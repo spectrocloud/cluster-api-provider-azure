@@ -18,61 +18,86 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"net"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-02-01/containerservice"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	azure "sigs.k8s.io/cluster-api-provider-azure/cloud"
-	"sigs.k8s.io/cluster-api-provider-azure/cloud/scope"
-	"sigs.k8s.io/cluster-api-provider-azure/cloud/services/managedclusters"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util/secret"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	azure "sigs.k8s.io/cluster-api-provider-azure/cloud"
+	"sigs.k8s.io/cluster-api-provider-azure/cloud/scope"
+	"sigs.k8s.io/cluster-api-provider-azure/cloud/services/groups"
+	"sigs.k8s.io/cluster-api-provider-azure/cloud/services/managedclusters"
+	infrav1exp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
 )
 
 // azureManagedControlPlaneReconciler are list of services required by cluster controller
 type azureManagedControlPlaneReconciler struct {
 	kubeclient         client.Client
-	managedClustersSvc azure.CredentialGetter
+	managedClustersSvc *managedclusters.Service
+	groupsSvc          azure.Service
 }
 
 // newAzureManagedControlPlaneReconciler populates all the services based on input scope
 func newAzureManagedControlPlaneReconciler(scope *scope.ManagedControlPlaneScope) *azureManagedControlPlaneReconciler {
 	return &azureManagedControlPlaneReconciler{
 		kubeclient:         scope.Client,
-		managedClustersSvc: managedclusters.NewService(scope.AzureClients.Authorizer, scope.AzureClients.SubscriptionID),
+		managedClustersSvc: managedclusters.NewService(scope),
+		groupsSvc:          groups.NewService(scope),
 	}
 }
 
 // Reconcile reconciles all the services in pre determined order
 func (r *azureManagedControlPlaneReconciler) Reconcile(ctx context.Context, scope *scope.ManagedControlPlaneScope) error {
-	managedClusterSpec := &managedclusters.Spec{
-		Name:            scope.ControlPlane.Name,
-		ResourceGroup:   scope.ControlPlane.Spec.ResourceGroup,
-		Location:        scope.ControlPlane.Spec.Location,
-		Tags:            scope.ControlPlane.Spec.AdditionalTags,
-		Version:         scope.ControlPlane.Spec.Version,
-		LoadBalancerSKU: scope.ControlPlane.Spec.LoadBalancerSKU,
-		NetworkPlugin:   scope.ControlPlane.Spec.NetworkPlugin,
-		NetworkPolicy:   scope.ControlPlane.Spec.NetworkPolicy,
-		SSHPublicKey:    scope.ControlPlane.Spec.SSHPublicKey,
+	decodedSSHPublicKey, err := base64.StdEncoding.DecodeString(scope.ControlPlane.Spec.SSHPublicKey)
+	if err != nil {
+		return errors.Wrapf(err, "failed to decode SSHPublicKey")
 	}
 
-	scope.Logger.V(2).Info("Reconciling managed cluster")
+	managedClusterSpec := &managedclusters.Spec{
+		Name:          scope.ControlPlane.Name,
+		ResourceGroup: scope.ControlPlane.Spec.ResourceGroup,
+		Location:      scope.ControlPlane.Spec.Location,
+		Tags:          scope.ControlPlane.Spec.AdditionalTags,
+		Version:       strings.TrimPrefix(scope.ControlPlane.Spec.Version, "v"),
+		SSHPublicKey:  string(decodedSSHPublicKey),
+		DNSServiceIP:  scope.ControlPlane.Spec.DNSServiceIP,
+	}
+
+	if scope.ControlPlane.Spec.NetworkPlugin != nil {
+		managedClusterSpec.NetworkPlugin = *scope.ControlPlane.Spec.NetworkPlugin
+	}
+	if scope.ControlPlane.Spec.NetworkPolicy != nil {
+		managedClusterSpec.NetworkPolicy = *scope.ControlPlane.Spec.NetworkPolicy
+	}
+	if scope.ControlPlane.Spec.LoadBalancerSKU != nil {
+		managedClusterSpec.LoadBalancerSKU = *scope.ControlPlane.Spec.LoadBalancerSKU
+	}
+
+	scope.V(2).Info("Reconciling managed cluster resource group")
+	if err := r.groupsSvc.Reconcile(ctx); err != nil {
+		return errors.Wrapf(err, "failed to reconcile managed cluster resource group")
+	}
+
+	scope.V(2).Info("Reconciling managed cluster")
 	if err := r.reconcileManagedCluster(ctx, scope, managedClusterSpec); err != nil {
 		return errors.Wrapf(err, "failed to reconcile managed cluster")
 	}
 
-	scope.Logger.V(2).Info("Reconciling endpoint")
+	scope.V(2).Info("Reconciling endpoint")
 	if err := r.reconcileEndpoint(ctx, scope, managedClusterSpec); err != nil {
 		return errors.Wrapf(err, "failed to reconcile control plane endpoint")
 	}
 
-	scope.Logger.V(2).Info("Reconciling kubeconfig")
+	scope.V(2).Info("Reconciling kubeconfig")
 	if err := r.reconcileKubeconfig(ctx, scope, managedClusterSpec); err != nil {
 		return errors.Wrapf(err, "failed to reconcile kubeconfig secret")
 	}
@@ -83,19 +108,33 @@ func (r *azureManagedControlPlaneReconciler) Reconcile(ctx context.Context, scop
 // Delete reconciles all the services in pre determined order
 func (r *azureManagedControlPlaneReconciler) Delete(ctx context.Context, scope *scope.ManagedControlPlaneScope) error {
 	managedClusterSpec := &managedclusters.Spec{
-		Name:            scope.ControlPlane.Name,
-		ResourceGroup:   scope.ControlPlane.Spec.ResourceGroup,
-		Location:        scope.ControlPlane.Spec.Location,
-		Tags:            scope.ControlPlane.Spec.AdditionalTags,
-		Version:         scope.ControlPlane.Spec.Version,
-		LoadBalancerSKU: scope.ControlPlane.Spec.LoadBalancerSKU,
-		NetworkPlugin:   scope.ControlPlane.Spec.NetworkPlugin,
-		NetworkPolicy:   scope.ControlPlane.Spec.NetworkPolicy,
-		SSHPublicKey:    scope.ControlPlane.Spec.SSHPublicKey,
+		Name:          scope.ControlPlane.Name,
+		ResourceGroup: scope.ControlPlane.Spec.ResourceGroup,
+		Location:      scope.ControlPlane.Spec.Location,
+		Tags:          scope.ControlPlane.Spec.AdditionalTags,
+		Version:       strings.TrimPrefix(scope.ControlPlane.Spec.Version, "v"),
+		SSHPublicKey:  scope.ControlPlane.Spec.SSHPublicKey,
+		DNSServiceIP:  scope.ControlPlane.Spec.DNSServiceIP,
 	}
 
+	if scope.ControlPlane.Spec.NetworkPlugin != nil {
+		managedClusterSpec.NetworkPlugin = *scope.ControlPlane.Spec.NetworkPlugin
+	}
+	if scope.ControlPlane.Spec.NetworkPolicy != nil {
+		managedClusterSpec.NetworkPolicy = *scope.ControlPlane.Spec.NetworkPolicy
+	}
+	if scope.ControlPlane.Spec.LoadBalancerSKU != nil {
+		managedClusterSpec.LoadBalancerSKU = *scope.ControlPlane.Spec.LoadBalancerSKU
+	}
+
+	scope.V(2).Info("Deleting managed cluster")
 	if err := r.managedClustersSvc.Delete(ctx, managedClusterSpec); err != nil {
 		return errors.Wrapf(err, "failed to delete managed cluster %s", scope.ControlPlane.Name)
+	}
+
+	scope.V(2).Info("Deleting managed cluster resource group")
+	if err := r.groupsSvc.Delete(ctx); err != nil {
+		return errors.Wrapf(err, "failed to delete managed cluster resource group")
 	}
 
 	return nil
@@ -122,6 +161,21 @@ func (r *azureManagedControlPlaneReconciler) reconcileManagedCluster(ctx context
 			if len(net.Pods.CIDRBlocks) == 1 {
 				managedClusterSpec.PodCIDR = net.Pods.CIDRBlocks[0]
 			}
+		}
+	}
+
+	// if DNSServiceIP is specified, ensure it is within the ServiceCIDR address range
+	if scope.ControlPlane.Spec.DNSServiceIP != nil {
+		if managedClusterSpec.ServiceCIDR == "" {
+			return fmt.Errorf(scope.Cluster.Name + " cluster serviceCIDR must be specified if specifying DNSServiceIP")
+		}
+		_, cidr, err := net.ParseCIDR(managedClusterSpec.ServiceCIDR)
+		if err != nil {
+			return fmt.Errorf("failed to parse cluster service cidr: %w", err)
+		}
+		ip := net.ParseIP(*scope.ControlPlane.Spec.DNSServiceIP)
+		if !cidr.Contains(ip) {
+			return fmt.Errorf(scope.ControlPlane.Name + " DNSServiceIP must reside within the associated cluster serviceCIDR")
 		}
 	}
 

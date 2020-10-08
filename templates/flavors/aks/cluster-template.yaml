@@ -29,11 +29,11 @@ metadata:
   name: ${CLUSTER_NAME}-control-plane
 spec:
   subscriptionID: ${AZURE_SUBSCRIPTION_ID}
-  resourceGroup: "${AZURE_RESOURCE_GROUP}"
+  resourceGroup: "${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME}}"
   location: "${AZURE_LOCATION}"
   defaultPoolRef:
     name: "agentpool0"
-  sshPublicKey: "${AZURE_SSH_PUBLIC_KEY}"
+  sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
   version: "${KUBERNETES_VERSION}"
 ---
 # Due to the nature of managed Kubernetes and the control plane implementation,
@@ -43,8 +43,6 @@ apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha3
 kind: AzureManagedCluster
 metadata:
   name: ${CLUSTER_NAME}
-spec:
-  subscriptionID: ${AZURE_SUBSCRIPTION_ID}
 ---
 # We provision a default machine pool with no boostrap data (AKS will provide it).
 # We specify an AzureManagedMachinePool as the infrastructure machine it, which

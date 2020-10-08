@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   name: azuremachinepools.exp.infrastructure.cluster.x-k8s.io
 spec:
@@ -108,6 +108,37 @@ spec:
                       is set to true with a VMSize that does not support it, Azure
                       will return an error.
                     type: boolean
+                  dataDisks:
+                    description: DataDisks specifies the list of data disks to be
+                      created for a Virtual Machine
+                    items:
+                      description: DataDisk specifies the parameters that are used
+                        to add one or more data disks to the machine.
+                      properties:
+                        cachingType:
+                          type: string
+                        diskSizeGB:
+                          description: DiskSizeGB is the size in GB to assign to the
+                            data disk.
+                          format: int32
+                          type: integer
+                        lun:
+                          description: Lun Specifies the logical unit number of the
+                            data disk. This value is used to identify data disks within
+                            the VM and therefore must be unique for each data disk
+                            attached to a VM. The value must be between 0 and 63.
+                          format: int32
+                          type: integer
+                        nameSuffix:
+                          description: NameSuffix is the suffix to be appended to
+                            the machine name to generate the disk name. Each disk
+                            name will be in format <machineName>_<nameSuffix>.
+                          type: string
+                      required:
+                      - diskSizeGB
+                      - nameSuffix
+                      type: object
+                    type: array
                   image:
                     description: Image is used to provide details of an image to use
                       during Virtual Machine creation. If image details are omitted
@@ -138,6 +169,12 @@ spec:
                               2019-Datacenter
                             minLength: 1
                             type: string
+                          thirdPartyImage:
+                            default: false
+                            description: ThirdPartyImage indicates the image is published
+                              by a third party publisher and a Plan will be generated
+                              for it.
+                            type: boolean
                           version:
                             description: Version specifies the version of an image
                               sku. The allowed formats are Major.Minor.Build or 'latest'.
@@ -199,6 +236,22 @@ spec:
                     description: OSDisk contains the operating system disk information
                       for a Virtual Machine
                     properties:
+                      cachingType:
+                        type: string
+                      diffDiskSettings:
+                        description: DiffDiskSettings describe ephemeral disk settings
+                          for the os disk.
+                        properties:
+                          option:
+                            description: Option enables ephemeral OS when set to "Local"
+                              See https://docs.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks
+                              for full details
+                            enum:
+                            - Local
+                            type: string
+                        required:
+                        - option
+                        type: object
                       diskSizeGB:
                         format: int32
                         type: integer
@@ -222,6 +275,11 @@ spec:
                     description: SSHPublicKey is the SSH public key string base64
                       encoded to add to a Virtual Machine
                     type: string
+                  terminateNotificationTimeout:
+                    description: TerminateNotificationTimeout enables or disables
+                      VMSS scheduled events termination notification with specified
+                      timeout allowed values are between 5 and 15 (mins)
+                    type: integer
                   vmSize:
                     description: VMSize is the size of the Virtual Machine to build.
                       See https://docs.microsoft.com/en-us/rest/api/compute/virtualmachines/createorupdate#virtualmachinesizetypes
@@ -271,8 +329,8 @@ spec:
                   output."
                 type: string
               provisioningState:
-                description: VMState is the provisioning state of the Azure virtual
-                  machine.
+                description: ProvisioningState is the provisioning state of the Azure
+                  virtual machine.
                 type: string
               ready:
                 description: Ready is true when the provider resource is ready.

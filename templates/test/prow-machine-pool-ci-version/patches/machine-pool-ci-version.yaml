@@ -87,27 +87,10 @@ spec:
     - path: /etc/kubernetes/azure.json
       owner: "root:root"
       permissions: "0644"
-      content: |
-        {
-          "cloud": "AzurePublicCloud",
-          "tenantId": "${AZURE_TENANT_ID}",
-          "subscriptionId": "${AZURE_SUBSCRIPTION_ID}",
-          "aadClientId": "${AZURE_CLIENT_ID}",
-          "aadClientSecret": "${AZURE_CLIENT_SECRET}",
-          "resourceGroup": "${AZURE_RESOURCE_GROUP}",
-          "securityGroupName": "${CLUSTER_NAME}-node-nsg",
-          "location": "${AZURE_LOCATION}",
-          "vmType": "vmss",
-          "vnetName": "${CLUSTER_NAME}-vnet",
-          "vnetResourceGroup": "${CLUSTER_NAME}",
-          "subnetName": "${CLUSTER_NAME}-node-subnet",
-          "routeTableName": "${CLUSTER_NAME}-node-routetable",
-          "userAssignedID": "${CLUSTER_NAME}",
-          "loadBalancerSku": "standard",
-          "maximumLoadBalancerRuleCount": 250,
-          "useManagedIdentityExtension": false,
-          "useInstanceMetadata": true
-        }
+      contentFrom:
+        secret:
+          key: control-plane-azure.json
+          name: ${CLUSTER_NAME}-control-plane-azure-json
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfig
@@ -194,26 +177,10 @@ spec:
     - path: /etc/kubernetes/azure.json
       owner: "root:root"
       permissions: "0644"
-      content: |
-        {
-          "cloud": "AzurePublicCloud",
-          "tenantId": "${AZURE_TENANT_ID}",
-          "subscriptionId": "${AZURE_SUBSCRIPTION_ID}",
-          "aadClientId": "${AZURE_CLIENT_ID}",
-          "aadClientSecret": "${AZURE_CLIENT_SECRET}",
-          "resourceGroup": "${CLUSTER_NAME}",
-          "securityGroupName": "${CLUSTER_NAME}-node-nsg",
-          "location": "${AZURE_LOCATION}",
-          "vmType": "vmss",
-          "vnetName": "${CLUSTER_NAME}-vnet",
-          "vnetResourceGroup": "${CLUSTER_NAME}",
-          "subnetName": "${CLUSTER_NAME}-node-subnet",
-          "routeTableName": "${CLUSTER_NAME}-node-routetable",
-          "loadBalancerSku": "standard",
-          "maximumLoadBalancerRuleCount": 250,
-          "useManagedIdentityExtension": false,
-          "useInstanceMetadata": true
-        }
+      contentFrom:
+        secret:
+          key: worker-node-azure.json
+          name: ${CLUSTER_NAME}-mp-0-azure-json
 ---
 apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha3
 kind: AzureMachinePool
@@ -222,10 +189,10 @@ metadata:
 spec:
   template:
     image:
-      # we use the 1.18.2 image as a workaround there is no published marketplace image for k8s CI versions.
-      # 1.18.2 binaries and images will get replaced to the desired version by the script above.
+      # we use the 1.18.8 image as a workaround there is no published marketplace image for k8s CI versions.
+      # 1.18.8 binaries and images will get replaced to the desired version by the script above.
       marketplace:
         publisher: cncf-upstream
         offer: capi
-        sku: k8s-1dot18dot2-ubuntu-1804
+        sku: k8s-1dot18dot8-ubuntu-1804
         version: "2020.04.17"

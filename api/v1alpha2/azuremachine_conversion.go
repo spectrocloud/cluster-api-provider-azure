@@ -19,6 +19,7 @@ package v1alpha2
 import (
 	apiconversion "k8s.io/apimachinery/pkg/conversion"
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	v1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
 	utilconversion "sigs.k8s.io/cluster-api/util/conversion"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 )
@@ -36,19 +37,40 @@ func (src *AzureMachine) ConvertTo(dstRaw conversion.Hub) error { // nolint
 	if ok, err := utilconversion.UnmarshalData(src, restored); err != nil || !ok {
 		return err
 	}
-	if restored.Spec.Identity != "" {
-		dst.Spec.Identity = restored.Spec.Identity
-	}
-	if len(restored.Spec.UserAssignedIdentities) > 0 {
-		dst.Spec.UserAssignedIdentities = restored.Spec.UserAssignedIdentities
-	}
-	if restored.Spec.AcceleratedNetworking != nil {
-		dst.Spec.AcceleratedNetworking = restored.Spec.AcceleratedNetworking
-	}
 
-	dst.Spec.FailureDomain = restored.Spec.FailureDomain
+	restoreAzureMachineSpec(&restored.Spec, &dst.Spec)
+
+	// Manual conversion for conditions
+	dst.SetConditions(restored.GetConditions())
 
 	return nil
+}
+
+func restoreAzureMachineSpec(restored, dst *infrav1alpha3.AzureMachineSpec) {
+	if restored.Identity != "" {
+		dst.Identity = restored.Identity
+	}
+	if len(restored.UserAssignedIdentities) > 0 {
+		dst.UserAssignedIdentities = restored.UserAssignedIdentities
+	}
+	dst.RoleAssignmentName = restored.RoleAssignmentName
+	if restored.AcceleratedNetworking != nil {
+		dst.AcceleratedNetworking = restored.AcceleratedNetworking
+	}
+	dst.FailureDomain = restored.FailureDomain
+	dst.EnableIPForwarding = restored.EnableIPForwarding
+	if restored.SpotVMOptions != nil {
+		dst.SpotVMOptions = restored.SpotVMOptions.DeepCopy()
+	}
+	if len(restored.DataDisks) != 0 {
+		dst.DataDisks = restored.DataDisks
+	}
+	dst.OSDisk.DiffDiskSettings = restored.OSDisk.DiffDiskSettings
+	dst.OSDisk.CachingType = restored.OSDisk.CachingType
+
+	if restored.Image != nil && restored.Image.Marketplace != nil {
+		dst.Image.Marketplace.ThirdPartyImage = restored.Image.Marketplace.ThirdPartyImage
+	}
 }
 
 // ConvertFrom converts from the Hub version (v1alpha3) to this version.
@@ -171,6 +193,11 @@ func Convert_v1alpha3_Image_To_v1alpha2_Image(in *infrav1alpha3.Image, out *Imag
 		return nil
 	}
 	return nil
+}
+
+// Convert_v1alpha3_OSDisk_To_v1alpha2_OSDisk converts between api versions
+func Convert_v1alpha3_OSDisk_To_v1alpha2_OSDisk(in *v1alpha3.OSDisk, out *OSDisk, s apiconversion.Scope) error {
+	return autoConvert_v1alpha3_OSDisk_To_v1alpha2_OSDisk(in, out, s)
 }
 
 func isAzureMarketPlaceImage(in *Image) bool {

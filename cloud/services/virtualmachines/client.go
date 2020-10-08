@@ -19,7 +19,7 @@ package virtualmachines
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	azure "sigs.k8s.io/cluster-api-provider-azure/cloud"
 )
@@ -39,14 +39,14 @@ type AzureClient struct {
 var _ Client = &AzureClient{}
 
 // NewClient creates a new VM client from subscription ID.
-func NewClient(subscriptionID string, authorizer autorest.Authorizer) *AzureClient {
-	c := newVirtualMachinesClient(subscriptionID, authorizer)
+func NewClient(auth azure.Authorizer) *AzureClient {
+	c := newVirtualMachinesClient(auth.SubscriptionID(), auth.BaseURI(), auth.Authorizer())
 	return &AzureClient{c}
 }
 
 // newVirtualMachinesClient creates a new VM client from subscription ID.
-func newVirtualMachinesClient(subscriptionID string, authorizer autorest.Authorizer) compute.VirtualMachinesClient {
-	vmClient := compute.NewVirtualMachinesClient(subscriptionID)
+func newVirtualMachinesClient(subscriptionID string, baseURI string, authorizer autorest.Authorizer) compute.VirtualMachinesClient {
+	vmClient := compute.NewVirtualMachinesClientWithBaseURI(baseURI, subscriptionID)
 	vmClient.Authorizer = authorizer
 	vmClient.AddToUserAgent(azure.UserAgent())
 	return vmClient

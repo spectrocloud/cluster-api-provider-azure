@@ -33,6 +33,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
@@ -154,6 +155,15 @@ func initScheme() *runtime.Scheme {
 func loadE2EConfig(configPath string) *clusterctl.E2EConfig {
 	config := clusterctl.LoadE2EConfig(context.TODO(), clusterctl.LoadE2EConfigInput{ConfigPath: configPath})
 	Expect(config).ToNot(BeNil(), "Failed to load E2E config from %s", configPath)
+
+	// Read CNI file and set CNI_RESOURCES environmental variable
+	Expect(config.Variables).To(HaveKey(capi_e2e.CNIPath), "Missing %s variable in the config", capi_e2e.CNIPath)
+	clusterctl.SetCNIEnvVar(config.GetVariable(capi_e2e.CNIPath), capi_e2e.CNIResources)
+
+	// Read CNI_IPV6 file and set CNI_RESOURCES_IPV6 environmental variable
+	Expect(config.Variables).To(HaveKey(CNIPathIPv6), "Missing %s variable in the config", CNIPathIPv6)
+	clusterctl.SetCNIEnvVar(config.GetVariable(CNIPathIPv6), CNIResourcesIPv6)
+
 	return config
 }
 

@@ -1,4 +1,4 @@
-managementClusterName: kind-capz
+managementClusterName: capz-e2e
 
 images:
   - name: ${MANAGER_IMAGE}
@@ -8,8 +8,8 @@ providers:
   - name: cluster-api
     type: CoreProvider
     versions:
-      - name: v0.3.6
-        value: https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.6/core-components.yaml
+      - name: v0.3.10
+        value: https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.10/core-components.yaml
         type: url
         replacements:
           - old: "imagePullPolicy: Always"
@@ -19,8 +19,8 @@ providers:
   - name: kubeadm
     type: BootstrapProvider
     versions:
-      - name: v0.3.6
-        value: https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.6/bootstrap-components.yaml
+      - name: v0.3.10
+        value: https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.10/bootstrap-components.yaml
         type: url
         replacements:
           - old: "imagePullPolicy: Always"
@@ -30,8 +30,8 @@ providers:
   - name: kubeadm
     type: ControlPlaneProvider
     versions:
-      - name: v0.3.6
-        value: https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.6/control-plane-components.yaml
+      - name: v0.3.10
+        value: https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.10/control-plane-components.yaml
         type: url
         replacements:
           - old: "imagePullPolicy: Always"
@@ -42,19 +42,38 @@ providers:
     type: InfrastructureProvider
     versions:
       - name: v0.4.0
-        value: ../../../config
+        value: "${PWD}/config"
     files:
-      - sourcePath: ../../../templates/cluster-template.yaml
+      - sourcePath: "${PWD}/templates/test/cluster-template-prow.yaml"
+        targetName: "cluster-template.yaml"
+      - sourcePath: "../data/infrastructure-azure/cluster-template-kcp-adoption.yaml"
+        targetName: "cluster-template-kcp-adoption.yaml"
+      - sourcePath: "${PWD}/templates/test/cluster-template-prow-ipv6.yaml"
+        targetName: "cluster-template-ipv6.yaml"
+      - sourcePath: "../data/infrastructure-azure/cluster-template-mhc.yaml"
+        targetName: "cluster-template-mhc.yaml"        
 
 variables:
-  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.17.4}"
-  CNI: "../../templates/addons/calico.yaml"
+  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.18.8}"
+  ETCD_VERSION_UPGRADE_TO: "3.4.3-0"
+  COREDNS_VERSION_UPGRADE_TO: "1.6.7"
+  KUBERNETES_VERSION_UPGRADE_TO: "${KUBERNETES_VERSION_UPGRADE_TO:-v1.18.8}"
+  KUBERNETES_VERSION_UPGRADE_FROM: "${KUBERNETES_VERSION_UPGRADE_FROM:-v1.17.11}"
+  CNI: "${PWD}/templates/addons/calico.yaml"
+  CNI_IPV6: "${PWD}/templates/addons/calico-ipv6.yaml"
+  REDACT_LOG_SCRIPT: "${PWD}/hack/log/redact.sh"
+  EXP_AKS: "true"
+  EXP_MACHINE_POOL: "true"
+  EXP_CLUSTER_RESOURCE_SET: "true"
 
 intervals:
   default/wait-controllers: ["3m", "10s"]
   default/wait-cluster: ["20m", "10s"]
-  default/wait-control-plane: ["10m", "10s"]
-  default/wait-worker-nodes: ["10m", "10s"]
+  default/wait-control-plane: ["20m", "10s"]
+  default/wait-worker-nodes: ["20m", "10s"]
   default/wait-delete-cluster: ["30m", "10s"]
-  default/wait-machine-upgrade: ["20m", "10s"]
-  default/wait-machine-remediation: ["20m", "10s"]
+  default/wait-machine-upgrade: ["60m", "10s"]
+  default/wait-machine-remediation: ["30m", "10s"]
+  default/wait-deployment: ["5m", "10s"]
+  default/wait-job: ["5m", "10s"]
+  default/wait-service: ["3m", "10s"]

@@ -1,9 +1,9 @@
 # Flavors
 
-In `clusterctl` the infrastructure provider authors can provide different type of cluster templates, 
+In `clusterctl` the infrastructure provider authors can provide different type of cluster templates,
 or flavors; use the --flavor flag to specify which flavor to use; e.g
 ```shell
-clusterctl config cluster my-cluster --kubernetes-version v1.18.2 \
+clusterctl config cluster my-cluster --kubernetes-version v1.18.8 \
     --flavor external-cloud-provider > my-cluster.yaml
 ```
 See [`clusterctl` flavors docs](https://cluster-api.sigs.k8s.io/clusterctl/commands/config-cluster.html#flavors).
@@ -25,7 +25,7 @@ run ```tilt up ${flavors}``` to spin up worker clusters in Azure represented by 
 Add your desired flavors to tilt_config.json:
 ```json
 {
-    "worker-flavors": ["default", "aks", "external-cloud-provider", "machinepool", "system-assigned-identity", "user-assigned-identity"]
+    "worker-flavors": ["default", "aks", "ephemeral", "external-cloud-provider", "ipv6", "machinepool", "system-assigned-identity", "user-assigned-identity"]
 }
 ```
 
@@ -56,7 +56,8 @@ If you wish to override the default variables for flavor workers, you can specif
         "AZURE_SUBSCRIPTION_ID_B64": "****",
         "AZURE_TENANT_ID_B64": "****",
         "AZURE_CLIENT_SECRET_B64": "****",
-        "AZURE_CLIENT_ID_B64": "****"
+        "AZURE_CLIENT_ID_B64": "****",
+        "AZURE_ENVIRONMENT": "AzureChinaCloud"
     },
     "worker-templates": {
         "flavors": {
@@ -74,7 +75,7 @@ If you wish to override the default variables for flavor workers, you can specif
             "AZURE_LOCATION": "eastus",
             "AZURE_RESOURCE_GROUP": "test-resource-group-name",
             "CONTROL_PLANE_MACHINE_COUNT": "1",
-            "KUBERNETES_VERSION": "v1.18.3",
+            "KUBERNETES_VERSION": "v1.18.8",
             "AZURE_CONTROL_PLANE_MACHINE_TYPE": "Standard_D2s_v3",
             "WORKER_MACHINE_COUNT": "2",
             "AZURE_NODE_MACHINE_TYPE": "Standard_D2s_v3"

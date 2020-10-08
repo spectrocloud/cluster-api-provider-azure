@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   name: azuremanagedmachinepools.exp.infrastructure.cluster.x-k8s.io
 spec:
@@ -44,8 +44,8 @@ spec:
             properties:
               osDiskSizeGB:
                 description: OSDiskSizeGB is the disk size for every machine in this
-                  master/agent pool. If you specify 0, it will apply the default osDisk
-                  size according to the vmSize specified.
+                  agent pool. If you specify 0, it will apply the default osDisk size
+                  according to the vmSize specified.
                 format: int32
                 type: integer
               providerIDList:

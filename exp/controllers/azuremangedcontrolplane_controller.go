@@ -18,35 +18,76 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
-	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
-
-	"sigs.k8s.io/cluster-api-provider-azure/cloud/scope"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-azure/cloud/scope"
+	infracontroller "sigs.k8s.io/cluster-api-provider-azure/controllers"
+	infrav1exp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-azure/util/reconciler"
 )
 
 // AzureManagedControlPlaneReconciler reconciles a AzureManagedControlPlane object
 type AzureManagedControlPlaneReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Recorder record.EventRecorder
+	Log              logr.Logger
+	Recorder         record.EventRecorder
+	ReconcileTimeout time.Duration
 }
 
 func (r *AzureManagedControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	log := r.Log.WithValues("controller", "AzureManagedControlPlane")
+	azManagedControlPlane := &infrav1exp.AzureManagedControlPlane{}
+	// create mapper to transform incoming AzureManagedClusters into AzureManagedControlPlane requests
+	azureManagedClusterMapper, err := AzureManagedClusterToAzureManagedControlPlaneMapper(r.Client, log)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create AzureManagedCluster to AzureManagedControlPlane mapper")
+	}
+
+	c, err := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(options).
-		For(&infrav1exp.AzureManagedControlPlane{}).
-		Complete(r)
+		For(azManagedControlPlane).
+		WithEventFilter(predicates.ResourceNotPaused(log)). // don't queue reconcile if resource is paused
+		// watch AzureManagedCluster resources
+		Watches(
+			&source.Kind{Type: &infrav1exp.AzureManagedCluster{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: azureManagedClusterMapper,
+			},
+		).
+		Build(r)
+	if err != nil {
+		return errors.Wrapf(err, "error creating controller")
+	}
+
+	// Add a watch on clusterv1.Cluster object for unpause & ready notifications.
+	if err = c.Watch(
+		&source.Kind{Type: &clusterv1.Cluster{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: util.ClusterToInfrastructureMapFunc(infrav1exp.GroupVersion.WithKind("AzureManagedControlPlane")),
+		},
+		predicates.ClusterUnpausedAndInfrastructureReady(log),
+	); err != nil {
+		return errors.Wrapf(err, "failed adding a watch for ready clusters")
+	}
+
+	return nil
 }
 
 // +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=azuremanagedcontrolplanes,verbs=get;list;watch;create;update;patch;delete
@@ -54,7 +95,8 @@ func (r *AzureManagedControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager, 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
 
 func (r *AzureManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.Background(), reconciler.DefaultedLoopTimeout(r.ReconcileTimeout))
+	defer cancel()
 	log := r.Log.WithValues("namespace", req.Namespace, "azureManagedControlPlanes", req.Name)
 
 	// Fetch the AzureManagedControlPlane instance
@@ -79,6 +121,12 @@ func (r *AzureManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (_ ctrl
 
 	log = log.WithValues("cluster", cluster.Name)
 
+	// Return early if the object or Cluster is paused.
+	if annotations.IsPaused(cluster, azureControlPlane) {
+		log.Info("AzureManagedControlPlane or linked Cluster is marked as paused. Won't reconcile")
+		return ctrl.Result{}, nil
+	}
+
 	// fetch default pool
 	defaultPoolKey := client.ObjectKey{
 		Name:      azureControlPlane.Spec.DefaultPoolRef.Name,
@@ -91,10 +139,8 @@ func (r *AzureManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (_ ctrl
 
 	log = log.WithValues("azureManagedMachinePool", defaultPoolKey.Name)
 
-	// fetch owner of default pool
-	// TODO(ace): create a helper in util for this
 	// Fetch the owning MachinePool.
-	ownerPool, err := getOwnerMachinePool(ctx, r.Client, defaultPool.ObjectMeta)
+	ownerPool, err := infracontroller.GetOwnerMachinePool(ctx, r.Client, defaultPool.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

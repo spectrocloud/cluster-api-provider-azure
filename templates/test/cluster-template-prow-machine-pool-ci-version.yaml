@@ -1,6 +1,8 @@
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
 metadata:
+  labels:
+    cni: ${CLUSTER_NAME}-crs-0
   name: ${CLUSTER_NAME}
   namespace: default
 spec:
@@ -29,8 +31,8 @@ spec:
   location: ${AZURE_LOCATION}
   networkSpec:
     vnet:
-      name: ${AZURE_VNET_NAME}
-  resourceGroup: ${AZURE_RESOURCE_GROUP}
+      name: ${AZURE_VNET_NAME:=${CLUSTER_NAME}-vnet}
+  resourceGroup: ${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME}}
   subscriptionID: ${AZURE_SUBSCRIPTION_ID}
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
@@ -66,7 +68,27 @@ spec:
           mountPath: /etc/kubernetes/azure.json
           name: cloud-config
           readOnly: true
+      etcd:
+        local:
+          dataDir: /var/lib/etcddisk/etcd
       kubernetesVersion: ci/${CI_VERSION}
+    diskSetup:
+      filesystems:
+      - device: /dev/disk/azure/scsi1/lun0
+        extraOpts:
+        - -E
+        - lazy_itable_init=1,lazy_journal_init=1
+        filesystem: ext4
+        label: etcd_disk
+      - device: ephemeral0.1
+        filesystem: ext4
+        label: ephemeral0
+        replaceFS: ntfs
+      partitions:
+      - device: /dev/disk/azure/scsi1/lun0
+        layout: true
+        overwrite: false
+        tableType: gpt
     files:
     - content: |
         #!/bin/bash
@@ -142,27 +164,10 @@ spec:
       owner: root:root
       path: /tmp/kubeadm-bootstrap.sh
       permissions: "0744"
-    - content: |
-        {
-          "cloud": "AzurePublicCloud",
-          "tenantId": "${AZURE_TENANT_ID}",
-          "subscriptionId": "${AZURE_SUBSCRIPTION_ID}",
-          "aadClientId": "${AZURE_CLIENT_ID}",
-          "aadClientSecret": "${AZURE_CLIENT_SECRET}",
-          "resourceGroup": "${AZURE_RESOURCE_GROUP}",
-          "securityGroupName": "${CLUSTER_NAME}-node-nsg",
-          "location": "${AZURE_LOCATION}",
-          "vmType": "vmss",
-          "vnetName": "${CLUSTER_NAME}-vnet",
-          "vnetResourceGroup": "${CLUSTER_NAME}",
-          "subnetName": "${CLUSTER_NAME}-node-subnet",
-          "routeTableName": "${CLUSTER_NAME}-node-routetable",
-          "userAssignedID": "${CLUSTER_NAME}",
-          "loadBalancerSku": "standard",
-          "maximumLoadBalancerRuleCount": 250,
-          "useManagedIdentityExtension": false,
-          "useInstanceMetadata": true
-        }
+    - contentFrom:
+        secret:
+          key: control-plane-azure.json
+          name: ${CLUSTER_NAME}-control-plane-azure-json
       owner: root:root
       path: /etc/kubernetes/azure.json
       permissions: "0644"
@@ -178,6 +183,9 @@ spec:
           cloud-config: /etc/kubernetes/azure.json
           cloud-provider: azure
         name: '{{ ds.meta_data["local_hostname"] }}'
+    mounts:
+    - - LABEL=etcd_disk
+      - /var/lib/etcddisk
     preKubeadmCommands:
     - bash -c /tmp/kubeadm-bootstrap.sh
     useExperimentalRetryJoin: true
@@ -192,11 +200,15 @@ metadata:
 spec:
   template:
     spec:
+      dataDisks:
+      - diskSizeGB: 256
+        lun: 0
+        nameSuffix: etcddisk
       image:
         marketplace:
           offer: capi
           publisher: cncf-upstream
-          sku: k8s-1dot18dot2-ubuntu-1804
+          sku: k8s-1dot18dot8-ubuntu-1804
           version: 2020.04.17
       location: ${AZURE_LOCATION}
       osDisk:
@@ -204,7 +216,7 @@ spec:
         managedDisk:
           storageAccountType: Premium_LRS
         osType: Linux
-      sshPublicKey: ${AZURE_SSH_PUBLIC_KEY}
+      sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
       vmSize: ${AZURE_CONTROL_PLANE_MACHINE_TYPE}
 ---
 apiVersion: exp.cluster.x-k8s.io/v1alpha3
@@ -241,14 +253,14 @@ spec:
       marketplace:
         offer: capi
         publisher: cncf-upstream
-        sku: k8s-1dot18dot2-ubuntu-1804
+        sku: k8s-1dot18dot8-ubuntu-1804
         version: 2020.04.17
     osDisk:
       diskSizeGB: 30
       managedDisk:
         storageAccountType: Premium_LRS
       osType: Linux
-    sshPublicKey: ${AZURE_SSH_PUBLIC_KEY}
+    sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
     vmSize: ${AZURE_NODE_MACHINE_TYPE}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
@@ -332,26 +344,10 @@ spec:
     owner: root:root
     path: /tmp/kubeadm-bootstrap.sh
     permissions: "0744"
-  - content: |
-      {
-        "cloud": "AzurePublicCloud",
-        "tenantId": "${AZURE_TENANT_ID}",
-        "subscriptionId": "${AZURE_SUBSCRIPTION_ID}",
-        "aadClientId": "${AZURE_CLIENT_ID}",
-        "aadClientSecret": "${AZURE_CLIENT_SECRET}",
-        "resourceGroup": "${CLUSTER_NAME}",
-        "securityGroupName": "${CLUSTER_NAME}-node-nsg",
-        "location": "${AZURE_LOCATION}",
-        "vmType": "vmss",
-        "vnetName": "${CLUSTER_NAME}-vnet",
-        "vnetResourceGroup": "${CLUSTER_NAME}",
-        "subnetName": "${CLUSTER_NAME}-node-subnet",
-        "routeTableName": "${CLUSTER_NAME}-node-routetable",
-        "loadBalancerSku": "standard",
-        "maximumLoadBalancerRuleCount": 250,
-        "useManagedIdentityExtension": false,
-        "useInstanceMetadata": true
-      }
+  - contentFrom:
+      secret:
+        key: worker-node-azure.json
+        name: ${CLUSTER_NAME}-mp-0-azure-json
     owner: root:root
     path: /etc/kubernetes/azure.json
     permissions: "0644"
@@ -364,3 +360,24 @@ spec:
   preKubeadmCommands:
   - bash -c /tmp/kubeadm-bootstrap.sh
   useExperimentalRetryJoin: true
+---
+apiVersion: v1
+data: ${CNI_RESOURCES}
+kind: ConfigMap
+metadata:
+  name: cni-${CLUSTER_NAME}-crs-0
+  namespace: default
+---
+apiVersion: addons.cluster.x-k8s.io/v1alpha3
+kind: ClusterResourceSet
+metadata:
+  name: ${CLUSTER_NAME}-crs-0
+  namespace: default
+spec:
+  clusterSelector:
+    matchLabels:
+      cni: ${CLUSTER_NAME}-crs-0
+  resources:
+  - kind: ConfigMap
+    name: cni-${CLUSTER_NAME}-crs-0
+  strategy: ApplyOnce

@@ -19,7 +19,7 @@ package disks
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	azure "sigs.k8s.io/cluster-api-provider-azure/cloud"
 )
@@ -37,19 +37,20 @@ type AzureClient struct {
 var _ Client = &AzureClient{}
 
 // NewClient creates a new VM client from subscription ID.
-func NewClient(subscriptionID string, authorizer autorest.Authorizer) *AzureClient {
-	c := newDisksClient(subscriptionID, authorizer)
+func NewClient(auth azure.Authorizer) *AzureClient {
+	c := newDisksClient(auth.SubscriptionID(), auth.BaseURI(), auth.Authorizer())
 	return &AzureClient{c}
 }
 
 // newDisksClient creates a new disks client from subscription ID.
-func newDisksClient(subscriptionID string, authorizer autorest.Authorizer) compute.DisksClient {
-	disksClient := compute.NewDisksClient(subscriptionID)
+func newDisksClient(subscriptionID string, baseURI string, authorizer autorest.Authorizer) compute.DisksClient {
+	disksClient := compute.NewDisksClientWithBaseURI(baseURI, subscriptionID)
 	disksClient.Authorizer = authorizer
 	disksClient.AddToUserAgent(azure.UserAgent())
 	return disksClient
 }
 
+// Delete removes the disk client
 func (ac *AzureClient) Delete(ctx context.Context, resourceGroupName, name string) error {
 	future, err := ac.disks.Delete(ctx, resourceGroupName, name)
 	if err != nil {

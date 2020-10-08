@@ -19,14 +19,14 @@ package scope
 import (
 	"context"
 	"encoding/base64"
-
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/klogr"
 	"k8s.io/utils/pointer"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	azure "sigs.k8s.io/cluster-api-provider-azure/cloud"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	capiv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
@@ -41,25 +41,21 @@ import (
 type (
 	// MachinePoolScopeParams defines the input parameters used to create a new MachinePoolScope.
 	MachinePoolScopeParams struct {
-		AzureClients
 		Client           client.Client
 		Logger           logr.Logger
-		Cluster          *capiv1.Cluster
 		MachinePool      *capiv1exp.MachinePool
-		AzureCluster     *infrav1.AzureCluster
 		AzureMachinePool *infrav1exp.AzureMachinePool
+		ClusterDescriber azure.ClusterDescriber
 	}
 
 	// MachinePoolScope defines a scope defined around a machine pool and its cluster.
 	MachinePoolScope struct {
 		logr.Logger
-		AzureClients
 		client           client.Client
 		patchHelper      *patch.Helper
-		Cluster          *capiv1.Cluster
 		MachinePool      *capiv1exp.MachinePool
-		AzureCluster     *infrav1.AzureCluster
 		AzureMachinePool *infrav1exp.AzureMachinePool
+		azure.ClusterDescriber
 	}
 )
 
@@ -72,12 +68,6 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 	if params.MachinePool == nil {
 		return nil, errors.New("machine pool is required when creating a MachinePoolScope")
 	}
-	if params.Cluster == nil {
-		return nil, errors.New("cluster is required when creating a MachinePoolScope")
-	}
-	if params.AzureCluster == nil {
-		return nil, errors.New("azure cluster is required when creating a MachinePoolScope")
-	}
 	if params.AzureMachinePool == nil {
 		return nil, errors.New("azure machine pool is required when creating a MachinePoolScope")
 	}
@@ -86,42 +76,78 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 		params.Logger = klogr.New()
 	}
 
-	if err := params.AzureClients.setCredentials(params.AzureCluster.Spec.SubscriptionID); err != nil {
-		return nil, errors.Wrap(err, "failed to create Azure session")
-	}
-
 	helper, err := patch.NewHelper(params.AzureMachinePool, params.Client)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
 	return &MachinePoolScope{
 		client:           params.Client,
-		Cluster:          params.Cluster,
 		MachinePool:      params.MachinePool,
-		AzureCluster:     params.AzureCluster,
 		AzureMachinePool: params.AzureMachinePool,
-		AzureClients:     params.AzureClients,
 		Logger:           params.Logger,
 		patchHelper:      helper,
+		ClusterDescriber: params.ClusterDescriber,
 	}, nil
 }
 
+// ScaleSetSpec returns the scale set spec.
+func (m *MachinePoolScope) ScaleSetSpec() azure.ScaleSetSpec {
+	return azure.ScaleSetSpec{
+		Name:                    m.Name(),
+		Size:                    m.AzureMachinePool.Spec.Template.VMSize,
+		Capacity:                int64(to.Int32(m.MachinePool.Spec.Replicas)),
+		SSHKeyData:              m.AzureMachinePool.Spec.Template.SSHPublicKey,
+		OSDisk:                  m.AzureMachinePool.Spec.Template.OSDisk,
+		DataDisks:               m.AzureMachinePool.Spec.Template.DataDisks,
+		SubnetName:              m.NodeSubnet().Name,
+		VNetName:                m.Vnet().Name,
+		VNetResourceGroup:       m.Vnet().ResourceGroup,
+		PublicLBName:            m.ClusterName(),
+		PublicLBAddressPoolName: azure.GenerateOutboundBackendddressPoolName(m.ClusterName()),
+		AcceleratedNetworking:   m.AzureMachinePool.Spec.Template.AcceleratedNetworking,
+	}
+}
+
+// Name returns the Azure Machine Pool Name.
 func (m *MachinePoolScope) Name() string {
 	return m.AzureMachinePool.Name
 }
 
-// GetID returns the AzureMachinePool ID by parsing Spec.ProviderID.
-func (m *MachinePoolScope) GetID() *string {
+// ProviderID returns the AzureMachinePool ID by parsing Spec.ProviderID.
+func (m *MachinePoolScope) ProviderID() string {
 	parsed, err := noderefutil.NewProviderID(m.AzureMachinePool.Spec.ProviderID)
 	if err != nil {
-		return nil
+		return ""
 	}
-	return pointer.StringPtr(parsed.ID())
+	return parsed.ID()
 }
 
-// SetReady sets the AzureMachinePool Ready Status
+// SetProviderID sets the AzureMachine providerID in spec.
+func (m *MachinePoolScope) SetProviderID(v string) {
+	m.AzureMachinePool.Spec.ProviderID = v
+}
+
+// ProvisioningState returns the AzureMachinePool provisioning state.
+func (m *MachinePoolScope) ProvisioningState() infrav1.VMState {
+	if m.AzureMachinePool.Status.ProvisioningState != nil {
+		return *m.AzureMachinePool.Status.ProvisioningState
+	}
+	return ""
+}
+
+// SetProvisioningState sets the AzureMachinePool provisioning state.
+func (m *MachinePoolScope) SetProvisioningState(v infrav1.VMState) {
+	m.AzureMachinePool.Status.ProvisioningState = &v
+}
+
+// SetReady sets the AzureMachinePool Ready Status to true.
 func (m *MachinePoolScope) SetReady() {
 	m.AzureMachinePool.Status.Ready = true
+}
+
+// SetNotReady sets the AzureMachinePool Ready Status to false.
+func (m *MachinePoolScope) SetNotReady() {
+	m.AzureMachinePool.Status.Ready = false
 }
 
 // SetFailureMessage sets the AzureMachinePool status failure message.
@@ -138,8 +164,13 @@ func (m *MachinePoolScope) SetFailureReason(v capierrors.MachineStatusError) {
 // the value from AzureMachinePool takes precedence.
 func (m *MachinePoolScope) AdditionalTags() infrav1.Tags {
 	tags := make(infrav1.Tags)
-	tags.Merge(m.AzureCluster.Spec.AdditionalTags)
+	// Start with the cluster-wide tags...
+	tags.Merge(m.ClusterDescriber.AdditionalTags())
+	// ... and merge in the Machine Pool's
 	tags.Merge(m.AzureMachinePool.Spec.AdditionalTags)
+	// Set the cloud provider tag
+	tags[infrav1.ClusterAzureCloudProviderTagKey(m.ClusterName())] = string(infrav1.ResourceLifecycleOwned)
+
 	return tags
 }
 
@@ -152,9 +183,8 @@ func (m *MachinePoolScope) SetAnnotation(key, value string) {
 }
 
 // PatchObject persists the machine spec and status.
-func (m *MachinePoolScope) PatchObject() error {
-	// TODO[dj]: any function we are building where we are not adding context to the signature is welcoming unbound execution times. This needs to be addressed.
-	return m.patchHelper.Patch(context.TODO(), m.AzureMachinePool)
+func (m *MachinePoolScope) PatchObject(ctx context.Context) error {
+	return m.patchHelper.Patch(ctx, m.AzureMachinePool)
 }
 
 func (m *MachinePoolScope) AzureMachineTemplate(ctx context.Context) (*infrav1.AzureMachineTemplate, error) {
@@ -163,8 +193,8 @@ func (m *MachinePoolScope) AzureMachineTemplate(ctx context.Context) (*infrav1.A
 }
 
 // Close the MachineScope by updating the machine spec, machine status.
-func (m *MachinePoolScope) Close() error {
-	return m.patchHelper.Patch(context.TODO(), m.AzureMachinePool)
+func (m *MachinePoolScope) Close(ctx context.Context) error {
+	return m.patchHelper.Patch(ctx, m.AzureMachinePool)
 }
 
 func getAzureMachineTemplate(ctx context.Context, c client.Client, name, namespace string) (*infrav1.AzureMachineTemplate, error) {
@@ -177,14 +207,14 @@ func getAzureMachineTemplate(ctx context.Context, c client.Client, name, namespa
 }
 
 // GetBootstrapData returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName.
-func (m *MachinePoolScope) GetBootstrapData() (string, error) {
+func (m *MachinePoolScope) GetBootstrapData(ctx context.Context) (string, error) {
 	dataSecretName := m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName
 	if dataSecretName == nil {
 		return "", errors.New("error retrieving bootstrap data: linked Machine Spec's bootstrap.dataSecretName is nil")
 	}
 	secret := &corev1.Secret{}
 	key := types.NamespacedName{Namespace: m.AzureMachinePool.Namespace, Name: *dataSecretName}
-	if err := m.client.Get(context.TODO(), key, secret); err != nil {
+	if err := m.client.Get(ctx, key, secret); err != nil {
 		return "", errors.Wrapf(err, "failed to retrieve bootstrap data secret for AzureMachinePool %s/%s", m.AzureMachinePool.Namespace, m.Name())
 	}
 
@@ -193,4 +223,14 @@ func (m *MachinePoolScope) GetBootstrapData() (string, error) {
 		return "", errors.New("error retrieving bootstrap data: secret value key is missing")
 	}
 	return base64.StdEncoding.EncodeToString(value), nil
+}
+
+// Pick image from the machine configuration, or use a default one.
+func (m *MachinePoolScope) GetVMImage() (*infrav1.Image, error) {
+	// Use custom Marketplace image, Image ID or a Shared Image Gallery image if provided
+	if m.AzureMachinePool.Spec.Template.Image != nil {
+		return m.AzureMachinePool.Spec.Template.Image, nil
+	}
+	m.Info("No image specified for machine, using default", "machine", m.MachinePool.GetName())
+	return azure.GetDefaultUbuntuImage(to.String(m.MachinePool.Spec.Template.Spec.Version))
 }

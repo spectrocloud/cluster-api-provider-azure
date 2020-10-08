@@ -39,6 +39,10 @@ type (
 		// OSDisk contains the operating system disk information for a Virtual Machine
 		OSDisk infrav1.OSDisk `json:"osDisk"`
 
+		// DataDisks specifies the list of data disks to be created for a Virtual Machine
+		// +optional
+		DataDisks []infrav1.DataDisk `json:"dataDisks,omitempty"`
+
 		// SSHPublicKey is the SSH public key string base64 encoded to add to a Virtual Machine
 		SSHPublicKey string `json:"sshPublicKey"`
 
@@ -47,6 +51,11 @@ type (
 		// If AcceleratedNetworking is set to true with a VMSize that does not support it, Azure will return an error.
 		// +optional
 		AcceleratedNetworking *bool `json:"acceleratedNetworking,omitempty"`
+
+		// TerminateNotificationTimeout enables or disables VMSS scheduled events termination notification with specified timeout
+		// allowed values are between 5 and 15 (mins)
+		// +optional
+		TerminateNotificationTimeout *int `json:"terminateNotificationTimeout,omitempty"`
 	}
 
 	// AzureMachinePoolSpec defines the desired state of AzureMachinePool
@@ -64,6 +73,7 @@ type (
 		AdditionalTags infrav1.Tags `json:"additionalTags,omitempty"`
 
 		// ProviderID is the identification ID of the Virtual Machine Scale Set
+		// +optional
 		ProviderID string `json:"providerID,omitempty"`
 
 		// ProviderIDList are the identification IDs of machine instances provided by the provider.
@@ -82,7 +92,7 @@ type (
 		// +optional
 		Replicas int32 `json:"replicas"`
 
-		// VMState is the provisioning state of the Azure virtual machine.
+		// ProvisioningState is the provisioning state of the Azure virtual machine.
 		// +optional
 		ProvisioningState *infrav1.VMState `json:"provisioningState,omitempty"`
 

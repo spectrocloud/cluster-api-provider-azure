@@ -29,9 +29,6 @@ const (
 
 // Network encapsulates the state of Azure networking resources.
 type Network struct {
-	// SecurityGroups is a map from the role/kind of the security group to its unique name, if any.
-	SecurityGroups map[SecurityGroupRole]SecurityGroup `json:"securityGroups,omitempty"`
-
 	// APIServerLB is the Kubernetes API server load balancer.
 	APIServerLB LoadBalancer `json:"apiServerLb,omitempty"`
 
@@ -63,9 +60,16 @@ type VnetSpec struct {
 	Name string `json:"name"`
 
 	// CidrBlock is the CIDR block to be used when the provider creates a managed virtual network.
+	// DEPRECATED: Use CIDRBlocks instead
+	// +optional
 	CidrBlock string `json:"cidrBlock,omitempty"`
 
+	// CIDRBlocks defines the virtual network's address space, specified as one or more address prefixes in CIDR notation.
+	// +optional
+	CIDRBlocks []string `json:"cidrBlocks,omitempty"`
+
 	// Tags is a collection of tags describing the resource.
+	// +optional
 	Tags Tags `json:"tags,omitempty"`
 }
 
@@ -118,8 +122,12 @@ const (
 
 // IngressRule defines an Azure ingress rule for security groups.
 type IngressRule struct {
+	Name        string                `json:"name"`
 	Description string                `json:"description"`
 	Protocol    SecurityGroupProtocol `json:"protocol"`
+
+	// Priority - A number between 100 and 4096. Each rule should have a unique value for priority. Rules are processed in priority order, with lower numbers processed before higher numbers. Once traffic matches a rule, processing stops.
+	Priority int32 `json:"priority,omitempty"`
 
 	// SourcePorts - The source port or range. Integer or range between 0 and 65535. Asterix '*' can also be used to match all ports.
 	SourcePorts *string `json:"sourcePorts,omitempty"`
@@ -250,6 +258,11 @@ type AzureMarketplaceImage struct {
 	// time even if a new version becomes available.
 	// +kubebuilder:validation:MinLength=1
 	Version string `json:"version"`
+	// ThirdPartyImage indicates the image is published by a third party publisher and a Plan
+	// will be generated for it.
+	// +kubebuilder:default=false
+	// +optional
+	ThirdPartyImage bool `json:"thirdPartyImage"`
 }
 
 // AzureSharedGalleryImage defines an image in a Shared Image Gallery to use for VM creation
@@ -277,7 +290,7 @@ type AzureSharedGalleryImage struct {
 
 // AvailabilityZone specifies an Azure Availability Zone
 //
-// Deprecated: Use FailureDomain instead
+// DEPRECATED: Use FailureDomain instead
 type AvailabilityZone struct {
 	ID      *string `json:"id,omitempty"`
 	Enabled *bool   `json:"enabled,omitempty"`
@@ -306,14 +319,39 @@ type UserAssignedIdentity struct {
 
 // OSDisk defines the operating system disk for a VM.
 type OSDisk struct {
-	OSType      string      `json:"osType"`
-	DiskSizeGB  int32       `json:"diskSizeGB"`
-	ManagedDisk ManagedDisk `json:"managedDisk"`
+	OSType           string            `json:"osType"`
+	DiskSizeGB       int32             `json:"diskSizeGB"`
+	ManagedDisk      ManagedDisk       `json:"managedDisk"`
+	DiffDiskSettings *DiffDiskSettings `json:"diffDiskSettings,omitempty"`
+	// +optional
+	CachingType string `json:"cachingType,omitempty"`
+}
+
+// DataDisk specifies the parameters that are used to add one or more data disks to the machine.
+type DataDisk struct {
+	// NameSuffix is the suffix to be appended to the machine name to generate the disk name.
+	// Each disk name will be in format <machineName>_<nameSuffix>.
+	NameSuffix string `json:"nameSuffix"`
+	// DiskSizeGB is the size in GB to assign to the data disk.
+	DiskSizeGB int32 `json:"diskSizeGB"`
+	// Lun Specifies the logical unit number of the data disk. This value is used to identify data disks within the VM and therefore must be unique for each data disk attached to a VM.
+	// The value must be between 0 and 63.
+	Lun *int32 `json:"lun,omitempty"`
+	// +optional
+	CachingType string `json:"cachingType,omitempty"`
 }
 
 // ManagedDisk defines the managed disk options for a VM.
 type ManagedDisk struct {
 	StorageAccountType string `json:"storageAccountType"`
+}
+
+// DiffDiskSettings describe ephemeral disk settings for the os disk.
+type DiffDiskSettings struct {
+	// Option enables ephemeral OS when set to "Local"
+	// See https://docs.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks for full details
+	// +kubebuilder:validation:Enum=Local
+	Option string `json:"option"`
 }
 
 // SubnetRole defines the unique role of a subnet.
@@ -340,8 +378,13 @@ type SubnetSpec struct {
 	Name string `json:"name"`
 
 	// CidrBlock is the CIDR block to be used when the provider creates a managed Vnet.
+	// DEPRECATED: Use CIDRBlocks instead
 	// +optional
 	CidrBlock string `json:"cidrBlock,omitempty"`
+
+	// CIDRBlocks defines the subnet's address space, specified as one or more address prefixes in CIDR notation.
+	// +optional
+	CIDRBlocks []string `json:"cidrBlocks,omitempty"`
 
 	// InternalLBIPAddress is the IP address that will be used as the internal LB private IP.
 	// For the control plane subnet only.

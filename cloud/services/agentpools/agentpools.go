@@ -18,7 +18,6 @@ package agentpools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-02-01/containerservice"
 	"github.com/google/go-cmp/cmp"
@@ -38,20 +37,11 @@ type Spec struct {
 	OSDiskSizeGB  int32
 }
 
-// Get fetches a agent pool from Azure.
-func (s *Service) Get(ctx context.Context, spec interface{}) (interface{}, error) {
-	agentPoolSpec, ok := spec.(*Spec)
-	if !ok {
-		return containerservice.AgentPool{}, errors.New("expected agent pool specification")
-	}
-	return s.Client.Get(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name)
-}
-
 // Reconcile idempotently creates or updates a agent pool, if possible.
 func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 	agentPoolSpec, ok := spec.(*Spec)
 	if !ok {
-		return errors.New("expected agent pool specification")
+		return errors.New("invalid agent pool specification")
 	}
 
 	profile := containerservice.AgentPool{
@@ -64,13 +54,9 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 		},
 	}
 
-	existingSpec, err := s.Get(ctx, spec)
+	existingPool, err := s.Client.Get(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name)
 	if err != nil && !azure.ResourceNotFound(err) {
 		return errors.Wrapf(err, "failed to get existing agent pool")
-	}
-	existingPool, ok := existingSpec.(containerservice.AgentPool)
-	if !ok {
-		return errors.New("expected agent pool specification")
 	}
 
 	// For updates, we want to pass whatever we find in the existing
@@ -81,9 +67,15 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 	if isCreate {
 		err = s.Client.CreateOrUpdate(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name, profile)
 		if err != nil {
-			return fmt.Errorf("failed to create or update agent pool, %#+v", err)
+			return errors.Wrap(err, "failed to create or update agent pool")
 		}
 	} else {
+		ps := *existingPool.ManagedClusterAgentPoolProfileProperties.ProvisioningState
+		if ps != "Canceled" && ps != "Failed" && ps != "Succeeded" {
+			klog.V(2).Infof("Unable to update existing agent pool in non terminal state.  Agent pool must be in one of the following provisioning states: canceled, failed, or succeeded")
+			return nil
+		}
+
 		// Normalize individual agent pools to diff in case we need to update
 		existingProfile := containerservice.AgentPool{
 			ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
@@ -101,7 +93,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 			klog.V(2).Infof("Update required (+new -old):\n%s", diff)
 			err = s.Client.CreateOrUpdate(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name, profile)
 			if err != nil {
-				return fmt.Errorf("failed to create or update agent pool, %#+v", err.Error())
+				return errors.Wrap(err, "failed to create or update agent pool")
 			}
 		} else {
 			klog.V(2).Infof("Normalized and desired agent pool matched, no update needed")
@@ -115,7 +107,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 func (s *Service) Delete(ctx context.Context, spec interface{}) error {
 	agentPoolSpec, ok := spec.(*Spec)
 	if !ok {
-		return errors.New("expected agent pool specification")
+		return errors.New("invalid agent pool specification")
 	}
 
 	klog.V(2).Infof("deleting agent pool  %s ", agentPoolSpec.Name)

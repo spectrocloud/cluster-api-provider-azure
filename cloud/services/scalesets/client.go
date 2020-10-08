@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-11-01/network"
 	"github.com/Azure/go-autorest/autorest"
 
@@ -33,6 +33,7 @@ type Client interface {
 	ListInstances(context.Context, string, string) ([]compute.VirtualMachineScaleSetVM, error)
 	Get(context.Context, string, string) (compute.VirtualMachineScaleSet, error)
 	CreateOrUpdate(context.Context, string, string, compute.VirtualMachineScaleSet) error
+	Update(context.Context, string, string, compute.VirtualMachineScaleSetUpdate) error
 	Delete(context.Context, string, string) error
 	GetPublicIPAddress(context.Context, string, string) (network.PublicIPAddress, error)
 }
@@ -47,33 +48,33 @@ type AzureClient struct {
 var _ Client = &AzureClient{}
 
 // NewClient creates a new VMSS client from subscription ID.
-func NewClient(subscriptionID string, authorizer autorest.Authorizer) *AzureClient {
+func NewClient(auth azure.Authorizer) *AzureClient {
 	return &AzureClient{
-		scalesetvms: newVirtualMachineScaleSetVMsClient(subscriptionID, authorizer),
-		scalesets:   newVirtualMachineScaleSetsClient(subscriptionID, authorizer),
-		publicIPs:   newPublicIPsClient(subscriptionID, authorizer),
+		scalesetvms: newVirtualMachineScaleSetVMsClient(auth.SubscriptionID(), auth.BaseURI(), auth.Authorizer()),
+		scalesets:   newVirtualMachineScaleSetsClient(auth.SubscriptionID(), auth.BaseURI(), auth.Authorizer()),
+		publicIPs:   newPublicIPsClient(auth.SubscriptionID(), auth.BaseURI(), auth.Authorizer()),
 	}
 }
 
 // newVirtualMachineScaleSetVMsClient creates a new vmss VM client from subscription ID.
-func newVirtualMachineScaleSetVMsClient(subscriptionID string, authorizer autorest.Authorizer) compute.VirtualMachineScaleSetVMsClient {
-	c := compute.NewVirtualMachineScaleSetVMsClient(subscriptionID)
+func newVirtualMachineScaleSetVMsClient(subscriptionID string, baseURI string, authorizer autorest.Authorizer) compute.VirtualMachineScaleSetVMsClient {
+	c := compute.NewVirtualMachineScaleSetVMsClientWithBaseURI(baseURI, subscriptionID)
 	c.Authorizer = authorizer
 	_ = c.AddToUserAgent(azure.UserAgent()) // intentionally ignore error as it doesn't matter
 	return c
 }
 
 // newVirtualMachineScaleSetsClient creates a new vmss client from subscription ID.
-func newVirtualMachineScaleSetsClient(subscriptionID string, authorizer autorest.Authorizer) compute.VirtualMachineScaleSetsClient {
-	c := compute.NewVirtualMachineScaleSetsClient(subscriptionID)
+func newVirtualMachineScaleSetsClient(subscriptionID string, baseURI string, authorizer autorest.Authorizer) compute.VirtualMachineScaleSetsClient {
+	c := compute.NewVirtualMachineScaleSetsClientWithBaseURI(baseURI, subscriptionID)
 	c.Authorizer = authorizer
 	_ = c.AddToUserAgent(azure.UserAgent()) // intentionally ignore error as it doesn't matter
 	return c
 }
 
 // newPublicIPsClient creates a new publicIPs client from subscription ID.
-func newPublicIPsClient(subscriptionID string, authorizer autorest.Authorizer) network.PublicIPAddressesClient {
-	c := network.NewPublicIPAddressesClient(subscriptionID)
+func newPublicIPsClient(subscriptionID string, baseURI string, authorizer autorest.Authorizer) network.PublicIPAddressesClient {
+	c := network.NewPublicIPAddressesClientWithBaseURI(baseURI, subscriptionID)
 	c.Authorizer = authorizer
 	_ = c.AddToUserAgent(azure.UserAgent()) // intentionally ignore error as it doesn't matter
 	return c
@@ -119,6 +120,21 @@ func (ac *AzureClient) Get(ctx context.Context, resourceGroupName, vmssName stri
 // CreateOrUpdate the operation to create or update a virtual machine scale set.
 func (ac *AzureClient) CreateOrUpdate(ctx context.Context, resourceGroupName, vmssName string, vmss compute.VirtualMachineScaleSet) error {
 	future, err := ac.scalesets.CreateOrUpdate(ctx, resourceGroupName, vmssName, vmss)
+	if err != nil {
+		return err
+	}
+	err = future.WaitForCompletionRef(ctx, ac.scalesets.Client)
+	if err != nil {
+		return err
+	}
+	_, err = future.Result(ac.scalesets)
+	return err
+}
+
+// Update update a VM scale set.
+// Parameters: resourceGroupName - the name of the resource group. VMScaleSetName - the name of the VM scale set to create or update. parameters - the scale set object.
+func (ac *AzureClient) Update(ctx context.Context, resourceGroupName, vmssName string, parameters compute.VirtualMachineScaleSetUpdate) error {
+	future, err := ac.scalesets.Update(ctx, resourceGroupName, vmssName, parameters)
 	if err != nil {
 		return err
 	}

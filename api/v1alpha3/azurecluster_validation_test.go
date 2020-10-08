@@ -20,8 +20,81 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
+
+func TestClusterNameValidation(t *testing.T) {
+	g := NewWithT(t)
+	tests := []struct {
+		name        string
+		clusterName string
+		wantErr     bool
+	}{
+		{
+			name:        "cluster name more than 44 characters",
+			clusterName: "vegkebfadbczdtevzjiyookobkdgfofjxmlquonomzoes",
+			wantErr:     true,
+		},
+		{
+			name:        "cluster name with letters",
+			clusterName: "cluster",
+			wantErr:     false,
+		},
+		{
+			name:        "cluster name with upper case letters",
+			clusterName: "clusterName",
+			wantErr:     true,
+		},
+		{
+			name:        "cluster name with hyphen",
+			clusterName: "test-cluster",
+			wantErr:     false,
+		},
+		{
+			name:        "cluster name with letters and numbers",
+			clusterName: "clustername1",
+			wantErr:     false,
+		},
+		{
+			name:        "cluster name with special characters",
+			clusterName: "cluster$?name",
+			wantErr:     true,
+		},
+		{
+			name:        "cluster name starting with underscore",
+			clusterName: "_clustername",
+			wantErr:     true,
+		},
+		{
+			name:        "cluster name with underscore",
+			clusterName: "cluster_name",
+			wantErr:     true,
+		},
+		{
+			name:        "cluster name with period",
+			clusterName: "cluster.name",
+			wantErr:     true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			azureCluster := AzureCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tc.clusterName,
+				},
+			}
+
+			allErrs := azureCluster.validateClusterName()
+			if tc.wantErr {
+				g.Expect(allErrs).ToNot(BeNil())
+			} else {
+				g.Expect(allErrs).To(BeNil())
+			}
+		})
+	}
+}
 
 func TestClusterWithPreexistingVnetValid(t *testing.T) {
 	g := NewWithT(t)
@@ -485,8 +558,63 @@ func TestInternalLBIPAddressInvalid(t *testing.T) {
 	g.Expect(err.BadValue).To(BeEquivalentTo(internalLBIPAddress))
 }
 
+func TestIngressRules(t *testing.T) {
+	g := NewWithT(t)
+
+	tests := []struct {
+		name      string
+		validRule *IngressRule
+		wantErr   bool
+	}{
+		{
+			name: "ingressRule - valid priority",
+			validRule: &IngressRule{
+				Name:        "allow_apiserver",
+				Description: "Allow K8s API Server",
+				Priority:    101,
+			},
+			wantErr: false,
+		},
+		{
+			name: "ingressRule - invalid low priority",
+			validRule: &IngressRule{
+				Name:        "allow_apiserver",
+				Description: "Allow K8s API Server",
+				Priority:    99,
+			},
+			wantErr: true,
+		},
+		{
+			name: "ingressRule - invalid high priority",
+			validRule: &IngressRule{
+				Name:        "allow_apiserver",
+				Description: "Allow K8s API Server",
+				Priority:    5000,
+			},
+			wantErr: true,
+		},
+	}
+	for _, testCase := range tests {
+
+		t.Run(testCase.name, func(t *testing.T) {
+			err := validateIngressRule(
+				testCase.validRule,
+				field.NewPath("spec").Child("networkSpec").Child("subnets").Index(0).Child("securityGroup").Child("ingressRules").Index(0),
+			)
+			if testCase.wantErr {
+				g.Expect(err).To(HaveOccurred())
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	}
+}
+
 func createValidCluster() *AzureCluster {
 	return &AzureCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster",
+		},
 		Spec: AzureClusterSpec{
 			NetworkSpec: createValidNetworkSpec(),
 		},

@@ -16,23 +16,37 @@ limitations under the License.
 package scalesets
 
 import (
-	"github.com/Azure/go-autorest/autorest"
-	"sigs.k8s.io/cluster-api-provider-azure/cloud/services/publicloadbalancers"
+	"context"
+	"github.com/go-logr/logr"
+	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	azure "sigs.k8s.io/cluster-api-provider-azure/cloud"
 	"sigs.k8s.io/cluster-api-provider-azure/cloud/services/resourceskus"
 )
 
+// ScaleSetScope defines the scope interface for a scale sets service.
+type ScaleSetScope interface {
+	azure.ClusterDescriber
+	logr.Logger
+	ScaleSetSpec() azure.ScaleSetSpec
+	GetBootstrapData(ctx context.Context) (string, error)
+	GetVMImage() (*infrav1.Image, error)
+	SetAnnotation(string, string)
+	SetProviderID(string)
+	SetProvisioningState(infrav1.VMState)
+}
+
 // Service provides operations on azure resources
 type Service struct {
+	Scope ScaleSetScope
 	Client
-	ResourceSkusClient        resourceskus.Client
-	PublicLoadBalancersClient publicloadbalancers.Client
+	ResourceSKUCache *resourceskus.Cache
 }
 
 // NewService creates a new service.
-func NewService(authorizer autorest.Authorizer, subscriptionID string) *Service {
+func NewService(scope ScaleSetScope, skuCache *resourceskus.Cache) *Service {
 	return &Service{
-		Client:                    NewClient(subscriptionID, authorizer),
-		ResourceSkusClient:        resourceskus.NewClient(subscriptionID, authorizer),
-		PublicLoadBalancersClient: publicloadbalancers.NewClient(subscriptionID, authorizer),
+		Client:           NewClient(scope),
+		Scope:            scope,
+		ResourceSKUCache: skuCache,
 	}
 }

@@ -31,6 +31,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-azuremachine
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.azuremachine.infrastructure.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1alpha3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - azuremachines
+  sideEffects: None
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
       path: /mutate-exp-cluster-x-k8s-io-x-k8s-io-v1alpha3-azuremachinepool
   failurePolicy: Fail
   matchPolicy: Equivalent
@@ -46,6 +66,24 @@ webhooks:
     resources:
     - azuremachinepools
   sideEffects: None
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-exp-infrastructure-cluster-x-k8s-io-v1alpha3-azuremanagedcontrolplane
+  failurePolicy: Fail
+  name: azuremanagedcontrolplane.kb.io
+  rules:
+  - apiGroups:
+    - exp.infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1alpha3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - azuremanagedcontrolplanes
 
 ---
 apiVersion: admissionregistration.k8s.io/v1beta1
@@ -114,3 +152,21 @@ webhooks:
     resources:
     - azuremachinepools
   sideEffects: None
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-exp-infrastructure-cluster-x-k8s-io-v1alpha3-azuremanagedcontrolplane
+  failurePolicy: Fail
+  name: azuremanagedcontrolplane.kb.io
+  rules:
+  - apiGroups:
+    - exp.infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1alpha3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - azuremanagedcontrolplanes

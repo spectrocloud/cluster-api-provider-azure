@@ -17,19 +17,28 @@ limitations under the License.
 package publicips
 
 import (
-	"sigs.k8s.io/cluster-api-provider-azure/cloud/scope"
+	azure "sigs.k8s.io/cluster-api-provider-azure/cloud"
+
+	"github.com/go-logr/logr"
 )
 
-// Service provides operations on azure resources
+// PublicIPScope defines the scope interface for a public IP service.
+type PublicIPScope interface {
+	logr.Logger
+	azure.ClusterDescriber
+	PublicIPSpecs() []azure.PublicIPSpec
+}
+
+// Service provides operations on Azure resources.
 type Service struct {
-	Scope *scope.ClusterScope
+	Scope PublicIPScope
 	Client
 }
 
 // NewService creates a new service.
-func NewService(scope *scope.ClusterScope) *Service {
+func NewService(scope PublicIPScope) *Service {
 	return &Service{
 		Scope:  scope,
-		Client: NewClient(scope.SubscriptionID, scope.Authorizer),
+		Client: NewClient(scope),
 	}
 }

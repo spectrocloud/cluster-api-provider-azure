@@ -21,21 +21,30 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os/exec"
+	"path"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/kubeconfig"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Test suite constants for e2e config variables
 const (
-	KubernetesVersion  = "KUBERNETES_VERSION"
-	CNIPath            = "CNI"
-	AzureResourceGroup = "AZURE_RESOURCE_GROUP"
-	AzureVNetName      = "AZURE_VNET_NAME"
+	RedactLogScriptPath = "REDACT_LOG_SCRIPT"
+	AzureResourceGroup  = "AZURE_RESOURCE_GROUP"
+	AzureVNetName       = "AZURE_VNET_NAME"
+	CNIPathIPv6         = "CNI_IPV6"
+	CNIResourcesIPv6    = "CNI_RESOURCES_IPV6"
 )
 
 func Byf(format string, a ...interface{}) {
@@ -80,4 +89,29 @@ func dumpSpecResourcesAndCleanup(ctx context.Context, specName string, clusterPr
 		})
 	}
 	cancelWatches()
+	redactLogs()
+}
+
+func redactLogs() {
+	By("Redacting sensitive information from logs")
+	Expect(e2eConfig.Variables).To(HaveKey(RedactLogScriptPath))
+	cmd := exec.Command(e2eConfig.GetVariable(RedactLogScriptPath))
+	cmd.Run()
+}
+
+func createRestConfig(tmpdir, namespace, clusterName string) *rest.Config {
+	cluster := crclient.ObjectKey{
+		Namespace: namespace,
+		Name:      clusterName,
+	}
+	kubeConfigData, err := kubeconfig.FromSecret(context.TODO(), bootstrapClusterProxy.GetClient(), cluster)
+	Expect(err).NotTo(HaveOccurred())
+
+	kubeConfigPath := path.Join(tmpdir, clusterName+".kubeconfig")
+	Expect(ioutil.WriteFile(kubeConfigPath, kubeConfigData, 0640)).To(Succeed())
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+	Expect(err).NotTo(HaveOccurred())
+
+	return config
 }
