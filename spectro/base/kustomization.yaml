@@ -6,3 +6,4 @@ commonLabels:
 
 bases:
   - ../../config/default
+  - ../../config/aadpodidentity
