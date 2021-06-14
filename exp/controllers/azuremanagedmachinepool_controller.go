@@ -251,13 +251,19 @@ func (r *AzureManagedMachinePoolReconciler) reconcileDelete(ctx context.Context,
 
 	scope.Logger.Info("Reconciling AzureManagedMachinePool delete")
 
-	if err := r.createAzureManagedMachinePoolService(scope).Delete(ctx, scope); err != nil {
-		return reconcile.Result{}, errors.Wrapf(err, "error deleting AzureManagedMachinePool %s/%s", scope.InfraMachinePool.Namespace, scope.InfraMachinePool.Name)
+	if !scope.Cluster.DeletionTimestamp.IsZero() {
+		// Cluster was deleted, skip machine pool deletion and let AKS delete the whole cluster.
+		// So, remove the finalizer.
+		controllerutil.RemoveFinalizer(scope.InfraMachinePool, infrav1.ClusterFinalizer)
+	} else {
+
+		if err := r.createAzureManagedMachinePoolService(scope).Delete(ctx, scope); err != nil {
+			return reconcile.Result{}, errors.Wrapf(err, "error deleting AzureManagedMachinePool %s/%s", scope.InfraMachinePool.Namespace, scope.InfraMachinePool.Name)
+		}
+
+		// Cluster is deleted so remove the finalizer.
+		controllerutil.RemoveFinalizer(scope.InfraMachinePool, infrav1.ClusterFinalizer)
 	}
-
-	// Cluster is deleted so remove the finalizer.
-	controllerutil.RemoveFinalizer(scope.InfraMachinePool, infrav1.ClusterFinalizer)
-
 	if err := scope.PatchObject(ctx); err != nil {
 		return reconcile.Result{}, err
 	}
