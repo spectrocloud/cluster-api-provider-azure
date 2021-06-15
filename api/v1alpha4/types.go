@@ -166,12 +166,15 @@ type SecurityRules []SecurityRule
 
 // LoadBalancerSpec defines an Azure load balancer.
 type LoadBalancerSpec struct {
-	ID               string       `json:"id,omitempty"`
-	Name             string       `json:"name,omitempty"`
-	SKU              SKU          `json:"sku,omitempty"`
-	FrontendIPs      []FrontendIP `json:"frontendIPs,omitempty"`
-	Type             LBType       `json:"type,omitempty"`
-	FrontendIPsCount *int32       `json:"frontendIPsCount,omitempty"`
+	ID          string       `json:"id,omitempty"`
+	Name        string       `json:"name,omitempty"`
+	SKU         SKU          `json:"sku,omitempty"`
+	FrontendIPs []FrontendIP `json:"frontendIPs,omitempty"`
+	Type        LBType       `json:"type,omitempty"`
+	// FrontendIPsCount specifies the number of frontend IP addresses for the load balancer.
+	FrontendIPsCount *int32 `json:"frontendIPsCount,omitempty"`
+	// IdleTimeoutInMinutes specifies the timeout for the TCP idle connection.
+	IdleTimeoutInMinutes *int32 `json:"idleTimeoutInMinutes,omitempty"`
 }
 
 // SKU defines an Azure load balancer SKU.
@@ -515,6 +518,16 @@ type AddressRecord struct {
 // CloudProviderConfigOverrides represents the fields that can be overridden in azure cloud provider config.
 type CloudProviderConfigOverrides struct {
 	RateLimits []RateLimitSpec `json:"rateLimits,omitempty"`
+	BackOffs   BackOffConfig   `json:"backOffs,omitempty"`
+}
+
+// BackOffConfig indicates the back-off config options.
+type BackOffConfig struct {
+	CloudProviderBackoff         bool               `json:"cloudProviderBackoff,omitempty"`
+	CloudProviderBackoffRetries  int                `json:"cloudProviderBackoffRetries,omitempty"`
+	CloudProviderBackoffExponent *resource.Quantity `json:"cloudProviderBackoffExponent,omitempty"`
+	CloudProviderBackoffDuration int                `json:"cloudProviderBackoffDuration,omitempty"`
+	CloudProviderBackoffJitter   *resource.Quantity `json:"cloudProviderBackoffJitter,omitempty"`
 }
 
 // RateLimitSpec represents the rate limit configuration for a particular kind of resource.
@@ -586,4 +599,9 @@ type AzureBastion struct {
 	Subnet SubnetSpec `json:"subnet,omitempty"`
 	// +optional
 	PublicIP PublicIPSpec `json:"publicIP,omitempty"`
+}
+
+// IsTerminalProvisioningState returns true if the ProvisioningState is a terminal state for an Azure resource
+func IsTerminalProvisioningState(state ProvisioningState) bool {
+	return state == Failed || state == Succeeded
 }
