@@ -26,6 +26,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-11-01/network"
 	"github.com/Azure/go-autorest/autorest"
+	azureautorest "github.com/Azure/go-autorest/autorest/azure"
 	"github.com/pkg/errors"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
@@ -60,6 +61,11 @@ type (
 	genericScaleSetFuture interface {
 		DoneWithContext(ctx context.Context, sender autorest.Sender) (done bool, err error)
 		Result(client compute.VirtualMachineScaleSetsClient) (vmss compute.VirtualMachineScaleSet, err error)
+	}
+
+	genericScaleSetFutureImpl struct {
+		azureautorest.FutureAPI
+		result func(client compute.VirtualMachineScaleSetsClient) (vmss compute.VirtualMachineScaleSet, err error)
 	}
 
 	deleteResultAdapter struct {
@@ -196,7 +202,7 @@ func (ac *AzureClient) CreateOrUpdateAsync(ctx context.Context, resourceGroupNam
 
 	jsonData, err := future.MarshalJSON()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to marshal async future")
+		return nil, errors.Wrap(err, "failed to marshal async future")
 	}
 
 	return &infrav1.Future{
@@ -249,7 +255,7 @@ func (ac *AzureClient) UpdateAsync(ctx context.Context, resourceGroupName, vmssN
 
 	jsonData, err := future.MarshalJSON()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to marshal async future")
+		return nil, errors.Wrap(err, "failed to marshal async future")
 	}
 
 	return &infrav1.Future{
@@ -265,7 +271,7 @@ func (ac *AzureClient) GetResultIfDone(ctx context.Context, future *infrav1.Futu
 	var genericFuture genericScaleSetFuture
 	futureData, err := base64.URLEncoding.DecodeString(future.FutureData)
 	if err != nil {
-		return compute.VirtualMachineScaleSet{}, errors.Wrapf(err, "failed to base64 decode future data")
+		return compute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed to base64 decode future data")
 	}
 
 	switch future.Type {
@@ -275,14 +281,20 @@ func (ac *AzureClient) GetResultIfDone(ctx context.Context, future *infrav1.Futu
 			return compute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed to unmarshal future data")
 		}
 
-		genericFuture = &future
+		genericFuture = &genericScaleSetFutureImpl{
+			FutureAPI: &future,
+			result:    future.Result,
+		}
 	case PutFuture:
 		var future compute.VirtualMachineScaleSetsCreateOrUpdateFuture
 		if err := json.Unmarshal(futureData, &future); err != nil {
 			return compute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed to unmarshal future data")
 		}
 
-		genericFuture = &future
+		genericFuture = &genericScaleSetFutureImpl{
+			FutureAPI: &future,
+			result:    future.Result,
+		}
 	case DeleteFuture:
 		var future compute.VirtualMachineScaleSetsDeleteFuture
 		if err := json.Unmarshal(futureData, &future); err != nil {
@@ -293,12 +305,12 @@ func (ac *AzureClient) GetResultIfDone(ctx context.Context, future *infrav1.Futu
 			VirtualMachineScaleSetsDeleteFuture: future,
 		}
 	default:
-		return compute.VirtualMachineScaleSet{}, errors.Errorf("unknown furture type %q", future.Type)
+		return compute.VirtualMachineScaleSet{}, errors.Errorf("unknown future type %q", future.Type)
 	}
 
 	done, err := genericFuture.DoneWithContext(ctx, ac.scalesets)
 	if err != nil {
-		return compute.VirtualMachineScaleSet{}, errors.Wrapf(err, "failed checking if the operation was complete")
+		return compute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed checking if the operation was complete")
 	}
 
 	if !done {
@@ -307,7 +319,7 @@ func (ac *AzureClient) GetResultIfDone(ctx context.Context, future *infrav1.Futu
 
 	vmss, err := genericFuture.Result(ac.scalesets)
 	if err != nil {
-		return vmss, errors.Wrapf(err, "failed fetching the result of operation for vmss")
+		return vmss, errors.Wrap(err, "failed fetching the result of operation for vmss")
 	}
 
 	return vmss, nil
@@ -368,7 +380,7 @@ func (ac *AzureClient) DeleteAsync(ctx context.Context, resourceGroupName, vmssN
 
 	jsonData, err := future.MarshalJSON()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to marshal async future")
+		return nil, errors.Wrap(err, "failed to marshal async future")
 	}
 
 	return &infrav1.Future{
@@ -392,4 +404,9 @@ func (ac *AzureClient) GetPublicIPAddress(ctx context.Context, resourceGroupName
 func (da *deleteResultAdapter) Result(client compute.VirtualMachineScaleSetsClient) (compute.VirtualMachineScaleSet, error) {
 	_, err := da.VirtualMachineScaleSetsDeleteFuture.Result(client)
 	return compute.VirtualMachineScaleSet{}, err
+}
+
+// Result returns the Result so that we can treat it generically.
+func (g *genericScaleSetFutureImpl) Result(client compute.VirtualMachineScaleSetsClient) (compute.VirtualMachineScaleSet, error) {
+	return g.result(client)
 }

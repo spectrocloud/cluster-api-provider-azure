@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-02-01/containerservice"
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-03-01/containerservice"
 	"github.com/pkg/errors"
 	"k8s.io/klog"
 
@@ -122,7 +122,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 
 	properties := containerservice.ManagedCluster{
 		Identity: &containerservice.ManagedClusterIdentity{
-			Type: containerservice.SystemAssigned,
+			Type: containerservice.ResourceIdentityTypeSystemAssigned,
 		},
 		Location: &managedClusterSpec.Location,
 		ManagedClusterProperties: &containerservice.ManagedClusterProperties{
@@ -143,7 +143,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 				ClientID: &managedIdentity,
 			},
 			AgentPoolProfiles: &[]containerservice.ManagedClusterAgentPoolProfile{},
-			NetworkProfile: &containerservice.NetworkProfileType{
+			NetworkProfile: &containerservice.NetworkProfile{
 				NetworkPlugin:   containerservice.NetworkPlugin(managedClusterSpec.NetworkPlugin),
 				LoadBalancerSku: containerservice.LoadBalancerSku(managedClusterSpec.LoadBalancerSKU),
 				NetworkPolicy:   containerservice.NetworkPolicy(managedClusterSpec.NetworkPolicy),
@@ -177,7 +177,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 	for _, pool := range managedClusterSpec.AgentPools {
 		profile := containerservice.ManagedClusterAgentPoolProfile{
 			Name:         &pool.Name,
-			VMSize:       containerservice.VMSizeTypes(pool.SKU),
+			VMSize:       &pool.SKU,
 			OsDiskSizeGB: &pool.OSDiskSizeGB,
 			Count:        &pool.Replicas,
 			Type:         containerservice.VirtualMachineScaleSets,
