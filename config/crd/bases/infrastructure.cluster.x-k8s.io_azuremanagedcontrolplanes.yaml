@@ -23,7 +23,7 @@ spec:
   - name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: AzureManagedControlPlane is the Schema for the azuremanagedcontrolplanes API
+        description: AzureManagedControlPlane is the Schema for the azuremanagedcontrolplanes API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
@@ -34,7 +34,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: AzureManagedControlPlaneSpec defines the desired state of AzureManagedControlPlane
+            description: AzureManagedControlPlaneSpec defines the desired state of AzureManagedControlPlane.
             properties:
               aadProfile:
                 description: AadProfile is Azure Active Directory configuration to integrate with AKS for aad authentication.
@@ -157,7 +157,7 @@ spec:
             - version
             type: object
           status:
-            description: AzureManagedControlPlaneStatus defines the observed state of AzureManagedControlPlane
+            description: AzureManagedControlPlaneStatus defines the observed state of AzureManagedControlPlane.
             properties:
               initialized:
                 description: Initialized is true when the the control plane is available for initial contact. This may occur before the control plane is fully ready. In the AzureManagedControlPlane implementation, these are identical.
@@ -174,7 +174,7 @@ spec:
   - name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: AzureManagedControlPlane is the Schema for the azuremanagedcontrolplanes API
+        description: AzureManagedControlPlane is the Schema for the azuremanagedcontrolplanes API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
@@ -185,7 +185,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: AzureManagedControlPlaneSpec defines the desired state of AzureManagedControlPlane
+            description: AzureManagedControlPlaneSpec defines the desired state of AzureManagedControlPlane.
             properties:
               aadProfile:
                 description: AadProfile is Azure Active Directory configuration to integrate with AKS for aad authentication.
@@ -307,7 +307,7 @@ spec:
             - version
             type: object
           status:
-            description: AzureManagedControlPlaneStatus defines the observed state of AzureManagedControlPlane
+            description: AzureManagedControlPlaneStatus defines the observed state of AzureManagedControlPlane.
             properties:
               initialized:
                 description: Initialized is true when the the control plane is available for initial contact. This may occur before the control plane is fully ready. In the AzureManagedControlPlane implementation, these are identical.
