@@ -99,6 +99,18 @@ func (r *azureManagedControlPlaneReconciler) Reconcile(ctx context.Context, scop
 		managedClusterSpec.LoadBalancerSKU = *scope.ControlPlane.Spec.LoadBalancerSKU
 	}
 
+	if scope.ControlPlane.Spec.AADProfile != nil {
+		managedClusterSpec.AADProfile = &managedclusters.ManagedClusterAADProfile{
+			Managed:             scope.ControlPlane.Spec.AADProfile.Managed,
+			EnableAzureRBAC:     scope.ControlPlane.Spec.AADProfile.Managed,
+			AdminGroupObjectIDs: scope.ControlPlane.Spec.AADProfile.AdminGroupObjectIDs,
+			ClientAppID:         scope.ControlPlane.Spec.AADProfile.ClientAppID,
+			ServerAppID:         scope.ControlPlane.Spec.AADProfile.ServerAppID,
+			ServerAppSecret:     scope.ControlPlane.Spec.AADProfile.ServerAppSecret,
+			TenantID:            scope.ControlPlane.Spec.AADProfile.TenantID,
+		}
+	}
+
 	scope.V(2).Info("Reconciling managed cluster resource group")
 	if err := r.groupsSvc.Reconcile(ctx); err != nil {
 		return errors.Wrapf(err, "failed to reconcile managed cluster resource group")

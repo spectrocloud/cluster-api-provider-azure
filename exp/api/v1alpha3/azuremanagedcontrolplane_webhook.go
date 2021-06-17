@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Kubernetes Authors.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,13 +22,15 @@ import (
 	"regexp"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
 )
 
 // log is for logging in this package.
@@ -47,7 +49,7 @@ func (r *AzureManagedControlPlane) SetupWebhookWithManager(mgr ctrl.Manager) err
 
 var _ webhook.Defaulter = &AzureManagedControlPlane{}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
+// Default implements webhook.Defaulter so a webhook will be registered for the type.
 func (r *AzureManagedControlPlane) Default() {
 	azuremanagedcontrolplanelog.Info("default", "name", r.Name)
 
@@ -83,33 +85,226 @@ func (r *AzureManagedControlPlane) Default() {
 
 var _ webhook.Validator = &AzureManagedControlPlane{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
+// ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (r *AzureManagedControlPlane) ValidateCreate() error {
 	azuremanagedcontrolplanelog.Info("validate create", "name", r.Name)
 
 	return r.Validate()
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *AzureManagedControlPlane) ValidateUpdate(old runtime.Object) error {
+// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
+func (r *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object) error {
 	azuremanagedcontrolplanelog.Info("validate update", "name", r.Name)
+	var allErrs field.ErrorList
+	old := oldRaw.(*AzureManagedControlPlane)
 
-	return r.Validate()
+	if r.Spec.SubscriptionID != old.Spec.SubscriptionID {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "SubscriptionID"),
+				r.Spec.SubscriptionID,
+				"field is immutable"))
+	}
+
+	if r.Spec.ResourceGroupName != old.Spec.ResourceGroupName {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "ResourceGroupName"),
+				r.Spec.ResourceGroupName,
+				"field is immutable"))
+	}
+
+	if r.Spec.NodeResourceGroupName != old.Spec.NodeResourceGroupName {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "NodeResourceGroupName"),
+				r.Spec.NodeResourceGroupName,
+				"field is immutable"))
+	}
+
+	if r.Spec.Location != old.Spec.Location {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "Location"),
+				r.Spec.Location,
+				"field is immutable"))
+	}
+
+	if old.Spec.SSHPublicKey != "" {
+		// Prevent SSH key modification if it was already set to some value
+		if r.Spec.SSHPublicKey != old.Spec.SSHPublicKey {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "SSHPublicKey"),
+					r.Spec.SSHPublicKey,
+					"field is immutable"))
+		}
+	}
+
+	if old.Spec.DNSServiceIP != nil {
+		// Prevent DNSServiceIP modification if it was already set to some value
+		if r.Spec.DNSServiceIP == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "DNSServiceIP"),
+					r.Spec.DNSServiceIP,
+					"field is immutable, unsetting is not allowed"))
+		} else if *r.Spec.DNSServiceIP != *old.Spec.DNSServiceIP {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "DNSServiceIP"),
+					*r.Spec.DNSServiceIP,
+					"field is immutable"))
+		}
+	}
+
+	if old.Spec.NetworkPlugin != nil {
+		// Prevent NetworkPlugin modification if it was already set to some value
+		if r.Spec.NetworkPlugin == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "NetworkPlugin"),
+					r.Spec.NetworkPlugin,
+					"field is immutable, unsetting is not allowed"))
+		} else if *r.Spec.NetworkPlugin != *old.Spec.NetworkPlugin {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "NetworkPlugin"),
+					*r.Spec.NetworkPlugin,
+					"field is immutable"))
+		}
+	}
+
+	if old.Spec.NetworkPolicy != nil {
+		// Prevent NetworkPolicy modification if it was already set to some value
+		if r.Spec.NetworkPolicy == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "NetworkPolicy"),
+					r.Spec.NetworkPolicy,
+					"field is immutable, unsetting is not allowed"))
+		} else if *r.Spec.NetworkPolicy != *old.Spec.NetworkPolicy {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "NetworkPolicy"),
+					*r.Spec.NetworkPolicy,
+					"field is immutable"))
+		}
+	}
+
+	if old.Spec.LoadBalancerSKU != nil {
+		// Prevent LoadBalancerSKU modification if it was already set to some value
+		if r.Spec.LoadBalancerSKU == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "LoadBalancerSKU"),
+					r.Spec.LoadBalancerSKU,
+					"field is immutable, unsetting is not allowed"))
+		} else if *r.Spec.LoadBalancerSKU != *old.Spec.LoadBalancerSKU {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "LoadBalancerSKU"),
+					*r.Spec.LoadBalancerSKU,
+					"field is immutable"))
+		}
+	}
+
+	if old.Spec.DefaultPoolRef.Name != "" {
+		if r.Spec.DefaultPoolRef.Name != old.Spec.DefaultPoolRef.Name {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "DefaultPoolRef", "Name"),
+					r.Spec.DefaultPoolRef.Name,
+					"field is immutable"))
+		}
+	}
+
+	if old.Spec.AADProfile != nil && r.Spec.AADProfile == nil {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "AADProfile"),
+				r.Spec.AADProfile,
+				"field cannot be nil, cannot disable AADProfile"))
+	}
+
+	if old.Spec.AADProfile != nil && r.Spec.AADProfile != nil {
+		if old.Spec.AADProfile.Managed != nil && (r.Spec.AADProfile.Managed == nil || !*r.Spec.AADProfile.Managed) {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "AADProfile", "Managed"),
+					r.Spec.AADProfile.Managed,
+					"field cannot be set to false, Managed AADManagedProfile cannot be disabled or migrated to Legacy"))
+		}
+
+		if old.Spec.AADProfile.AdminGroupObjectIDs != nil && (r.Spec.AADProfile.AdminGroupObjectIDs == nil || len(*r.Spec.AADProfile.AdminGroupObjectIDs) == 0) {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "AADProfile", "AdminGroupObjectIDs"),
+					r.Spec.AADProfile.AdminGroupObjectIDs,
+					"need atleast one AdminGroupObjectID"))
+		}
+
+		if r.Spec.AADProfile.Managed == nil {
+			if old.Spec.AADProfile.ClientAppID != nil && r.Spec.AADProfile.ClientAppID != old.Spec.AADProfile.ClientAppID {
+				allErrs = append(allErrs,
+					field.Invalid(
+						field.NewPath("Spec", "AADProfile", "ClientAppID"),
+						r.Spec.AADProfile.ClientAppID,
+						"field is immutable"))
+			}
+			if old.Spec.AADProfile.ServerAppID != nil && r.Spec.AADProfile.ServerAppID != old.Spec.AADProfile.ServerAppID {
+				allErrs = append(allErrs,
+					field.Invalid(
+						field.NewPath("Spec", "AADProfile", "ServerAppID"),
+						r.Spec.AADProfile.ServerAppID,
+						"field is immutable"))
+			}
+			if old.Spec.AADProfile.ServerAppSecret != nil && r.Spec.AADProfile.ServerAppSecret != old.Spec.AADProfile.ServerAppSecret {
+				allErrs = append(allErrs,
+					field.Invalid(
+						field.NewPath("Spec", "AADProfile", "ServerAppSecret"),
+						r.Spec.AADProfile.ServerAppSecret,
+						"field is immutable"))
+			}
+			if old.Spec.AADProfile.TenantID != nil && r.Spec.AADProfile.TenantID != old.Spec.AADProfile.TenantID {
+				allErrs = append(allErrs,
+					field.Invalid(
+						field.NewPath("Spec", "AADProfile", "TenantID"),
+						r.Spec.AADProfile.TenantID,
+						"field is immutable"))
+			}
+		}
+	}
+
+	if len(allErrs) == 0 {
+		return r.Validate()
+	}
+
+	return apierrors.NewInvalid(GroupVersion.WithKind("AzureManagedControlPlane").GroupKind(), r.Name, allErrs)
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
+// ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
 func (r *AzureManagedControlPlane) ValidateDelete() error {
 	azuremanagedcontrolplanelog.Info("validate delete", "name", r.Name)
 
 	return nil
 }
 
-// Validate the Azure Machine Pool and return an aggregate error
+// Validate the Azure Machine Pool and return an aggregate error.
 func (r *AzureManagedControlPlane) Validate() error {
 	validators := []func() error{
 		r.validateVersion,
 		r.validateDNSServiceIP,
 		r.validateSSHKey,
+		r.validateAadProfile,
 	}
 
 	var errs []error
@@ -122,7 +317,7 @@ func (r *AzureManagedControlPlane) Validate() error {
 	return kerrors.NewAggregate(errs)
 }
 
-// validate DNSServiceIP
+// validate DNSServiceIP.
 func (r *AzureManagedControlPlane) validateDNSServiceIP() error {
 	if r.Spec.DNSServiceIP != nil {
 		if net.ParseIP(*r.Spec.DNSServiceIP) == nil {
@@ -153,4 +348,54 @@ func (r *AzureManagedControlPlane) validateSSHKey() error {
 	}
 
 	return nil
+}
+
+func (r *AzureManagedControlPlane) validateAadProfile() error {
+	if r.Spec.AADProfile != nil {
+		managedAad, err := r.validateManagedAadProfile()
+		if err != nil {
+			return err
+		}
+		legacyAad, err := r.validateLegacyAadProfile()
+		if err != nil {
+			return err
+		}
+		if managedAad && legacyAad {
+			return errors.New("conflicting values provided in AADProfile")
+		}
+	}
+	return nil
+}
+
+func (r *AzureManagedControlPlane) validateManagedAadProfile() (bool, error) {
+	if r.Spec.AADProfile.Managed != nil && *r.Spec.AADProfile.Managed && (r.Spec.AADProfile.AdminGroupObjectIDs == nil || len(*r.Spec.AADProfile.AdminGroupObjectIDs) == 0) {
+		return false, errors.New("AdminGroupObjectIDs fields missing in AADProfile")
+	}
+
+	if r.Spec.AADProfile.Managed == nil && r.Spec.AADProfile.AdminGroupObjectIDs != nil && len(*r.Spec.AADProfile.AdminGroupObjectIDs) != 0 {
+		return false, errors.New("Managed field missing in AADProfile")
+	}
+	return r.Spec.AADProfile.Managed != nil && *r.Spec.AADProfile.Managed, nil
+}
+
+func (r *AzureManagedControlPlane) validateLegacyAadProfile() (bool, error) {
+	err := ""
+	if r.Spec.AADProfile.ClientAppID != nil || r.Spec.AADProfile.ServerAppID != nil || r.Spec.AADProfile.ServerAppSecret != nil || r.Spec.AADProfile.TenantID != nil {
+		if r.Spec.AADProfile.ClientAppID == nil {
+			err = err + "missing ClientAppID in AADProfile. "
+		}
+		if r.Spec.AADProfile.ServerAppID == nil {
+			err = err + "missing ServerAppID in AADProfile. "
+		}
+		if r.Spec.AADProfile.ServerAppSecret == nil {
+			err = err + "missing ServerAppSecret in AADProfile. "
+		}
+		if r.Spec.AADProfile.TenantID == nil {
+			err = err + "missing TenantID in AADProfile. "
+		}
+	}
+	if err != "" {
+		return false, errors.New(err)
+	}
+	return r.Spec.AADProfile.ClientAppID != nil, nil
 }
