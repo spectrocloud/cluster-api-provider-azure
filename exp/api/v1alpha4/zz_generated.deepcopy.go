@@ -571,6 +571,11 @@ func (in *AzureManagedControlPlaneSpec) DeepCopyInto(out *AzureManagedControlPla
 		*out = new(string)
 		**out = **in
 	}
+	if in.IdentityRef != nil {
+		in, out := &in.IdentityRef, &out.IdentityRef
+		*out = new(v1.ObjectReference)
+		**out = **in
+	}
 	if in.AADProfile != nil {
 		in, out := &in.AADProfile, &out.AADProfile
 		*out = new(ManagedClusterAADProfile)

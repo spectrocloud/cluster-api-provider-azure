@@ -150,11 +150,58 @@ should be fairly clear from context.
 | networkPlugin | azure, kubenet   |
 | networkPolicy | azure, calico    |
 
-## AKS AAD
+### Multitenancy
+
+Multitenancy for managed clusters can be configured by using `aks-multi-tenancy` flavor. The steps for creating an azure managed identity and mapping it to an `AzureClusterIdentity` are similar to the ones described [here](https://capz.sigs.k8s.io/topics/multitenancy.html).
+The `AzureClusterIdentity` object is then mapped to a managed cluster through the `identityRef` field in `AzureManagedControlPlane.spec`.
+Following is an example configuration:
+
+```yaml
+apiVersion: cluster.x-k8s.io/v1alpha4
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: default
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks:
+      - 192.168.0.0/16
+  controlPlaneRef:
+    apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha4
+    kind: AzureManagedControlPlane
+    name: ${CLUSTER_NAME}
+  infrastructureRef:
+    apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha4
+    kind: AzureManagedCluster
+    name: ${CLUSTER_NAME}
+---
+apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha4
+kind: AzureManagedControlPlane
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: default
+spec:
+  defaultPoolRef:
+    name: agentpool0
+  identityRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+    kind: AzureClusterIdentity
+    name: ${CLUSTER_IDENTITY_NAME}
+    namespace: ${CLUSTER_IDENTITY_NAMESPACE}
+  location: ${AZURE_LOCATION}
+  resourceGroupName: ${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME}}
+  sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
+  subscriptionID: ${AZURE_SUBSCRIPTION_ID}
+  version: ${KUBERNETES_VERSION}
+---
+```
+
+### AKS AAD
 
 Azure Kubernetes Service (AKS) can be configured to use Azure Active Directory (AD) for user authentication.
-AAD for managed clusters can be configured by enabling the managed spec in AzureManagedControlPlane to true 
-and by providing Azure AD GroupObjectId in AdminGroupObjectIDs array. The group is needed as admin group for
+AAD for managed clusters can be configured by enabling the `managed` spec in AzureManagedControlPlane to true 
+and by providing Azure AD GroupObjectId in `adminGroupObjectIDs` array. The group is needed as admin group for
 the cluster to grant cluster admin permissions. You can use an existing Azure AD group, or create a new one.
 
 ```yaml
@@ -175,7 +222,6 @@ spec:
     adminGroupObjectIDs: 
     - 917056a9-8eb5-439c-g679-b34901ade75h # fake admin groupId
 ```
-
 ## Features
 
 AKS clusters deployed from CAPZ currently only support a limited,

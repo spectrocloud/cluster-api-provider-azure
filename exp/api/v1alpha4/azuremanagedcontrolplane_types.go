@@ -83,6 +83,10 @@ type AzureManagedControlPlaneSpec struct {
 	// +optional
 	LoadBalancerSKU *string `json:"loadBalancerSKU,omitempty"`
 
+	// IdentityRef is a reference to a AzureClusterIdentity to be used when reconciling this cluster
+	// +optional
+	IdentityRef *corev1.ObjectReference `json:"identityRef,omitempty"`
+
 	// AadProfile is Azure Active Directory configuration to integrate with AKS for aad authentication.
 	// +optional
 	AADProfile *ManagedClusterAADProfile `json:"aadProfile,omitempty"`
