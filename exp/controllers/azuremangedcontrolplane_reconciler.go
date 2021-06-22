@@ -99,15 +99,20 @@ func (r *azureManagedControlPlaneReconciler) Reconcile(ctx context.Context, scop
 		managedClusterSpec.LoadBalancerSKU = *scope.ControlPlane.Spec.LoadBalancerSKU
 	}
 
-	if scope.ControlPlane.Spec.AADProfile != nil {
+	if scope.ControlPlane.Spec.AADProfile != nil && scope.ControlPlane.Spec.AADProfile.LegacyAAD != nil {
 		managedClusterSpec.AADProfile = &managedclusters.ManagedClusterAADProfile{
-			Managed:             scope.ControlPlane.Spec.AADProfile.Managed,
-			EnableAzureRBAC:     scope.ControlPlane.Spec.AADProfile.Managed,
-			AdminGroupObjectIDs: scope.ControlPlane.Spec.AADProfile.AdminGroupObjectIDs,
-			ClientAppID:         scope.ControlPlane.Spec.AADProfile.ClientAppID,
-			ServerAppID:         scope.ControlPlane.Spec.AADProfile.ServerAppID,
-			ServerAppSecret:     scope.ControlPlane.Spec.AADProfile.ServerAppSecret,
-			TenantID:            scope.ControlPlane.Spec.AADProfile.TenantID,
+			ClientAppID:     scope.ControlPlane.Spec.AADProfile.LegacyAAD.ClientAppID,
+			ServerAppID:     scope.ControlPlane.Spec.AADProfile.LegacyAAD.ServerAppID,
+			ServerAppSecret: scope.ControlPlane.Spec.AADProfile.LegacyAAD.ServerAppSecret,
+			TenantID:        scope.ControlPlane.Spec.AADProfile.LegacyAAD.TenantID,
+		}
+	}
+
+	if scope.ControlPlane.Spec.AADProfile != nil && scope.ControlPlane.Spec.AADProfile.ManagedAAD != nil {
+		managedClusterSpec.AADProfile = &managedclusters.ManagedClusterAADProfile{
+			Managed:             scope.ControlPlane.Spec.AADProfile.ManagedAAD.Managed,
+			EnableAzureRBAC:     scope.ControlPlane.Spec.AADProfile.ManagedAAD.Managed,
+			AdminGroupObjectIDs: scope.ControlPlane.Spec.AADProfile.ManagedAAD.AdminGroupObjectIDs,
 		}
 	}
 
@@ -165,7 +170,7 @@ func (r *azureManagedControlPlaneReconciler) Delete(ctx context.Context, scope *
 	}
 
 	scope.V(2).Info("Deleting managed cluster resource group")
-	if err := r.groupsSvc.Delete(ctx); err != nil && err != azure.ErrNotOwned {
+	if err := r.groupsSvc.Delete(ctx); err != nil && !errors.Is(err, azure.ErrNotOwned) {
 		return errors.Wrapf(err, "failed to delete managed cluster resource group")
 	}
 
