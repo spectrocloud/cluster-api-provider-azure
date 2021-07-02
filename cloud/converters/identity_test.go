@@ -19,7 +19,7 @@ package converters
 import (
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	"github.com/onsi/gomega"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
@@ -38,14 +38,14 @@ var sampleSubjectFactory = []infrav1.UserAssignedIdentity{
 }
 
 var expectedVMSDKObject = map[string]*compute.VirtualMachineIdentityUserAssignedIdentitiesValue{
-	"foo":             {},
-	"bar":             {},
+	"/foo":            {},
+	"/bar":            {},
 	"/without/prefix": {},
 }
 
 var expectedVMSSSDKObject = map[string]*compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{
-	"foo":             {},
-	"bar":             {},
+	"/foo":            {},
+	"/bar":            {},
 	"/without/prefix": {},
 }
 

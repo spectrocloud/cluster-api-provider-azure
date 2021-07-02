@@ -157,6 +157,9 @@ func TestGetCloudProviderConfig(t *testing.T) {
 			if diff := cmp.Diff(tc.expectedWorkerNodeConfig, string(cloudConfig.Data["worker-node-azure.json"])); diff != "" {
 				t.Errorf(diff)
 			}
+			if diff := cmp.Diff(tc.expectedControlPlaneConfig, string(cloudConfig.Data["azure.json"])); diff != "" {
+				t.Errorf(diff)
+			}
 		})
 	}
 }
@@ -353,6 +356,8 @@ const (
     "cloud": "AzurePublicCloud",
     "tenantId": "fooTenant",
     "subscriptionId": "baz",
+    "aadClientId": "fooClient",
+    "aadClientSecret": "fooSecret",
     "resourceGroup": "bar",
     "securityGroupName": "foo-node-nsg",
     "securityGroupResourceGroup": "bar",
@@ -401,7 +406,7 @@ const (
     "routeTableName": "foo-node-routetable",
     "loadBalancerSku": "Standard",
     "maximumLoadBalancerRuleCount": 250,
-    "useManagedIdentityExtension": false,
+    "useManagedIdentityExtension": true,
     "useInstanceMetadata": true
 }`
 
@@ -439,8 +444,9 @@ const (
     "routeTableName": "foo-node-routetable",
     "loadBalancerSku": "Standard",
     "maximumLoadBalancerRuleCount": 250,
-    "useManagedIdentityExtension": false,
-    "useInstanceMetadata": true
+    "useManagedIdentityExtension": true,
+    "useInstanceMetadata": true,
+    "userAssignedIdentityId": "foobar"
 }`
 	spCustomVnetControlPlaneCloudConfig = `{
     "cloud": "AzurePublicCloud",
@@ -466,6 +472,8 @@ const (
     "cloud": "AzurePublicCloud",
     "tenantId": "fooTenant",
     "subscriptionId": "baz",
+    "aadClientId": "fooClient",
+    "aadClientSecret": "fooSecret",
     "resourceGroup": "bar",
     "securityGroupName": "foo-node-nsg",
     "securityGroupResourceGroup": "custom-vnet-resource-group",

@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Kubernetes Authors.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,45 +14,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package converters
+package system
 
 import (
+	"os"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/services/privatedns/mgmt/2018-09-01/privatedns"
 	"github.com/onsi/gomega"
 )
 
-func Test_GetRecordType(t *testing.T) {
+func TestGetNamespace(t *testing.T) {
 	cases := []struct {
-		name   string
-		ip     string
-		expect privatedns.RecordType
+		Name         string
+		PodNamespace string
+		Expected     string
 	}{
 		{
-			name:   "ipv4",
-			ip:     "10.0.0.4",
-			expect: privatedns.A,
+			Name:         "env var set to custom namespace",
+			PodNamespace: "capz",
+			Expected:     "capz",
 		},
 		{
-			name:   "ipv6",
-			ip:     "2603:1030:805:2::b",
-			expect: privatedns.AAAA,
-		},
-		{
-			name:   "default",
-			ip:     "",
-			expect: privatedns.A,
+			Name:         "env var empty",
+			PodNamespace: "",
+			Expected:     "capz-system",
 		},
 	}
 
 	for _, c := range cases {
 		c := c
-		t.Run(c.name, func(t *testing.T) {
+		t.Run(c.Name, func(t *testing.T) {
 			t.Parallel()
-			g := gomega.NewGomegaWithT(t)
-			recordType := GetRecordType(c.ip)
-			g.Expect(c.expect).To(gomega.BeEquivalentTo(recordType))
+			g := gomega.NewWithT(t)
+			os.Setenv(NamespaceEnvVarName, c.PodNamespace)
+			g.Expect(GetManagerNamespace()).To(gomega.Equal(c.Expected))
 		})
 	}
 }

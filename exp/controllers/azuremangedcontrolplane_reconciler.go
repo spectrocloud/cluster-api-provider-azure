@@ -23,7 +23,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-02-01/containerservice"
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-03-01/containerservice"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -99,6 +99,23 @@ func (r *azureManagedControlPlaneReconciler) Reconcile(ctx context.Context, scop
 		managedClusterSpec.LoadBalancerSKU = *scope.ControlPlane.Spec.LoadBalancerSKU
 	}
 
+	if scope.ControlPlane.Spec.AADProfile != nil && scope.ControlPlane.Spec.AADProfile.LegacyAAD != nil {
+		managedClusterSpec.AADProfile = &managedclusters.ManagedClusterAADProfile{
+			ClientAppID:     scope.ControlPlane.Spec.AADProfile.LegacyAAD.ClientAppID,
+			ServerAppID:     scope.ControlPlane.Spec.AADProfile.LegacyAAD.ServerAppID,
+			ServerAppSecret: scope.ControlPlane.Spec.AADProfile.LegacyAAD.ServerAppSecret,
+			TenantID:        scope.ControlPlane.Spec.AADProfile.LegacyAAD.TenantID,
+		}
+	}
+
+	if scope.ControlPlane.Spec.AADProfile != nil && scope.ControlPlane.Spec.AADProfile.ManagedAAD != nil {
+		managedClusterSpec.AADProfile = &managedclusters.ManagedClusterAADProfile{
+			Managed:             scope.ControlPlane.Spec.AADProfile.ManagedAAD.Managed,
+			EnableAzureRBAC:     scope.ControlPlane.Spec.AADProfile.ManagedAAD.Managed,
+			AdminGroupObjectIDs: scope.ControlPlane.Spec.AADProfile.ManagedAAD.AdminGroupObjectIDs,
+		}
+	}
+
 	scope.V(2).Info("Reconciling managed cluster resource group")
 	if err := r.groupsSvc.Reconcile(ctx); err != nil {
 		return errors.Wrapf(err, "failed to reconcile managed cluster resource group")
@@ -147,8 +164,13 @@ func (r *azureManagedControlPlaneReconciler) Delete(ctx context.Context, scope *
 		return errors.Wrapf(err, "failed to delete managed cluster %s", scope.ControlPlane.Name)
 	}
 
+	scope.V(2).Info("Deleting virtual network")
+	if err := r.vnetSvc.Delete(ctx); err != nil {
+		return errors.Wrap(err, "failed to delete virtual network")
+	}
+
 	scope.V(2).Info("Deleting managed cluster resource group")
-	if err := r.groupsSvc.Delete(ctx); err != nil {
+	if err := r.groupsSvc.Delete(ctx); err != nil && !errors.Is(err, azure.ErrNotOwned) {
 		return errors.Wrapf(err, "failed to delete managed cluster resource group")
 	}
 

@@ -42,6 +42,7 @@ type ScaleSetScope interface {
 	logr.Logger
 	azure.ClusterDescriber
 	ScaleSetSpec() azure.ScaleSetSpec
+	VMSSExtensionSpecs() []azure.VMSSExtensionSpec
 	GetBootstrapData(ctx context.Context) (string, error)
 	GetVMImage() (*infrav1.Image, error)
 	SetAnnotation(string, string)
@@ -116,7 +117,7 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		}
 	default:
 		// just in case, set the provider ID if the instance exists
-		s.Scope.SetProviderID(fmt.Sprintf("azure://%s", fetchedVMSS.ID))
+		s.Scope.SetProviderID(azure.ProviderIDPrefix + fetchedVMSS.ID)
 	}
 
 	// Try to get the VMSS to update status if we have created a long running operation. If the VMSS is still in a long
@@ -192,7 +193,7 @@ func (s *Service) patchVMSSIfNeeded(ctx context.Context, infraVMSS *infrav1exp.V
 	ctx, span := tele.Tracer().Start(ctx, "scalesets.Service.patchVMSSIfNeeded")
 	defer span.End()
 
-	s.Scope.SetProviderID(fmt.Sprintf("azure://%s", infraVMSS.ID))
+	s.Scope.SetProviderID(azure.ProviderIDPrefix + infraVMSS.ID)
 
 	spec := s.Scope.ScaleSetSpec()
 	result, err := s.buildVMSSFromSpec(ctx, spec)
@@ -208,9 +209,12 @@ func (s *Service) patchVMSSIfNeeded(ctx context.Context, infraVMSS *infrav1exp.V
 		//
 		// Note: if a user were to mutate the VMSS in Azure rather than through CAPZ, this hash match may match, but not
 		// reflect the state of the specification in K8s.
+		s.Scope.V(2).Info("found matching spec hash no need to PATCH")
 		return nil, nil
 	}
 
+	s.Scope.V(2).Info("hashes don't match PATCHING VMSS", "oldHash", infraVMSS.Tags[infrav1.SpecVersionHashTagKey()], "newHash", result.Hash)
+	s.Scope.V(4).Info("diff", "oldVMSS", infraVMSS, "newVMSS", result)
 	vmss := result.VMSSWithoutHash
 	vmss.Tags = converters.TagsToMap(result.Tags.AddSpecVersionHashTag(result.Hash))
 	patch, err := getVMSSUpdateFromVMSS(vmss)
@@ -326,6 +330,8 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 		vmssSpec.AcceleratedNetworking = &accelNet
 	}
 
+	extensions := s.generateExtensions()
+
 	storageProfile, err := s.generateStorageProfile(vmssSpec, sku)
 	if err != nil {
 		return result, err
@@ -406,6 +412,9 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 				Priority:       priority,
 				EvictionPolicy: evictionPolicy,
 				BillingProfile: billingProfile,
+				ExtensionProfile: &compute.VirtualMachineScaleSetExtensionProfile{
+					Extensions: &extensions,
+				},
 			},
 		},
 	}
@@ -499,6 +508,23 @@ func (s *Service) getVirtualMachineScaleSetIfDone(ctx context.Context, future *i
 	}
 
 	return converters.SDKToVMSS(vmss, vmssInstances), nil
+}
+
+func (s *Service) generateExtensions() []compute.VirtualMachineScaleSetExtension {
+	extensions := make([]compute.VirtualMachineScaleSetExtension, len(s.Scope.VMSSExtensionSpecs()))
+	for i, extensionSpec := range s.Scope.VMSSExtensionSpecs() {
+		extensions[i] = compute.VirtualMachineScaleSetExtension{
+			Name: &extensionSpec.Name,
+			VirtualMachineScaleSetExtensionProperties: &compute.VirtualMachineScaleSetExtensionProperties{
+				Publisher:          to.StringPtr(extensionSpec.Publisher),
+				Type:               to.StringPtr(extensionSpec.Name),
+				TypeHandlerVersion: to.StringPtr(extensionSpec.Version),
+				Settings:           nil,
+				ProtectedSettings:  nil,
+			},
+		}
+	}
+	return extensions
 }
 
 // generateStorageProfile generates a pointer to a compute.VirtualMachineScaleSetStorageProfile which can utilized for VM creation.
@@ -627,6 +653,18 @@ func getSecurityProfile(vmssSpec azure.ScaleSetSpec, sku resourceskus.SKU) (*com
 
 // base64EncodedHash transforms a VMSS into json and then creates a sha256 hash of the data encoded as a base64 encoded string
 func base64EncodedHash(vmss compute.VirtualMachineScaleSet) (string, error) {
+	// Setting Admin Password is not supported but an initial password is required for Windows
+	// Don't include it in the hash since it is generated and won't be the same each the spec is created (#1182)
+	tmpPass := vmss.VirtualMachineProfile.OsProfile.AdminPassword
+	// Don't include customData in the hash since it will change due to the kubeadm bootstrap token being regenerated.
+	tmpCustomData := vmss.VirtualMachineProfile.OsProfile.CustomData
+	vmss.VirtualMachineProfile.OsProfile.AdminPassword = nil
+	vmss.VirtualMachineProfile.OsProfile.CustomData = nil
+	defer func() {
+		vmss.VirtualMachineProfile.OsProfile.AdminPassword = tmpPass
+		vmss.VirtualMachineProfile.OsProfile.CustomData = tmpCustomData
+	}()
+
 	jsonData, err := vmss.MarshalJSON()
 	if err != nil {
 		return "", errors.Wrapf(err, "failed marshaling vmss")

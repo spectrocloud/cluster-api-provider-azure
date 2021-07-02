@@ -140,6 +140,28 @@ func (r *AzureManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (_ ctrl
 		return ctrl.Result{}, nil
 	}
 
+	// Handle deleted clusters
+	// needs to happen before trying to fetch the default pool to avoid circular deletion dependencies
+	if !azureControlPlane.DeletionTimestamp.IsZero() {
+		// Create the scope.
+		mcpScope, err := scope.NewManagedControlPlaneScope(scope.ManagedControlPlaneScopeParams{
+			Client:       r.Client,
+			Logger:       log,
+			Cluster:      cluster,
+			ControlPlane: azureControlPlane,
+			PatchTarget:  azureControlPlane,
+		})
+		if err != nil {
+			return reconcile.Result{}, errors.Errorf("failed to create scope: %+v", err)
+		}
+		defer func() {
+			if err := mcpScope.PatchObject(ctx); err != nil && reterr == nil {
+				reterr = err
+			}
+		}()
+		return r.reconcileDelete(ctx, mcpScope)
+	}
+
 	// fetch default pool
 	defaultPoolKey := client.ObjectKey{
 		Name:      azureControlPlane.Spec.DefaultPoolRef.Name,
@@ -184,11 +206,6 @@ func (r *AzureManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (_ ctrl
 			reterr = err
 		}
 	}()
-
-	// Handle deleted clusters
-	if !azureControlPlane.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, mcpScope)
-	}
 
 	// Handle non-deleted clusters
 	return r.reconcileNormal(ctx, mcpScope)

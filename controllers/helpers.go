@@ -188,6 +188,8 @@ func GetCloudProviderSecret(d azure.ClusterScoper, namespace, name string, owner
 	secret.Data = map[string][]byte{
 		"control-plane-azure.json": controlPlaneData,
 		"worker-node-azure.json":   workerNodeData,
+		// added for backwards compatibility
+		"azure.json": controlPlaneData,
 	}
 
 	return secret, nil
@@ -198,6 +200,9 @@ func systemAssignedIdentityCloudProviderConfig(d azure.ClusterScoper) (*CloudPro
 	controlPlaneConfig.AadClientID = ""
 	controlPlaneConfig.AadClientSecret = ""
 	controlPlaneConfig.UseManagedIdentityExtension = true
+	workerConfig.AadClientID = ""
+	workerConfig.AadClientSecret = ""
+	workerConfig.UseManagedIdentityExtension = true
 	return controlPlaneConfig, workerConfig
 }
 
@@ -207,6 +212,10 @@ func userAssignedIdentityCloudProviderConfig(d azure.ClusterScoper, identityID s
 	controlPlaneConfig.AadClientSecret = ""
 	controlPlaneConfig.UseManagedIdentityExtension = true
 	controlPlaneConfig.UserAssignedIdentityID = identityID
+	workerConfig.AadClientID = ""
+	workerConfig.AadClientSecret = ""
+	workerConfig.UseManagedIdentityExtension = true
+	workerConfig.UserAssignedIdentityID = identityID
 	return controlPlaneConfig, workerConfig
 }
 
@@ -233,6 +242,8 @@ func newCloudProviderConfig(d azure.ClusterScoper) (controlPlaneConfig *CloudPro
 		},
 		&CloudProviderConfig{
 			Cloud:                        d.CloudEnvironment(),
+			AadClientID:                  d.ClientID(),
+			AadClientSecret:              d.ClientSecret(),
 			TenantID:                     d.TenantID(),
 			SubscriptionID:               d.SubscriptionID(),
 			ResourceGroup:                d.ResourceGroup(),

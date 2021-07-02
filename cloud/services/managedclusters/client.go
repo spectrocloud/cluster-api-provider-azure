@@ -19,7 +19,7 @@ package managedclusters
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-02-01/containerservice"
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-03-01/containerservice"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/pkg/errors"
 
@@ -101,6 +101,9 @@ func (ac *AzureClient) Delete(ctx context.Context, resourceGroupName, name strin
 
 	future, err := ac.managedclusters.Delete(ctx, resourceGroupName, name)
 	if err != nil {
+		if azure.ResourceGroupNotFound(err) || azure.ResourceNotFound(err) {
+			return nil
+		}
 		return errors.Wrapf(err, "failed to begin operation")
 	}
 	if err := future.WaitForCompletionRef(ctx, ac.managedclusters.Client); err != nil {

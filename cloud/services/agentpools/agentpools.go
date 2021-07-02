@@ -19,7 +19,7 @@ package agentpools
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2020-02-01/containerservice"
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-03-01/containerservice"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"k8s.io/klog"
@@ -52,7 +52,8 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 
 	profile := containerservice.AgentPool{
 		ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
-			VMSize:              containerservice.VMSizeTypes(agentPoolSpec.SKU),
+			VMSize:              &agentPoolSpec.SKU,
+			OsType:              containerservice.Linux,
 			OsDiskSizeGB:        &agentPoolSpec.OSDiskSizeGB,
 			Count:               &agentPoolSpec.Replicas,
 			Type:                containerservice.VirtualMachineScaleSets,
@@ -87,6 +88,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 		existingProfile := containerservice.AgentPool{
 			ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
 				VMSize:              existingPool.ManagedClusterAgentPoolProfileProperties.VMSize,
+				OsType:              containerservice.Linux,
 				OsDiskSizeGB:        existingPool.ManagedClusterAgentPoolProfileProperties.OsDiskSizeGB,
 				Count:               existingPool.ManagedClusterAgentPoolProfileProperties.Count,
 				Type:                containerservice.VirtualMachineScaleSets,

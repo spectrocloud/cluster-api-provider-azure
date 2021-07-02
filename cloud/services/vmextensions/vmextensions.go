@@ -19,7 +19,7 @@ package vmextensions
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2020-06-30/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -55,6 +55,11 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	defer span.End()
 
 	for _, extensionSpec := range s.Scope.VMExtensionSpecs() {
+		if _, err := s.client.Get(ctx, s.Scope.ResourceGroup(), extensionSpec.VMName, extensionSpec.Name); err == nil {
+			// check for the extension and don't update if already exists
+			// TODO: set conditions based on extension status
+			continue
+		}
 		s.Scope.V(2).Info("creating VM extension", "vm extension", extensionSpec.Name)
 		err := s.client.CreateOrUpdate(
 			ctx,
@@ -81,6 +86,6 @@ func (s *Service) Reconcile(ctx context.Context) error {
 }
 
 // Delete is a no-op. Extensions will be deleted as part of VM deletion.
-func (s *Service) Delete(ctx context.Context) error {
+func (s *Service) Delete(_ context.Context) error {
 	return nil
 }

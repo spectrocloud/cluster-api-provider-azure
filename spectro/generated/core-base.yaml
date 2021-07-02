@@ -613,7 +613,7 @@ spec:
             fieldRef:
               fieldPath: spec.nodeName
         image: mcr.microsoft.com/oss/azure/aad-pod-identity/nmi:v1.6.3
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
             path: /healthz
