@@ -177,8 +177,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 		}
 	}
 
-	for i := range managedClusterSpec.AgentPools {
-		pool := managedClusterSpec.AgentPools[i]
+	for _, pool := range managedClusterSpec.AgentPools {
 		profile := containerservice.ManagedClusterAgentPoolProfile{
 			Name:         &pool.Name,
 			VMSize:       &pool.SKU,

@@ -262,8 +262,7 @@ func (r *azureManagedControlPlaneReconciler) reconcileManagedCluster(ctx context
 			ammps = append(ammps, ammp)
 		}
 		if len(ammps) == 0 {
-			scope.Logger.Info("owner ref for system machine pools not ready")
-			return nil
+			return errors.New("owner ref for system machine pools not ready")
 		}
 		// Add to cluster spec
 		managedClusterSpec.AgentPools = ammps
