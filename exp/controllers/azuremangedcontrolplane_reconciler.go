@@ -73,7 +73,7 @@ func (r *azureManagedControlPlaneReconciler) Reconcile(ctx context.Context, scop
 	}
 
 	managedClusterSpec := &managedclusters.Spec{
-		Name:                  scope.Cluster.Name,
+		Name:                  scope.ControlPlane.Name,
 		ResourceGroupName:     scope.ControlPlane.Spec.ResourceGroupName,
 		NodeResourceGroupName: scope.ControlPlane.Spec.NodeResourceGroupName,
 		Location:              scope.ControlPlane.Spec.Location,
