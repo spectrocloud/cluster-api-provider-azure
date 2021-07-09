@@ -217,7 +217,7 @@ func TestReconcile(t *testing.T) {
 					ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
 						Count:               to.Int32Ptr(3),
 						OsDiskSizeGB:        to.Int32Ptr(20),
-						VMSize:              to.StringPtr(string(containerservice.StandardA1)),
+						VMSize:              to.StringPtr(string(containerservice.VMSizeTypesStandardA1)),
 						OrchestratorVersion: to.StringPtr("9.99.9999"),
 						ProvisioningState:   to.StringPtr("Failed"),
 					},
@@ -242,8 +242,8 @@ func TestReconcile(t *testing.T) {
 					ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
 						Count:               to.Int32Ptr(2),
 						OsDiskSizeGB:        to.Int32Ptr(100),
-						VMSize:              to.StringPtr(string(containerservice.StandardD2sV3)),
-						OsType:              containerservice.Linux,
+						VMSize:              to.StringPtr(string(containerservice.VMSizeTypesStandardD2sV3)),
+						OsType:              containerservice.OSTypeLinux,
 						OrchestratorVersion: to.StringPtr("9.99.9999"),
 						ProvisioningState:   to.StringPtr("Succeeded"),
 						VnetSubnetID:        to.StringPtr(""),
