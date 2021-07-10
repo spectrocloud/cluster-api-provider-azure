@@ -23,11 +23,14 @@ import (
 
 const (
 	// LabelAgentPoolMode represents mode of an agent pool. Possible values include: System, User.
-	LabelAgentPoolMode = "azurecluster.infrastructure.cluster.x-k8s.io/agentpoolmode"
+	LabelAgentPoolMode = "azuremanagedmachinepool.infrastructure.cluster.x-k8s.io/agentpoolmode"
 
-	// SystemNodePool represents mode system for azuremachinepool.
-	SystemNodePool = "System"
+	// AgentPoolModeSystem represents mode system for azuremachinepool.
+	AgentPoolModeSystem NodePoolMode = "System"
 )
+
+// NodePoolMode enumerates the values for agent pool mode.
+type NodePoolMode string
 
 // AzureManagedMachinePoolSpec defines the desired state of AzureManagedMachinePool.
 type AzureManagedMachinePoolSpec struct {

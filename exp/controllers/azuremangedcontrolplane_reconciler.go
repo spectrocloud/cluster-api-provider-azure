@@ -23,7 +23,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-03-01/containerservice"
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-05-01/containerservice"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -216,7 +216,7 @@ func (r *azureManagedControlPlaneReconciler) reconcileManagedCluster(ctx context
 	if azure.ResourceNotFound(err) {
 		opt1 := client.InNamespace(scope.ControlPlane.Namespace)
 		opt2 := client.MatchingLabels(map[string]string{
-			infrav1exp.LabelAgentPoolMode: infrav1exp.SystemNodePool,
+			infrav1exp.LabelAgentPoolMode: string(infrav1exp.AgentPoolModeSystem),
 			clusterv1.ClusterLabelName:    scope.Cluster.Name,
 		})
 

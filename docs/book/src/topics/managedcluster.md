@@ -12,8 +12,9 @@ custom resources:
 The combination of AzureManagedControlPlane/AzureManagedCluster
 corresponds to provisioning an AKS cluster. AzureManagedMachinePool
 corresponds one-to-one with AKS node pools. This also means that
-creating atleast one AzureManagedMachinePool with Spec.Mode System,
-since AKS requires at least one system pool at creation time.
+at least one AzureManagedMachinePool with Spec.Mode System should exist,
+while creation. AKS expects at least one system pool at creation time.
+For more documentation on system node pool refer [AKS Docs](https://docs.microsoft.com/en-us/azure/aks/use-system-pools) 
 
 ## Deploy with clusterctl
 

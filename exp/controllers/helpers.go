@@ -427,7 +427,7 @@ func MachinePoolToAzureManagedControlPlaneMapFunc(ctx context.Context, c client.
 			}
 		}
 
-		isSystemNodePool := ammp.Spec.Mode == infrav1exp.SystemNodePool
+		isSystemNodePool := ammp.Spec.Mode == string(infrav1exp.AgentPoolModeSystem)
 
 		if groupMatches && kindMatches && isSystemNodePool {
 			return []reconcile.Request{
