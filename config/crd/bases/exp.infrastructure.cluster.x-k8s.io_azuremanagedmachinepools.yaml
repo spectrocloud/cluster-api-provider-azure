@@ -42,6 +42,12 @@ spec:
             description: AzureManagedMachinePoolSpec defines the desired state of
               AzureManagedMachinePool
             properties:
+              availabilityZones:
+                description: AvailabilityZones - Availability zones for nodes. Must
+                  use VirtualMachineScaleSets AgentPoolType.
+                items:
+                  type: string
+                type: array
               osDiskSizeGB:
                 description: OSDiskSizeGB is the disk size for every machine in this
                   agent pool. If you specify 0, it will apply the default osDisk size

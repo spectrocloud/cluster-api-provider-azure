@@ -231,10 +231,11 @@ func (r *azureManagedControlPlaneReconciler) reconcileManagedCluster(ctx context
 	// clusters API at create time, not update.
 	if azure.ResourceNotFound(err) {
 		defaultPoolSpec := managedclusters.PoolSpec{
-			Name:         scope.InfraMachinePool.Name,
-			SKU:          scope.InfraMachinePool.Spec.SKU,
-			Replicas:     1,
-			OSDiskSizeGB: 0,
+			Name:              scope.InfraMachinePool.Name,
+			SKU:               scope.InfraMachinePool.Spec.SKU,
+			Replicas:          1,
+			OSDiskSizeGB:      0,
+			AvailabilityZones: scope.InfraMachinePool.Spec.AvailabilityZones,
 		}
 
 		// Set optional values

@@ -26,17 +26,11 @@ spec:
   defaultPoolRef:
     name: agentpool0
   location: ${AZURE_LOCATION}
-  resourceGroupName: ${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME}}
   nodeResourceGroupName: MC_${AZURE_RESOURCE_GROUP}_${CLUSTER_NAME}_${AZURE_LOCATION}
+  resourceGroupName: ${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME}}
   sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
   subscriptionID: ${AZURE_SUBSCRIPTION_ID}
   version: ${KUBERNETES_VERSION}
-  aadProfile:
-    managedAadProfile:
-      managed: true
-      adminGroupObjectIDs:
-      - 616055b8-7db5-439c-a837-b34601dea75c
-      
 ---
 apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha3
 kind: AzureManagedCluster
@@ -73,6 +67,9 @@ metadata:
 spec:
   osDiskSizeGB: 512
   sku: ${AZURE_NODE_MACHINE_TYPE}
+  availabilityZones:
+  - "1"
+  - "2"
 ---
 apiVersion: exp.cluster.x-k8s.io/v1alpha3
 kind: MachinePool
@@ -103,3 +100,6 @@ metadata:
 spec:
   osDiskSizeGB: 1024
   sku: ${AZURE_NODE_MACHINE_TYPE}
+  availabilityZones:
+  - "1"
+  - "2"

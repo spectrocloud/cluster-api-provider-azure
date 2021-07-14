@@ -113,10 +113,11 @@ type ManagedClusterAADProfile struct {
 
 // PoolSpec contains agent pool specification details.
 type PoolSpec struct {
-	Name         string
-	SKU          string
-	Replicas     int32
-	OSDiskSizeGB int32
+	Name              string
+	SKU               string
+	Replicas          int32
+	OSDiskSizeGB      int32
+	AvailabilityZones *[]string
 }
 
 // Get fetches a managed cluster from Azure.
@@ -206,13 +207,14 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 
 	for _, pool := range managedClusterSpec.AgentPools {
 		profile := containerservice.ManagedClusterAgentPoolProfile{
-			Name:         &pool.Name,
-			VMSize:       &pool.SKU,
-			OsDiskSizeGB: &pool.OSDiskSizeGB,
-			Count:        &pool.Replicas,
-			Type:         containerservice.VirtualMachineScaleSets,
-			VnetSubnetID: &managedClusterSpec.VnetSubnetID,
-			Mode:         containerservice.System,
+			Name:              &pool.Name,
+			VMSize:            &pool.SKU,
+			OsDiskSizeGB:      &pool.OSDiskSizeGB,
+			Count:             &pool.Replicas,
+			Type:              containerservice.VirtualMachineScaleSets,
+			VnetSubnetID:      &managedClusterSpec.VnetSubnetID,
+			Mode:              containerservice.System,
+			AvailabilityZones: pool.AvailabilityZones,
 		}
 		*properties.AgentPoolProfiles = append(*properties.AgentPoolProfiles, profile)
 	}

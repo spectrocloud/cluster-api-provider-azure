@@ -23,6 +23,10 @@ import (
 
 // AzureManagedMachinePoolSpec defines the desired state of AzureManagedMachinePool
 type AzureManagedMachinePoolSpec struct {
+
+	// AvailabilityZones - Availability zones for nodes. Must use VirtualMachineScaleSets AgentPoolType.
+	AvailabilityZones *[]string `json:"availabilityZones,omitempty"`
+
 	// SKU is the size of the VMs in the node pool.
 	SKU string `json:"sku"`
 
