@@ -33,19 +33,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 )
 
 var _ = Describe("Workload cluster creation", func() {
 	var (
-		ctx           = context.TODO()
-		specName      = "create-workload-cluster"
-		namespace     *corev1.Namespace
-		cancelWatches context.CancelFunc
-		result        *clusterctl.ApplyClusterTemplateAndWaitResult
-		clusterName   string
-		specTimes     = map[string]time.Time{}
+		ctx               = context.TODO()
+		specName          = "create-workload-cluster"
+		namespace         *corev1.Namespace
+		cancelWatches     context.CancelFunc
+		result            *clusterctl.ApplyClusterTemplateAndWaitResult
+		clusterName       string
+		clusterNamePrefix string
+		specTimes         = map[string]time.Time{}
 	)
 
 	BeforeEach(func() {
@@ -56,23 +58,37 @@ var _ = Describe("Workload cluster creation", func() {
 		Expect(clusterctlConfigPath).To(BeAnExistingFile(), "Invalid argument. clusterctlConfigPath must be an existing file when calling %s spec", specName)
 		Expect(bootstrapClusterProxy).ToNot(BeNil(), "Invalid argument. bootstrapClusterProxy can't be nil when calling %s spec", specName)
 		Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid argument. artifactFolder can't be created for %s spec", specName)
-
 		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.KubernetesVersion))
 
-		clusterName = os.Getenv("CLUSTER_NAME")
-		if clusterName == "" {
-			clusterName = fmt.Sprintf("capz-e2e-%s", util.RandomString(6))
-		}
-		fmt.Fprintf(GinkgoWriter, "INFO: Cluster name is %s\n", clusterName)
+		clusterNamePrefix = fmt.Sprintf("capz-e2e-%s", util.RandomString(6))
 
 		// Setup a Namespace where to host objects for this spec and create a watcher for the namespace events.
 		var err error
-		namespace, cancelWatches, err = setupSpecNamespace(ctx, clusterName, bootstrapClusterProxy, artifactFolder)
+		namespace, cancelWatches, err = setupSpecNamespace(ctx, clusterNamePrefix, bootstrapClusterProxy, artifactFolder)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(os.Setenv(AzureResourceGroup, clusterName)).NotTo(HaveOccurred())
-		Expect(os.Setenv(AzureVNetName, fmt.Sprintf("%s-vnet", clusterName))).NotTo(HaveOccurred())
 		result = new(clusterctl.ApplyClusterTemplateAndWaitResult)
+
+		spClientSecret := os.Getenv(AzureClientSecret)
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cluster-identity-secret",
+				Namespace: namespace.Name,
+				Labels: map[string]string{
+					clusterctlv1.ClusterctlMoveHierarchyLabelName: "true",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"clientSecret": []byte(spClientSecret)},
+		}
+		err = bootstrapClusterProxy.GetClient().Create(ctx, secret)
+		Expect(err).ToNot(HaveOccurred())
+
+		identityName := e2eConfig.GetVariable(ClusterIdentityName)
+		Expect(os.Setenv(ClusterIdentityName, identityName)).NotTo(HaveOccurred())
+		Expect(os.Setenv(ClusterIdentityNamespace, namespace.Name)).NotTo(HaveOccurred())
+		Expect(os.Setenv(ClusterIdentitySecretName, "cluster-identity-secret")).NotTo(HaveOccurred())
+		Expect(os.Setenv(ClusterIdentitySecretNamespace, namespace.Name)).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -90,6 +106,7 @@ var _ = Describe("Workload cluster creation", func() {
 	if os.Getenv("LOCAL_ONLY") != "true" {
 		Context("Creating a private cluster", func() {
 			It("Creates a public management cluster in the same vnet", func() {
+				clusterName = getClusterName(clusterNamePrefix, "public-custom-vnet")
 				Context("Creating a custom virtual network", func() {
 					Expect(os.Setenv(AzureVNetName, "custom-vnet")).NotTo(HaveOccurred())
 					cpCIDR := "10.128.0.0/16"
@@ -109,7 +126,7 @@ var _ = Describe("Workload cluster creation", func() {
 						ClusterctlConfigPath:     clusterctlConfigPath,
 						KubeconfigPath:           bootstrapClusterProxy.GetKubeconfigPath(),
 						InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
-						Flavor:                   clusterctl.DefaultFlavor,
+						Flavor:                   "custom-vnet",
 						Namespace:                namespace.Name,
 						ClusterName:              clusterName,
 						KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
@@ -150,6 +167,7 @@ var _ = Describe("Workload cluster creation", func() {
 	}
 
 	It("With 3 control-plane nodes and 2 worker nodes", func() {
+		clusterName = getClusterName(clusterNamePrefix, "ha")
 		clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 			ClusterProxy: bootstrapClusterProxy,
 			ConfigCluster: clusterctl.ConfigClusterInput{
@@ -223,6 +241,7 @@ var _ = Describe("Workload cluster creation", func() {
 
 	Context("Creating a ipv6 control-plane cluster", func() {
 		It("With ipv6 worker node", func() {
+			clusterName = getClusterName(clusterNamePrefix, "ipv6")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,
 				ConfigCluster: clusterctl.ConfigClusterInput{
@@ -268,6 +287,7 @@ var _ = Describe("Workload cluster creation", func() {
 
 	Context("Creating a VMSS cluster", func() {
 		It("with a single control plane node and an AzureMachinePool with 2 nodes", func() {
+			clusterName = getClusterName(clusterNamePrefix, "vmss")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,
 				ConfigCluster: clusterctl.ConfigClusterInput{
@@ -309,7 +329,7 @@ var _ = Describe("Workload cluster creation", func() {
 			})
 
 			Context("Cordon and draining a node", func() {
-				AzureMachinePoolDrainSpec(ctx, func() AzureMachinePoolDrainSpecInput{
+				AzureMachinePoolDrainSpec(ctx, func() AzureMachinePoolDrainSpecInput {
 					return AzureMachinePoolDrainSpecInput{
 						BootstrapClusterProxy: bootstrapClusterProxy,
 						Namespace:             namespace,
@@ -329,6 +349,7 @@ var _ = Describe("Workload cluster creation", func() {
 	// See https://azure.microsoft.com/en-us/pricing/details/virtual-machines/linux/ for pricing.
 	Context("Creating a GPU-enabled cluster", func() {
 		It("with a single control plane node and 1 node", func() {
+			clusterName = getClusterName(clusterNamePrefix, "gpu")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,
 				ConfigCluster: clusterctl.ConfigClusterInput{
@@ -378,6 +399,7 @@ var _ = Describe("Workload cluster creation", func() {
 	// To include this test, set `GINKGO_SKIP=""`.
 	Context("Creating a cluster that uses the external cloud provider", func() {
 		It("with a 1 control plane nodes and 2 worker nodes", func() {
+			clusterName = getClusterName(clusterNamePrefix, "oot")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,
 				ConfigCluster: clusterctl.ConfigClusterInput{
@@ -410,85 +432,9 @@ var _ = Describe("Workload cluster creation", func() {
 		})
 	})
 
-	Context("Creating a cluster using a different SP identity", func() {
-		BeforeEach(func() {
-			spClientSecret := os.Getenv("AZURE_MULTI_TENANCY_SECRET")
-			secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "sp-identity-secret",
-					Namespace: namespace.Name,
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{"clientSecret": []byte(spClientSecret)},
-			}
-			err := bootstrapClusterProxy.GetClient().Create(ctx, secret)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
+	Context("Creating an AKS cluster", func() {
 		It("with a single control plane node and 1 node", func() {
-			spClientID := os.Getenv("AZURE_MULTI_TENANCY_ID")
-			identityName := e2eConfig.GetVariable(MultiTenancyIdentityName)
-			os.Setenv("CLUSTER_IDENTITY_NAME", identityName)
-			os.Setenv("CLUSTER_IDENTITY_NAMESPACE", namespace.Name)
-			os.Setenv("AZURE_CLUSTER_IDENTITY_CLIENT_ID", spClientID)
-			os.Setenv("AZURE_CLUSTER_IDENTITY_SECRET_NAME", "sp-identity-secret")
-			os.Setenv("AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE", namespace.Name)
-
-			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
-				ClusterProxy: bootstrapClusterProxy,
-				ConfigCluster: clusterctl.ConfigClusterInput{
-					LogFolder:                filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName()),
-					ClusterctlConfigPath:     clusterctlConfigPath,
-					KubeconfigPath:           bootstrapClusterProxy.GetKubeconfigPath(),
-					InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
-					Flavor:                   "multi-tenancy",
-					Namespace:                namespace.Name,
-					ClusterName:              clusterName,
-					KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
-					ControlPlaneMachineCount: pointer.Int64Ptr(1),
-					WorkerMachineCount:       pointer.Int64Ptr(1),
-				},
-				WaitForClusterIntervals:      e2eConfig.GetIntervals(specName, "wait-cluster"),
-				WaitForControlPlaneIntervals: e2eConfig.GetIntervals(specName, "wait-control-plane"),
-				WaitForMachineDeployments:    e2eConfig.GetIntervals(specName, "wait-worker-nodes"),
-			}, result)
-
-			Context("Validating identity", func() {
-				AzureServicePrincipalIdentitySpec(ctx, func() AzureServicePrincipalIdentitySpecInput {
-					return AzureServicePrincipalIdentitySpecInput{
-						BootstrapClusterProxy: bootstrapClusterProxy,
-						Namespace:             namespace,
-						ClusterName:           clusterName,
-					}
-				})
-			})
-		})
-	})
-
-	Context("Creating an AKS cluster using a different SP identity", func() {
-		BeforeEach(func() {
-			spClientSecret := os.Getenv("AZURE_MULTI_TENANCY_SECRET")
-			secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "sp-identity-secret",
-					Namespace: namespace.Name,
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{"clientSecret": []byte(spClientSecret)},
-			}
-			err := bootstrapClusterProxy.GetClient().Create(ctx, secret)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("with a single control plane node and 1 node", func() {
-			spClientID := os.Getenv("AZURE_MULTI_TENANCY_ID")
-			identityName := e2eConfig.GetVariable(MultiTenancyIdentityName)
-			os.Setenv("CLUSTER_IDENTITY_NAME", identityName)
-			os.Setenv("CLUSTER_IDENTITY_NAMESPACE", namespace.Name)
-			os.Setenv("AZURE_CLUSTER_IDENTITY_CLIENT_ID", spClientID)
-			os.Setenv("AZURE_CLUSTER_IDENTITY_SECRET_NAME", "sp-identity-secret")
-			os.Setenv("AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE", namespace.Name)
-
+			clusterName = getClusterName(clusterNamePrefix, "aks")
 			kubernetesVersion, err := GetAKSKubernetesVersion(ctx, e2eConfig)
 			Expect(err).To(BeNil())
 
@@ -515,9 +461,9 @@ var _ = Describe("Workload cluster creation", func() {
 				},
 			}, result)
 
-			Context("Validating AKS Resources", func() {
-				AKSResourcesValidationSpec(ctx, func() AKSResourcesValidationSpecInput {
-					return AKSResourcesValidationSpecInput{
+			Context("Validating AKS time synchronization", func() {
+				AzureDaemonsetTimeSyncSpec(ctx, func() AzureTimeSyncSpecInput {
+					return AzureTimeSyncSpecInput{
 						BootstrapClusterProxy: bootstrapClusterProxy,
 						Namespace:             namespace,
 						ClusterName:           clusterName,
@@ -530,17 +476,21 @@ var _ = Describe("Workload cluster creation", func() {
 	Context("Creating a Windows Enabled cluster", func() {
 		// Requires 3 control planes due to https://github.com/kubernetes-sigs/cluster-api-provider-azure/issues/857
 		It("With 3 control-plane nodes and 1 Linux worker node and 1 Windows worker node", func() {
+			clusterName = getClusterName(clusterNamePrefix, "win-ha")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,
 				ConfigCluster: clusterctl.ConfigClusterInput{
-					LogFolder:                filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName()),
-					ClusterctlConfigPath:     clusterctlConfigPath,
-					KubeconfigPath:           bootstrapClusterProxy.GetKubeconfigPath(),
-					InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
-					Flavor:                   "windows",
-					Namespace:                namespace.Name,
-					ClusterName:              clusterName,
-					KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
+					LogFolder:              filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName()),
+					ClusterctlConfigPath:   clusterctlConfigPath,
+					KubeconfigPath:         bootstrapClusterProxy.GetKubeconfigPath(),
+					InfrastructureProvider: clusterctl.DefaultInfrastructureProvider,
+					Flavor:                 "windows",
+					Namespace:              namespace.Name,
+					ClusterName:            clusterName,
+					// using a different version for windows because of an issue on azure cloud provider
+					// that only affects windows and external load balancer
+					// https://github.com/kubernetes-sigs/cloud-provider-azure/issues/706
+					KubernetesVersion:        e2eConfig.GetVariable(WindowsKubernetesVersion),
 					ControlPlaneMachineCount: pointer.Int64Ptr(3),
 					WorkerMachineCount:       pointer.Int64Ptr(1),
 				},
@@ -576,6 +526,7 @@ var _ = Describe("Workload cluster creation", func() {
 
 	Context("Creating a Windows enabled VMSS cluster", func() {
 		It("with a single control plane node and an Linux AzureMachinePool with 1 nodes and Windows AzureMachinePool with 1 node", func() {
+			clusterName = getClusterName(clusterNamePrefix, "win-vmss")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,
 				ConfigCluster: clusterctl.ConfigClusterInput{

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/pkg/errors"
@@ -38,9 +40,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const azureSecretKey = "clientSecret"
+
 // CredentialsProvider defines the behavior for azure identity based credential providers.
 type CredentialsProvider interface {
 	GetAuthorizer(ctx context.Context, resourceManagerEndpoint string) (autorest.Authorizer, error)
+	GetClientID() string
+	GetClientSecret(ctx context.Context) (string, error)
+	GetTenantID() string
 }
 
 // AzureCredentialsProvider represents a credential provider with azure cluster identity.
@@ -142,6 +149,12 @@ func (p *AzureCredentialsProvider) GetAuthorizer(ctx context.Context, resourceMa
 	if err != nil {
 		return nil, err
 	}
+
+	// AzureIdentity and AzureIdentityBinding will no longer have an OwnerRef starting from capz release v0.5.0 because of the following:
+	// In Kubenetes v1.20+, if the garbage collector detects an invalid cross-namespace ownerReference, or a cluster-scoped dependent with
+	// an ownerReference referencing a namespaced kind, a warning Event with a reason of OwnerRefInvalidNamespace and an involvedObject
+	// of the invalid dependent is reported. You can check for that kind of Event by running kubectl get events -A --field-selector=reason=OwnerRefInvalidNamespace.
+
 	copiedIdentity := &aadpodv1.AzureIdentity{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AzureIdentity",
@@ -154,11 +167,10 @@ func (p *AzureCredentialsProvider) GetAuthorizer(ctx context.Context, resourceMa
 				aadpodv1.BehaviorKey: "namespaced",
 			},
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName:         clusterMeta.Name,
-				infrav1.ClusterLabelNamespace:      clusterMeta.Namespace,
-				clusterctl.ClusterctlMoveLabelName: "true",
+				clusterv1.ClusterLabelName:                  clusterMeta.Name,
+				infrav1.ClusterLabelNamespace:               clusterMeta.Namespace,
+				clusterctl.ClusterctlMoveHierarchyLabelName: "true",
 			},
-			OwnerReferences: clusterMeta.OwnerReferences,
 		},
 		Spec: aadpodv1.AzureIdentitySpec{
 			Type:           azureIdentityType,
@@ -182,11 +194,10 @@ func (p *AzureCredentialsProvider) GetAuthorizer(ctx context.Context, resourceMa
 			Name:      fmt.Sprintf("%s-binding", copiedIdentity.Name),
 			Namespace: copiedIdentity.Namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName:         clusterMeta.Name,
-				infrav1.ClusterLabelNamespace:      clusterMeta.Namespace,
-				clusterctl.ClusterctlMoveLabelName: "true",
+				clusterv1.ClusterLabelName:                  clusterMeta.Name,
+				infrav1.ClusterLabelNamespace:               clusterMeta.Namespace,
+				clusterctl.ClusterctlMoveHierarchyLabelName: "true",
 			},
-			OwnerReferences: clusterMeta.OwnerReferences,
 		},
 		Spec: aadpodv1.AzureIdentityBindingSpec{
 			AzureIdentity: copiedIdentity.Name,
@@ -213,6 +224,33 @@ func (p *AzureCredentialsProvider) GetAuthorizer(ctx context.Context, resourceMa
 	}
 
 	return autorest.NewBearerAuthorizer(spt), nil
+}
+
+// GetClientID returns the Client ID associated with the AzureCredentialsProvider's Identity.
+func (p *AzureCredentialsProvider) GetClientID() string {
+	return p.Identity.Spec.ClientID
+}
+
+// GetClientSecret returns the Client Secret associated with the AzureCredentialsProvider's Identity.
+// NOTE: this only works if the Identity references a Service Principal Client Secret.
+// If using another type of credentials, such a Certificate, we return an empty string.
+func (p *AzureCredentialsProvider) GetClientSecret(ctx context.Context) (string, error) {
+	secretRef := p.Identity.Spec.ClientSecret
+	key := types.NamespacedName{
+		Namespace: secretRef.Namespace,
+		Name:      secretRef.Name,
+	}
+	secret := &corev1.Secret{}
+	err := p.Client.Get(ctx, key, secret)
+	if err != nil {
+		return "", errors.Wrap(err, "Unable to fetch ClientSecret")
+	}
+	return string(secret.Data[azureSecretKey]), nil
+}
+
+// GetTenantID returns the Tenant ID associated with the AzureCredentialsProvider's Identity.
+func (p *AzureCredentialsProvider) GetTenantID() string {
+	return p.Identity.Spec.TenantID
 }
 
 func getAzureIdentityType(identity *infrav1.AzureClusterIdentity) (aadpodv1.IdentityType, error) {

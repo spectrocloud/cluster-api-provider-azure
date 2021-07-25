@@ -4,7 +4,7 @@ envsubst_cmd = "./hack/tools/bin/envsubst"
 tools_bin = "./hack/tools/bin"
 
 #Add tools to path
-os.putenv('PATH', os.getenv('PATH') + ':' + tools_bin) 
+os.putenv('PATH', os.getenv('PATH') + ':' + tools_bin)
 
 update_settings(k8s_upsert_timeout_secs=60)  # on first tilt up, often can take longer than 30 seconds
 
@@ -22,7 +22,7 @@ settings = {
     "aks_kubernetes_version": "v1.20.5"
 }
 
-keys = ["AZURE_SUBSCRIPTION_ID_B64", "AZURE_TENANT_ID_B64", "AZURE_CLIENT_SECRET_B64", "AZURE_CLIENT_ID_B64"]
+keys = ["AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID", "AZURE_CLIENT_SECRET", "AZURE_CLIENT_ID"]
 
 # global settings
 settings.update(read_json(
@@ -117,13 +117,22 @@ COPY --from=tilt-helper /restart.sh .
 COPY manager .
 """
 
+# Install the OpenTelemetry helm chart
+def observability():
+    instrumentation_key = os.getenv("AZURE_INSTRUMENTATION_KEY", "")
+    if instrumentation_key == "":
+        warn("AZURE_INSTRUMENTATION_KEY is not set, so tracing won't be exported to Application Insights")
+    k8s_yaml(helm("./hack/observability/opentelemetry/chart",
+         name="opentelemetry-collector", namespace="capz-system",
+         values=["./hack/observability/opentelemetry/values.yaml"],
+         set=["config.exporters.azuremonitor.instrumentation_key="+instrumentation_key]))
+
 # Build CAPZ and add feature gates
 def capz():
     # Apply the kustomized yaml for this provider
     substitutions = settings.get("kustomize_substitutions", {})
     os.environ.update(substitutions)
     yaml = str(kustomizesub("./hack/observability")) # build an observable kind deployment by default
-
 
     # add extra_args if they are defined
     if settings.get("extra_args"):
@@ -169,6 +178,20 @@ def capz():
 
     k8s_yaml(blob(yaml))
 
+def create_identity_secret():
+    #create secret for identity password
+    local("kubectl delete secret cluster-identity-secret --ignore-not-found=true")
+
+    os.putenv('AZURE_CLUSTER_IDENTITY_SECRET_NAME', 'cluster-identity-secret')
+    os.putenv('AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE', 'default')
+    os.putenv('CLUSTER_IDENTITY_NAME', 'cluster-identity')
+
+    substitutions = settings.get("kustomize_substitutions", {})
+    os.putenv('AZURE_CLIENT_SECRET_B64', base64_encode(substitutions.get("AZURE_CLIENT_SECRET")))
+
+    local("cat templates/azure-cluster-identity/secret.yaml | " + envsubst_cmd + " | kubectl apply -f -", quiet=True)
+    os.unsetenv('AZURE_CLIENT_SECRET_B64')
+
 def create_crs():
     # create config maps
     local("kubectl delete configmaps calico-addon --ignore-not-found=true")
@@ -177,7 +200,7 @@ def create_crs():
     local("kubectl create configmap calico-ipv6-addon --from-file=templates/addons/calico-ipv6.yaml")
     local("kubectl delete configmaps flannel-windows-addon --ignore-not-found=true")
 
-    # need to set version for kube-proxy on windows.  
+    # need to set version for kube-proxy on windows.
     os.putenv("KUBERNETES_VERSION", settings.get("kubernetes_version", {}))
     local("kubectl create configmap flannel-windows-addon --from-file=templates/addons/windows/ --dry-run=client -o yaml | " + envsubst_cmd + " | kubectl apply -f -")
 
@@ -204,7 +227,7 @@ def flavors():
     else:
         print("{} was not specified in tilt_config.json, attempting to load {}".format(ssh_pub_key_B64, ssh_pub_key_path))
         os.environ.update({ssh_pub_key_B64: base64_encode_file(ssh_pub_key_path)})
-    
+
     ssh_pub_key = "AZURE_SSH_PUBLIC_KEY"
     if substitutions.get(ssh_pub_key):
         os.environ.update({ssh_pub_key: substitutions.get(ssh_pub_key)})
@@ -308,7 +331,7 @@ def waitforsystem():
     local("kubectl wait --for=condition=ready --timeout=300s pod --all -n capi-kubeadm-bootstrap-system")
     local("kubectl wait --for=condition=ready --timeout=300s pod --all -n capi-kubeadm-control-plane-system")
     local("kubectl wait --for=condition=ready --timeout=300s pod --all -n capi-system")
-    
+
 ##############################
 # Actual work happens here
 ##############################
@@ -324,7 +347,11 @@ if settings.get("deploy_cert_manager"):
 
 deploy_capi()
 
+create_identity_secret()
+
 capz()
+
+observability()
 
 waitforsystem()
 

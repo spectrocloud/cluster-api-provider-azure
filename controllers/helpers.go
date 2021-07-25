@@ -49,6 +49,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 )
 
+const (
+	spIdentityWarning = "You are using Service Principal authentication for Cloud Provider Azure which is less secure than Managed Identity. " +
+		"Your Service Principal credentials will be written to a file on the disk of each VM in order to be accessible by Cloud Provider. " +
+		"To learn more, see https://capz.sigs.k8s.io/topics/identities-use-cases.html#azure-host-identity "
+	deprecatedManagerCredsWarning = "You're using deprecated functionality: " +
+		"Using Azure credentials from the manager environment is deprecated and will be removed in future releases. " +
+		"Please specify an AzureClusterIdentity for the AzureCluster instead, see: https://capz.sigs.k8s.io/topics/multitenancy.html "
+)
+
 type (
 	// Options are controller options extended.
 	Options struct {
@@ -228,6 +237,7 @@ func userAssignedIdentityCloudProviderConfig(d azure.ClusterScoper, identityID s
 }
 
 func newCloudProviderConfig(d azure.ClusterScoper) (controlPlaneConfig *CloudProviderConfig, workerConfig *CloudProviderConfig) {
+	subnet := getOneNodeSubnet(d)
 	return (&CloudProviderConfig{
 			Cloud:                        d.CloudEnvironment(),
 			AadClientID:                  d.ClientID(),
@@ -235,14 +245,14 @@ func newCloudProviderConfig(d azure.ClusterScoper) (controlPlaneConfig *CloudPro
 			TenantID:                     d.TenantID(),
 			SubscriptionID:               d.SubscriptionID(),
 			ResourceGroup:                d.ResourceGroup(),
-			SecurityGroupName:            d.NodeSubnet().SecurityGroup.Name,
+			SecurityGroupName:            subnet.SecurityGroup.Name,
 			SecurityGroupResourceGroup:   d.Vnet().ResourceGroup,
 			Location:                     d.Location(),
 			VMType:                       "vmss",
 			VnetName:                     d.Vnet().Name,
 			VnetResourceGroup:            d.Vnet().ResourceGroup,
-			SubnetName:                   d.NodeSubnet().Name,
-			RouteTableName:               d.NodeRouteTable().Name,
+			SubnetName:                   subnet.Name,
+			RouteTableName:               subnet.RouteTable.Name,
 			LoadBalancerSku:              "Standard",
 			MaximumLoadBalancerRuleCount: 250,
 			UseManagedIdentityExtension:  false,
@@ -255,19 +265,29 @@ func newCloudProviderConfig(d azure.ClusterScoper) (controlPlaneConfig *CloudPro
 			TenantID:                     d.TenantID(),
 			SubscriptionID:               d.SubscriptionID(),
 			ResourceGroup:                d.ResourceGroup(),
-			SecurityGroupName:            d.NodeSubnet().SecurityGroup.Name,
+			SecurityGroupName:            subnet.SecurityGroup.Name,
 			SecurityGroupResourceGroup:   d.Vnet().ResourceGroup,
 			Location:                     d.Location(),
 			VMType:                       "vmss",
 			VnetName:                     d.Vnet().Name,
 			VnetResourceGroup:            d.Vnet().ResourceGroup,
-			SubnetName:                   d.NodeSubnet().Name,
-			RouteTableName:               d.NodeRouteTable().Name,
+			SubnetName:                   subnet.Name,
+			RouteTableName:               subnet.RouteTable.Name,
 			LoadBalancerSku:              "Standard",
 			MaximumLoadBalancerRuleCount: 250,
 			UseManagedIdentityExtension:  false,
 			UseInstanceMetadata:          true,
 		}).overrideFromSpec(d)
+}
+
+// getOneNodeSubnet returns one of the subnets for the node role.
+func getOneNodeSubnet(d azure.ClusterScoper) infrav1.SubnetSpec {
+	for _, subnet := range d.Subnets() {
+		if subnet.Role == infrav1.SubnetNode {
+			return subnet
+		}
+	}
+	return infrav1.SubnetSpec{}
 }
 
 // overrideFromSpec overrides cloud provider config with the values provided in cluster spec.

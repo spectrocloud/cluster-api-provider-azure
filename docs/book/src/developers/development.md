@@ -214,14 +214,15 @@ make delete-workload-cluster
 
 #### Viewing Telemetry
 The CAPZ controller emits tracing and metrics data. When run in Tilt, the KinD cluster is provisioned with a development
-deployment of Jaeger, for distributed tracing, and Prometheus for metrics scraping and visualization.
+deployment of OpenTelemetry for distributed tracing, and Prometheus for metrics scraping and visualization.
 
-The Jaeger and Prometheus deployments are for development purposes only. These illustrate the hooks for tracing and
-metrics, but lack the robustness of production cluster deployments. For example, Jaeger in "all-in-one" mode with only
-in-memory persistence of traces.
+The OpenTelemetry and Prometheus deployments are for development purposes only. These illustrate the hooks for tracing and
+metrics, but lack the robustness of production cluster deployments.
 
-After the Tilt cluster has been initialized, to view distributed traces in Jaeger open a browser to
-`http://localhost:8080`.
+After the Tilt cluster has been initialized, if you followed the [tracing documentation](../../../../hack/observability/opentelemetry/readme.md),
+you can view distributed traces in the Azure Portal. Open the App Insights resource identified by the
+`AZURE_INSTRUMENTATION_KEY` you specified, choose "Transaction search" from the "Investigate" menu on the left,
+and click "Refresh" or make a specific query of the trace data.
 
 To view metrics, run `kubectl port-forward -n capz-system prometheus-prometheus-0 9090` and open
 `http://localhost:9090` to see the Prometheus UI.
@@ -285,7 +286,7 @@ export CONTROL_PLANE_MACHINE_COUNT=3
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="Standard_D2s_v3"
 export AZURE_NODE_MACHINE_TYPE="Standard_D2s_v3"
 export WORKER_MACHINE_COUNT=2
-export KUBERNETES_VERSION="v1.19.7"
+export KUBERNETES_VERSION="v1.21.2"
 
 # Generate SSH key.
 # If you want to provide your own key, skip this step and set AZURE_SSH_PUBLIC_KEY_B64 to your existing file.

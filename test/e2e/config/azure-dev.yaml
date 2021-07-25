@@ -80,8 +80,6 @@ providers:
       targetName: "cluster-template-conformance-ci-artifacts.yaml"
     - sourcePath: "${PWD}/templates/test/dev/cluster-template-custom-builds.yaml"
       targetName: "cluster-template-conformance-presubmit-artifacts.yaml"
-    - sourcePath: "${PWD}/templates/test/ci/cluster-template-prow-multi-tenancy.yaml"
-      targetName: "cluster-template-multi-tenancy.yaml"
     - sourcePath: "${PWD}/templates/test/ci/cluster-template-prow-windows.yaml"
       targetName: "cluster-template-windows.yaml"
     - sourcePath: "${PWD}/templates/test/ci/cluster-template-prow-machine-pool-windows.yaml"
@@ -90,26 +88,35 @@ providers:
       targetName: "cluster-template-external-cloud-provider.yaml"
     - sourcePath: "${PWD}/templates/test/ci/cluster-template-prow-aks-multi-tenancy.yaml"
       targetName: "cluster-template-aks-multi-tenancy.yaml"
+    - sourcePath: "${PWD}/templates/test/ci/cluster-template-prow-custom-vnet.yaml"
+      targetName: "cluster-template-custom-vnet.yaml"
+    - sourcePath: "${PWD}/templates/test/ci/cluster-template-prow-identity-from-env.yaml"
+      targetName: "cluster-template-identity-from-env.yaml"        
 
 variables:
-  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.19.7}"
+  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.21.2}"
+  # using a different version for windows because of an issue on azure cloud provider
+  # that only affects windows and external load balancer  
+  # https://github.com/kubernetes-sigs/cloud-provider-azure/issues/706
+  WINDOWS_KUBERNETES_VERSION: "${WINDOWS_KUBERNETES_VERSION:-v1.19.11}"
   AKS_KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.19.9}"
   ETCD_VERSION_UPGRADE_TO: "3.4.3-0"
   COREDNS_VERSION_UPGRADE_TO: "1.6.7"
-  KUBERNETES_VERSION_UPGRADE_TO: "${KUBERNETES_VERSION_UPGRADE_TO:-v1.19.11}"
-  KUBERNETES_VERSION_UPGRADE_FROM: "${KUBERNETES_VERSION_UPGRADE_FROM:-v1.18.15}"
+  KUBERNETES_VERSION_UPGRADE_TO: "${KUBERNETES_VERSION_UPGRADE_TO:-v1.21.2}"
+  KUBERNETES_VERSION_UPGRADE_FROM: "${KUBERNETES_VERSION_UPGRADE_FROM:-v1.19.11}"
   CNI: "${PWD}/templates/addons/calico.yaml"
   REDACT_LOG_SCRIPT: "${PWD}/hack/log/redact.sh"
   EXP_AKS: "true"
   EXP_MACHINE_POOL: "true"
   EXP_CLUSTER_RESOURCE_SET: "true"
-  CONFORMANCE_CI_ARTIFACTS_KUBERNETES_VERSION: "v1.19.7"
+  CONFORMANCE_CI_ARTIFACTS_KUBERNETES_VERSION: "v1.21.2"
   CONFORMANCE_WORKER_MACHINE_COUNT: "2"
   CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT: "${CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT:-1}"
   CONFORMANCE_IMAGE: "${CONFORMANCE_IMAGE:-}"
   CONFORMANCE_NODES: "${CONFORMANCE_NODES:-1}"
   IP_FAMILY: "IPv4" # this is used by the CAPI quickstart spec
   MULTI_TENANCY_IDENTITY_NAME: "multi-tenancy-identity"
+  CLUSTER_IDENTITY_NAME: "cluster-identity"
   NODE_DRAIN_TIMEOUT: "60s"
 
 intervals:
@@ -125,3 +132,4 @@ intervals:
   default/wait-job: ["5m", "10s"]
   default/wait-service: ["5m", "10s"]
   default/wait-machine-pool-nodes: ["30m", "10s"]
+  node-drain/wait-machine-deleted: [ "10m", "10s" ]

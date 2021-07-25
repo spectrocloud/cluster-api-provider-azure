@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -124,6 +125,12 @@ func (r *AzureJSONMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl
 		return reconcile.Result{}, err
 	}
 
+	// Construct secret for this machine
+	userAssignedIdentityIfExists := ""
+	if len(azureMachinePool.Spec.UserAssignedIdentities) > 0 {
+		userAssignedIdentityIfExists = azureMachinePool.Spec.UserAssignedIdentities[0].ProviderID
+	}
+
 	// Create the scope.
 	clusterScope, err := scope.NewClusterScope(ctx, scope.ClusterScopeParams{
 		Client:       r.Client,
@@ -143,13 +150,18 @@ func (r *AzureJSONMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl
 		UID:        azureMachinePool.GetUID(),
 	}
 
+	if azureMachinePool.Spec.Identity == infrav1.VMIdentityNone {
+		log.Info(fmt.Sprintf("WARNING, %s", spIdentityWarning))
+		r.Recorder.Eventf(azureMachinePool, corev1.EventTypeWarning, "VMIdentityNone", spIdentityWarning)
+	}
+
 	newSecret, err := GetCloudProviderSecret(
 		clusterScope,
 		azureMachinePool.Namespace,
 		azureMachinePool.Name,
 		owner,
 		azureMachinePool.Spec.Identity,
-		"",
+		userAssignedIdentityIfExists,
 	)
 
 	if err != nil {
