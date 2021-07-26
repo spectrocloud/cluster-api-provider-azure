@@ -87,20 +87,23 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 		// Normalize individual agent pools to diff in case we need to update
 		existingProfile := containerservice.AgentPool{
 			ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
-				VMSize:              existingPool.ManagedClusterAgentPoolProfileProperties.VMSize,
-				OsType:              containerservice.Linux,
-				OsDiskSizeGB:        existingPool.ManagedClusterAgentPoolProfileProperties.OsDiskSizeGB,
 				Count:               existingPool.ManagedClusterAgentPoolProfileProperties.Count,
-				Type:                containerservice.VirtualMachineScaleSets,
 				OrchestratorVersion: existingPool.ManagedClusterAgentPoolProfileProperties.OrchestratorVersion,
-				VnetSubnetID:        existingPool.ManagedClusterAgentPoolProfileProperties.VnetSubnetID,
+			},
+		}
+
+		normalizedProfile := containerservice.AgentPool{
+			ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
+				Count:               profile.Count,
+				OrchestratorVersion: profile.OrchestratorVersion,
 			},
 		}
 
 		// Diff and check if we require an update
-		diff := cmp.Diff(profile, existingProfile)
+		diff := cmp.Diff(normalizedProfile, existingProfile)
 		if diff != "" {
 			klog.V(2).Infof("Update required (+new -old):\n%s", diff)
+			profile.Mode = existingPool.Mode
 			err = s.Client.CreateOrUpdate(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name, profile)
 			if err != nil {
 				return errors.Wrap(err, "failed to create or update agent pool")
