@@ -40,7 +40,6 @@ import (
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-azure/cloud/scope"
-	infracontroller "sigs.k8s.io/cluster-api-provider-azure/controllers"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-azure/util/reconciler"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
@@ -140,61 +139,13 @@ func (r *AzureManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (_ ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// Handle deleted clusters
-	// needs to happen before trying to fetch the default pool to avoid circular deletion dependencies
-	if !azureControlPlane.DeletionTimestamp.IsZero() {
-		// Create the scope.
-		mcpScope, err := scope.NewManagedControlPlaneScope(scope.ManagedControlPlaneScopeParams{
-			Client:       r.Client,
-			Logger:       log,
-			Cluster:      cluster,
-			ControlPlane: azureControlPlane,
-			PatchTarget:  azureControlPlane,
-		})
-		if err != nil {
-			return reconcile.Result{}, errors.Errorf("failed to create scope: %+v", err)
-		}
-		defer func() {
-			if err := mcpScope.PatchObject(ctx); err != nil && reterr == nil {
-				reterr = err
-			}
-		}()
-		return r.reconcileDelete(ctx, mcpScope)
-	}
-
-	// fetch default pool
-	defaultPoolKey := client.ObjectKey{
-		Name:      azureControlPlane.Spec.DefaultPoolRef.Name,
-		Namespace: azureControlPlane.Namespace,
-	}
-	defaultPool := &infrav1exp.AzureManagedMachinePool{}
-	if err := r.Client.Get(ctx, defaultPoolKey, defaultPool); err != nil {
-		return reconcile.Result{}, errors.Wrapf(err, "failed to fetch default pool reference")
-	}
-
-	log = log.WithValues("azureManagedMachinePool", defaultPoolKey.Name)
-
-	// Fetch the owning MachinePool.
-	ownerPool, err := infracontroller.GetOwnerMachinePool(ctx, r.Client, defaultPool.ObjectMeta)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	if ownerPool == nil {
-		log.Info("failed to fetch owner ref for default pool")
-		return reconcile.Result{}, nil
-	}
-
-	log = log.WithValues("machinePool", ownerPool.Name)
-
 	// Create the scope.
 	mcpScope, err := scope.NewManagedControlPlaneScope(scope.ManagedControlPlaneScopeParams{
-		Client:           r.Client,
-		Logger:           log,
-		Cluster:          cluster,
-		ControlPlane:     azureControlPlane,
-		MachinePool:      ownerPool,
-		InfraMachinePool: defaultPool,
-		PatchTarget:      azureControlPlane,
+		Client:       r.Client,
+		Logger:       log,
+		Cluster:      cluster,
+		ControlPlane: azureControlPlane,
+		PatchTarget:  azureControlPlane,
 	})
 	if err != nil {
 		return reconcile.Result{}, errors.Errorf("failed to create scope: %+v", err)
@@ -206,6 +157,11 @@ func (r *AzureManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (_ ctrl
 			reterr = err
 		}
 	}()
+
+	// Handle deleted clusters
+	if !azureControlPlane.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, mcpScope)
+	}
 
 	// Handle non-deleted clusters
 	return r.reconcileNormal(ctx, mcpScope)

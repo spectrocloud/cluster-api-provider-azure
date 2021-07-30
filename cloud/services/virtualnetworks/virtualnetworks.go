@@ -113,15 +113,13 @@ func (s *Service) Delete(ctx context.Context) error {
 	defer span.End()
 
 	vnetSpec := s.Scope.VNetSpec()
-	existingVnet, err := s.getExisting(ctx, vnetSpec)
-
-	if !existingVnet.IsManaged(s.Scope.ClusterName()) {
+	if !s.Scope.Vnet().IsManaged(s.Scope.ClusterName()) {
 		s.Scope.V(4).Info("Skipping VNet deletion in custom vnet mode")
 		return nil
 	}
 
 	s.Scope.V(2).Info("deleting VNet", "VNet", vnetSpec.Name)
-	err = s.Client.Delete(ctx, vnetSpec.ResourceGroup, vnetSpec.Name)
+	err := s.Client.Delete(ctx, vnetSpec.ResourceGroup, vnetSpec.Name)
 	if err != nil {
 		if azure.ResourceGroupNotFound(err) || azure.ResourceNotFound(err) {
 			return nil

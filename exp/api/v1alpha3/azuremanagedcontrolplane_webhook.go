@@ -218,16 +218,6 @@ func (r *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object) error {
 		}
 	}
 
-	if old.Spec.DefaultPoolRef.Name != "" {
-		if r.Spec.DefaultPoolRef.Name != old.Spec.DefaultPoolRef.Name {
-			allErrs = append(allErrs,
-				field.Invalid(
-					field.NewPath("Spec", "DefaultPoolRef", "Name"),
-					r.Spec.DefaultPoolRef.Name,
-					"field is immutable"))
-		}
-	}
-
 	errs := r.validateUpdateAadProfile(old.Spec.AADProfile)
 	allErrs = append(allErrs, errs...)
 

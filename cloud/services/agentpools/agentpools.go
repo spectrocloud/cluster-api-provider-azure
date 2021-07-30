@@ -38,6 +38,7 @@ type Spec struct {
 	Replicas      int32
 	OSDiskSizeGB  int32
 	VnetSubnetID  string
+	Mode          string
 }
 
 // Reconcile idempotently creates or updates a agent pool, if possible.
@@ -59,6 +60,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 			Type:                containerservice.AgentPoolTypeVirtualMachineScaleSets,
 			OrchestratorVersion: agentPoolSpec.Version,
 			VnetSubnetID:        &agentPoolSpec.VnetSubnetID,
+			Mode:                containerservice.AgentPoolMode(agentPoolSpec.Mode),
 		},
 	}
 
@@ -89,6 +91,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 			ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
 				Count:               existingPool.ManagedClusterAgentPoolProfileProperties.Count,
 				OrchestratorVersion: existingPool.ManagedClusterAgentPoolProfileProperties.OrchestratorVersion,
+				Mode:                existingPool.Mode,
 			},
 		}
 
@@ -96,6 +99,7 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 			ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
 				Count:               profile.Count,
 				OrchestratorVersion: profile.OrchestratorVersion,
+				Mode:                profile.Mode,
 			},
 		}
 
@@ -103,7 +107,6 @@ func (s *Service) Reconcile(ctx context.Context, spec interface{}) error {
 		diff := cmp.Diff(normalizedProfile, existingProfile)
 		if diff != "" {
 			klog.V(2).Infof("Update required (+new -old):\n%s", diff)
-			profile.Mode = existingPool.Mode
 			err = s.Client.CreateOrUpdate(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name, profile)
 			if err != nil {
 				return errors.Wrap(err, "failed to create or update agent pool")

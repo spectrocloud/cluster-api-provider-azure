@@ -31,10 +31,9 @@ spec:
   subscriptionID: ${AZURE_SUBSCRIPTION_ID}
   resourceGroupName: "${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME}}"
   location: "${AZURE_LOCATION}"
-  defaultPoolRef:
-    name: "agentpool0"
   sshPublicKey: ${AZURE_SSH_PUBLIC_KEY_B64:=""}
   version: "${KUBERNETES_VERSION}"
+  nodeResourceGroupName: MC_${AZURE_RESOURCE_GROUP}_${CLUSTER_NAME}_${AZURE_LOCATION}
 ---
 # Due to the nature of managed Kubernetes and the control plane implementation,
 # the infrastructure provider for AKS cluster is basically a no-op.
@@ -76,6 +75,7 @@ metadata:
 spec:
   osDiskSizeGB: 512
   sku: "${AZURE_NODE_MACHINE_TYPE}"
+  mode: System
 ---
 # Deploy a second agent pool with the same number of machines, but using potentially different infrastructure.
 apiVersion: exp.cluster.x-k8s.io/v1alpha3
@@ -106,3 +106,4 @@ metadata:
 spec:
   osDiskSizeGB: 1024
   sku: "${AZURE_NODE_MACHINE_TYPE}"
+  mode: User
