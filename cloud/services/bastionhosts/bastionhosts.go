@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -119,7 +119,7 @@ func (s *Service) Reconcile(ctx context.Context) error {
 								PublicIPAddress: &network.SubResource{
 									ID: publicIP.ID,
 								},
-								PrivateIPAllocationMethod: network.Static,
+								PrivateIPAllocationMethod: network.IPAllocationMethodStatic,
 							},
 						},
 					},
@@ -172,8 +172,8 @@ func (s *Service) createBastionPublicIP(ctx context.Context, ipName string) erro
 			Name:     to.StringPtr(ipName),
 			Location: to.StringPtr(s.Scope.Location()),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-				PublicIPAddressVersion:   network.IPv4,
-				PublicIPAllocationMethod: network.Static,
+				PublicIPAddressVersion:   network.IPVersionIPv4,
+				PublicIPAllocationMethod: network.IPAllocationMethodStatic,
 				DNSSettings: &network.PublicIPAddressDNSSettings{
 					DomainNameLabel: to.StringPtr(strings.ToLower(ipName)),
 				},
