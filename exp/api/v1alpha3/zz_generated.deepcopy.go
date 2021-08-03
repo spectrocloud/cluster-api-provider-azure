@@ -436,7 +436,6 @@ func (in *AzureManagedControlPlaneSpec) DeepCopyInto(out *AzureManagedControlPla
 		*out = new(string)
 		**out = **in
 	}
-	out.DefaultPoolRef = in.DefaultPoolRef
 	if in.DNSServiceIP != nil {
 		in, out := &in.DNSServiceIP, &out.DNSServiceIP
 		*out = new(string)

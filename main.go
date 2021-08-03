@@ -58,6 +58,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/pkg/ot"
 	"sigs.k8s.io/cluster-api-provider-azure/util/reconciler"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	"sigs.k8s.io/cluster-api-provider-azure/util/webhook"
 	"sigs.k8s.io/cluster-api-provider-azure/version"
 )
 
@@ -371,6 +372,17 @@ func main() {
 				os.Exit(1)
 			}
 		}
+
+		if feature.Gates.Enabled(feature.AKS) {
+			hookServer := mgr.GetWebhookServer()
+			hookServer.Register("/mutate-exp-infrastructure-cluster-x-k8s-io-v1alpha3-azuremanagedmachinepool", webhook.NewMutatingWebhook(
+				&infrav1alpha3exp.AzureManagedMachinePool{}, mgr.GetClient(),
+			))
+			hookServer.Register("/validate-exp-infrastructure-cluster-x-k8s-io-v1alpha3-azuremanagedmachinepool", webhook.NewValidatingWebhook(
+				&infrav1alpha3exp.AzureManagedMachinePool{}, mgr.GetClient(),
+			))
+		}
+
 	}
 	// +kubebuilder:scaffold:builder
 
