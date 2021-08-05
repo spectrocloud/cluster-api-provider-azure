@@ -201,6 +201,5 @@ webhooks:
     - v1alpha3
     operations:
     - UPDATE
-    - DELETE
     resources:
     - azuremanagedmachinepools
