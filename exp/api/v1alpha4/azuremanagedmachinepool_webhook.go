@@ -106,12 +106,7 @@ func (r *AzureManagedMachinePool) ValidateUpdate(oldRaw runtime.Object, client c
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
 func (r *AzureManagedMachinePool) ValidateDelete(client client.Client) error {
 	azuremanagedmachinepoollog.Info("validate delete", "name", r.Name)
-
-	if r.Spec.Mode != string(NodePoolModeSystem) {
-		return nil
-	}
-
-	return errors.Wrapf(r.validateLastSystemNodePool(client), "if the delete is triggered via owner MachinePool please refer to trouble shooting section in https://capz.sigs.k8s.io/topics/managedcluster.html")
+	return nil
 }
 
 // validateLastSystemNodePool is used to check if the existing system node pool is the last system node pool.
