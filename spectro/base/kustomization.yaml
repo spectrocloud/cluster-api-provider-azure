@@ -9,6 +9,7 @@ commonLabels:
 bases:
   - ../../config/manager
 
+
 patchesStrategicMerge:
   - ../../config/default/manager_image_patch.yaml
   - ../../config/default/manager_pull_policy.yaml

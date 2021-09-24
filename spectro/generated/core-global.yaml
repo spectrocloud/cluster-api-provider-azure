@@ -1562,6 +1562,178 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    api-approved.kubernetes.io: unapproved
+    controller-gen.kubebuilder.io/version: v0.5.0
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: azureidentities.aadpodidentity.k8s.io
+spec:
+  group: aadpodidentity.k8s.io
+  names:
+    kind: AzureIdentity
+    listKind: AzureIdentityList
+    plural: azureidentities
+    singular: azureidentity
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: AzureIdentity is the specification of the identity data structure.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AzureIdentitySpec describes the credential specifications
+              of an identity on Azure.
+            properties:
+              adEndpoint:
+                type: string
+              adResourceID:
+                description: For service principal. Option param for specifying the  AD
+                  details.
+                type: string
+              auxiliaryTenantIDs:
+                description: Service principal auxiliary tenant ids
+                items:
+                  type: string
+                nullable: true
+                type: array
+              clientID:
+                description: Both User Assigned MSI and SP can use this field.
+                type: string
+              clientPassword:
+                description: Used for service principal
+                properties:
+                  name:
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
+              metadata:
+                type: object
+              replicas:
+                format: int32
+                nullable: true
+                type: integer
+              resourceID:
+                description: User assigned MSI resource id.
+                type: string
+              tenantID:
+                description: Service principal primary tenant id.
+                type: string
+              type:
+                description: UserAssignedMSI or Service Principal
+                type: integer
+            type: object
+          status:
+            description: AzureIdentityStatus contains the replica status of the resource.
+            properties:
+              availableReplicas:
+                format: int32
+                type: integer
+              metadata:
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: unapproved
+    controller-gen.kubebuilder.io/version: v0.5.0
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: azureidentitybindings.aadpodidentity.k8s.io
+spec:
+  group: aadpodidentity.k8s.io
+  names:
+    kind: AzureIdentityBinding
+    listKind: AzureIdentityBindingList
+    plural: azureidentitybindings
+    singular: azureidentitybinding
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: AzureIdentityBinding brings together the spec of matching pods
+          and the identity which they can use.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AzureIdentityBindingSpec matches the pod with the Identity.
+              Used to indicate the potential matches to look for between the pod/deployment
+              and the identities present.
+            properties:
+              azureIdentity:
+                type: string
+              metadata:
+                type: object
+              selector:
+                type: string
+              weight:
+                description: Weight is used to figure out which of the matching identities
+                  would be selected.
+                type: integer
+            type: object
+          status:
+            description: AzureIdentityBindingStatus contains the status of an AzureIdentityBinding.
+            properties:
+              availableReplicas:
+                format: int32
+                type: integer
+              metadata:
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capz-serving-cert
     controller-gen.kubebuilder.io/version: v0.6.1
   labels:
@@ -4854,13 +5026,25 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    cert-manager.io/inject-ca-from: capi-webhook-system/capz-serving-cert
     controller-gen.kubebuilder.io/version: v0.6.1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
     cluster.x-k8s.io/v1alpha4: v1alpha4
   name: azuremanagedclusters.infrastructure.cluster.x-k8s.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        caBundle: Cg==
+        service:
+          name: capz-webhook-service
+          namespace: capi-webhook-system
+          path: /convert
+      conversionReviewVersions:
+      - v1
+      - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -4982,13 +5166,25 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    cert-manager.io/inject-ca-from: capi-webhook-system/capz-serving-cert
     controller-gen.kubebuilder.io/version: v0.6.1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
     cluster.x-k8s.io/v1alpha4: v1alpha4
   name: azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        caBundle: Cg==
+        service:
+          name: capz-webhook-service
+          namespace: capi-webhook-system
+          path: /convert
+      conversionReviewVersions:
+      - v1
+      - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -5368,13 +5564,25 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    cert-manager.io/inject-ca-from: capi-webhook-system/capz-serving-cert
     controller-gen.kubebuilder.io/version: v0.6.1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
     cluster.x-k8s.io/v1alpha4: v1alpha4
   name: azuremanagedmachinepools.infrastructure.cluster.x-k8s.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        caBundle: Cg==
+        service:
+          name: capz-webhook-service
+          namespace: capi-webhook-system
+          path: /convert
+      conversionReviewVersions:
+      - v1
+      - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -5544,6 +5752,126 @@ status:
   conditions: []
   storedVersions: []
 ---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: unapproved
+    controller-gen.kubebuilder.io/version: v0.5.0
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: azurepodidentityexceptions.aadpodidentity.k8s.io
+spec:
+  group: aadpodidentity.k8s.io
+  names:
+    kind: AzurePodIdentityException
+    listKind: AzurePodIdentityExceptionList
+    plural: azurepodidentityexceptions
+    singular: azurepodidentityexception
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: AzurePodIdentityException contains the pod selectors for all
+          pods that don't require NMI to process and request token on their behalf.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AzurePodIdentityExceptionSpec matches pods with the selector
+              defined. If request originates from a pod that matches the selector,
+              nmi will proxy the request and send response back without any validation.
+            properties:
+              metadata:
+                type: object
+              podLabels:
+                additionalProperties:
+                  type: string
+                type: object
+            type: object
+          status:
+            description: AzurePodIdentityExceptionStatus contains the status of an
+              AzurePodIdentityException.
+            properties:
+              metadata:
+                type: object
+              status:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-aad-pod-id-nmi-role
+rules:
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - aadpodidentity.k8s.io
+  resources:
+  - azureidentitybindings
+  - azureidentities
+  - azurepodidentityexceptions
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+    k8s-app: capz-aad-pod-id-nmi-binding
+  name: capz-aad-pod-id-nmi-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capz-aad-pod-id-nmi-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: capi-webhook-system
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -5601,7 +5929,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: gcr.io/k8s-staging-cluster-api-azure/cluster-api-azure-controller:latest
+        image: gcr.io/spectro-images-public/cluster-api-azure/cluster-api-azure-controller:spc-v1alpha4-17092021
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -5633,6 +5961,95 @@ spec:
         secret:
           defaultMode: 420
           secretName: capz-webhook-service-cert
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+    component: nmi
+    k8s-app: aad-pod-id
+    tier: node
+  name: capz-nmi
+  namespace: capi-webhook-system
+spec:
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/provider: infrastructure-azure
+      component: nmi
+      tier: node
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-azure
+        component: nmi
+        tier: node
+    spec:
+      containers:
+      - args:
+        - --node=$(NODE_NAME)
+        - --operation-mode=managed
+        - --forceNamespaced
+        - --http-probe-port=8085
+        env:
+        - name: FORCENAMESPACED
+          value: "true"
+        - name: HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: LOG_LEVEL
+          value: DEBUG
+        image: mcr.microsoft.com/oss/azure/aad-pod-identity/nmi:v1.8.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8085
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        name: nmi
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          capabilities:
+            add:
+            - DAC_READ_SEARCH
+            - NET_ADMIN
+            - NET_RAW
+            drop:
+            - ALL
+          runAsUser: 0
+        volumeMounts:
+        - mountPath: /run/xtables.lock
+          name: iptableslock
+        - mountPath: /etc/default/kubelet
+          name: kubelet-config
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      volumes:
+      - hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+        name: iptableslock
+      - hostPath:
+          path: /etc/default/kubelet
+          type: FileOrCreate
+        name: kubelet-config
+  updateStrategy:
+    type: RollingUpdate
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

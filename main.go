@@ -317,6 +317,7 @@ func main() {
 }
 
 func registerReconcilers(ctx context.Context, mgr manager.Manager) {
+	setupLog.V(0).Info("registerReconcilers")
 	if err := controllers.NewAzureMachineReconciler(mgr.GetClient(), ctrl.Log.WithName("controllers").WithName("AzureMachine"),
 		mgr.GetEventRecorderFor("azuremachine-reconciler"),
 		reconcileTimeout,
@@ -453,6 +454,7 @@ func registerReconcilers(ctx context.Context, mgr manager.Manager) {
 }
 
 func registerWebhooks(ctx context.Context, mgr manager.Manager) {
+	setupLog.V(0).Info("registerWebhooks")
 	if err := (&infrav1alpha4.AzureCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AzureCluster")
 		os.Exit(1)
