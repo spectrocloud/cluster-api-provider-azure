@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/go-logr/logr"
@@ -559,6 +560,37 @@ func (s *ManagedControlPlaneScope) SetAgentPoolReplicas(replicas int32) {
 	s.InfraMachinePool.Status.Replicas = replicas
 }
 
+//GetAgentPoolAnnotations returns annotations of the infra machine pool.
+func (s *ManagedControlPlaneScope) GetAgentPoolAnnotations() map[string]string {
+	return s.InfraMachinePool.Annotations
+}
+
+//SetAgentPoolAnnotations adds new annotation to the infra machine pool
+func (s *ManagedControlPlaneScope) SetAgentPoolAnnotations(k,v string) {
+	if s.InfraMachinePool.Annotations == nil {
+		s.InfraMachinePool.Annotations = make(map[string]string)
+	}
+	s.InfraMachinePool.Annotations[k] = v
+}
+
+//DeleteAgentPoolAnnotation deletes the infra machine pool annotation having the input key, its a no-op if the key doesn't exist
+func (s *ManagedControlPlaneScope) DeleteAgentPoolAnnotation(k string) {
+	delete(s.InfraMachinePool.Annotations, k)
+}
+
+//GetNodeDrainTimeout returns the node drain timeout of the machine pool.
+func (s *ManagedControlPlaneScope) GetNodeDrainTimeout() time.Duration {
+	var t time.Duration
+	if s.MachinePool != nil && s.MachinePool.Spec.Template.Spec.NodeDrainTimeout != nil {
+		 t = s.MachinePool.Spec.Template.Spec.NodeDrainTimeout.Duration	 
+	}
+	return t
+}
+
+//GetInfraClient returns the controller client in the scope.
+func (s *ManagedControlPlaneScope) GetInfraClient() client.Client {
+	return s.Client
+}
 // SetAgentPoolReady sets the flag that indicates if the agent pool is ready or not.
 func (s *ManagedControlPlaneScope) SetAgentPoolReady(ready bool) {
 	s.InfraMachinePool.Status.Ready = ready
