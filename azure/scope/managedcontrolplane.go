@@ -504,6 +504,12 @@ func (s *ManagedControlPlaneScope) GetAgentPoolSpecs(ctx context.Context) ([]azu
 			ammp.Replicas = *ownerPool.Spec.Replicas
 		}
 
+		if pool.Spec.Scaling != nil {
+			ammp.EnableAutoScaling = to.BoolPtr(true)
+			ammp.MaxCount = pool.Spec.Scaling.MaxSize
+			ammp.MinCount = pool.Spec.Scaling.MinSize
+		}
+
 		ammps = append(ammps, ammp)
 	}
 

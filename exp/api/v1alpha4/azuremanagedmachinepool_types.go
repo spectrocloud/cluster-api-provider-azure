@@ -61,9 +61,10 @@ type AzureManagedMachinePoolSpec struct {
 // ManagedMachinePoolScaling specifies scaling options.
 type ManagedMachinePoolScaling struct {
 	// MinSize specifies the minimum number node count.
-	MinSize *int32 `json:"minSize,omitempty"`
+	MinSize *int32 `json:"minSize"`
+
 	// MazSize specifies the maximum number node count.
-	MaxSize *int32 `json:"maxSize,omitempty"`
+	MaxSize *int32 `json:"maxSize"`
 }
 
 // AzureManagedMachinePoolStatus defines the observed state of AzureManagedMachinePool.
