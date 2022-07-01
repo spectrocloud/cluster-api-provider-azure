@@ -221,7 +221,7 @@ func InitFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&webhookPort,
 		"webhook-port",
 		0,
-		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed..",
+		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.",
 	)
 
 	fs.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs/",
@@ -380,6 +380,7 @@ func registerControllers(ctx context.Context, mgr manager.Manager) {
 	if err != nil {
 		setupLog.Error(err, "failed to build machineCache ReconcileCache")
 	}
+	setupLog.V(0).Info("registerControllers")
 	if err := controllers.NewAzureMachineReconciler(mgr.GetClient(),
 		mgr.GetEventRecorderFor("azuremachine-reconciler"),
 		timeouts,
@@ -608,6 +609,7 @@ func registerControllers(ctx context.Context, mgr manager.Manager) {
 }
 
 func registerWebhooks(mgr manager.Manager) {
+	setupLog.V(0).Info("registerWebhooks")
 	if err := (&infrav1.AzureCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AzureCluster")
 		os.Exit(1)
