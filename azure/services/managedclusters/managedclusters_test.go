@@ -99,6 +99,7 @@ func TestReconcile(t *testing.T) {
 				s.SetOIDCIssuerProfileStatus(&infrav1.OIDCIssuerProfileStatus{
 					IssuerURL: ptr.To("oidc issuer url"),
 				})
+				s.IsManagedVersionUpgrade().Return(false)
 				s.UpdatePutStatus(infrav1.ManagedClusterRunningCondition, serviceName, nil)
 			},
 		},
@@ -137,6 +138,48 @@ func TestReconcile(t *testing.T) {
 				s.SetOIDCIssuerProfileStatus(&infrav1.OIDCIssuerProfileStatus{
 					IssuerURL: ptr.To("oidc issuer url"),
 				})
+				s.IsManagedVersionUpgrade().Return(false)
+				s.UpdatePutStatus(infrav1.ManagedClusterRunningCondition, serviceName, nil)
+			},
+		},
+		{
+			name:          "create managed cluster succeeds, update autoupgrade status",
+			expectedError: "",
+			expect: func(m *mock_managedclusters.MockCredentialGetterMockRecorder, s *mock_managedclusters.MockManagedClusterScopeMockRecorder, r *mock_async.MockReconcilerMockRecorder) {
+				var userKubeConfigData []byte
+				s.ManagedClusterSpec().Return(fakeManagedClusterSpec)
+				r.CreateOrUpdateResource(gomockinternal.AContext(), fakeManagedClusterSpec, serviceName).Return(armcontainerservice.ManagedCluster{
+					Properties: &armcontainerservice.ManagedClusterProperties{
+						Fqdn:              ptr.To("my-managedcluster-fqdn"),
+						ProvisioningState: ptr.To("Succeeded"),
+						KubernetesVersion: ptr.To("1.27.3"),
+						IdentityProfile: map[string]*armcontainerservice.UserAssignedIdentity{
+							kubeletIdentityKey: {
+								ResourceID: ptr.To("kubelet-id"),
+							},
+						},
+						OidcIssuerProfile: &armcontainerservice.ManagedClusterOIDCIssuerProfile{
+							Enabled:   ptr.To(true),
+							IssuerURL: ptr.To("oidc issuer url"),
+						},
+					},
+				}, nil)
+				s.SetControlPlaneEndpoint(clusterv1.APIEndpoint{
+					Host: "my-managedcluster-fqdn",
+					Port: 443,
+				})
+				s.IsAADEnabled().Return(false)
+				s.AreLocalAccountsDisabled().Return(false)
+				m.GetCredentials(gomockinternal.AContext(), "my-rg", "my-managedcluster").Return([]byte("credentials"), nil)
+				s.SetAdminKubeconfigData([]byte("credentials"))
+				s.SetUserKubeconfigData(userKubeConfigData)
+				s.SetKubeletIdentity("kubelet-id")
+				s.SetOIDCIssuerProfileStatus(nil)
+				s.SetOIDCIssuerProfileStatus(&infrav1.OIDCIssuerProfileStatus{
+					IssuerURL: ptr.To("oidc issuer url"),
+				})
+				s.IsManagedVersionUpgrade().Return(true)
+				s.SetAutoUpgradeVersionStatus("v1.27.3")
 				s.UpdatePutStatus(infrav1.ManagedClusterRunningCondition, serviceName, nil)
 			},
 		},

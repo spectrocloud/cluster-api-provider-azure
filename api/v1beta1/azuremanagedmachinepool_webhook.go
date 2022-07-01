@@ -26,7 +26,6 @@ import (
 	"unicode"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4"
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,8 +36,6 @@ import (
 	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/maps"
 	webhookutils "sigs.k8s.io/cluster-api-provider-azure/util/webhook"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	capifeature "sigs.k8s.io/cluster-api/feature"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -209,15 +206,6 @@ func (mw *azureManagedMachinePoolWebhook) ValidateUpdate(ctx context.Context, ol
 				"field is immutable"))
 	}
 
-	if m.Spec.Mode != string(NodePoolModeSystem) && old.Spec.Mode == string(NodePoolModeSystem) {
-		// validate for last system node pool
-		if err := m.validateLastSystemNodePool(mw.Client); err != nil {
-			allErrs = append(allErrs, field.Forbidden(
-				field.NewPath("Spec", "Mode"),
-				"Cannot change node pool mode to User, you must have at least one System node pool in your cluster"))
-		}
-	}
-
 	if err := webhookutils.ValidateImmutable(
 		field.NewPath("Spec", "MaxPods"),
 		old.Spec.MaxPods,
@@ -296,54 +284,7 @@ func (mw *azureManagedMachinePoolWebhook) ValidateDelete(ctx context.Context, ob
 		return nil, nil
 	}
 
-	return nil, errors.Wrapf(m.validateLastSystemNodePool(mw.Client), "if the delete is triggered via owner MachinePool please refer to trouble shooting section in https://capz.sigs.k8s.io/topics/managedcluster.html")
-}
-
-// validateLastSystemNodePool is used to check if the existing system node pool is the last system node pool.
-// If it is a last system node pool it cannot be deleted or mutated to user node pool as AKS expects min 1 system node pool.
-func (m *AzureManagedMachinePool) validateLastSystemNodePool(cli client.Client) error {
-	ctx := context.Background()
-
-	// Fetch the Cluster.
-	clusterName, ok := m.Labels[clusterv1.ClusterNameLabel]
-	if !ok {
-		return nil
-	}
-
-	ownerCluster := &clusterv1.Cluster{}
-	key := client.ObjectKey{
-		Namespace: m.Namespace,
-		Name:      clusterName,
-	}
-
-	if err := cli.Get(ctx, key, ownerCluster); err != nil {
-		return err
-	}
-
-	if !ownerCluster.DeletionTimestamp.IsZero() {
-		return nil
-	}
-
-	// checking if the Cluster is going to be deleted for clusterctl move operation
-	if _, found := ownerCluster.Annotations[clusterctlv1.DeleteForMoveAnnotation]; found {
-		return nil
-	}
-
-	opt1 := client.InNamespace(m.Namespace)
-	opt2 := client.MatchingLabels(map[string]string{
-		clusterv1.ClusterNameLabel: clusterName,
-		LabelAgentPoolMode:         string(NodePoolModeSystem),
-	})
-
-	ammpList := &AzureManagedMachinePoolList{}
-	if err := cli.List(ctx, ammpList, opt1, opt2); err != nil {
-		return err
-	}
-
-	if len(ammpList.Items) <= 1 {
-		return errors.New("AKS Cluster must have at least one system pool")
-	}
-	return nil
+	return nil, nil
 }
 
 func (m *AzureManagedMachinePool) validateMaxPods() error {

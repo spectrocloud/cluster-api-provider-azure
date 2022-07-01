@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	_ "net/http/pprof"
@@ -36,6 +37,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cgrecord "k8s.io/client-go/tools/record"
+	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
@@ -60,9 +62,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+// TLSOptions defines the tls options for tls config.
+type TLSOptions struct {
+	TLSMinVersion   string
+	TLSCipherSuites []string
+}
+
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme     = runtime.NewScheme()
+	setupLog   = ctrl.Log.WithName("setup")
+	tlsOptions = TLSOptions{}
 )
 
 func init() {
@@ -221,8 +230,8 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&webhookPort,
 		"webhook-port",
-		9443,
-		"The webhook server port the manager will listen on.",
+		0,
+		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.",
 	)
 
 	fs.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs/",
@@ -265,6 +274,11 @@ func main() {
 	if watchNamespace != "" {
 		watchNamespaces = []string{watchNamespace}
 	}
+	tlsOptionOverrides, err := GetTLSOptionOverrideFuncs(tlsOptions)
+	if err != nil {
+		setupLog.Error(err, "unable to add TLS settings to the webhook server")
+		os.Exit(1)
+	}
 
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.UserAgent = "cluster-api-provider-azure-manager"
@@ -297,6 +311,8 @@ func main() {
 			CertDir: webhookCertDir,
 		}),
 		EventBroadcaster: broadcaster,
+		Port:             webhookPort,
+		TLSOpts:          tlsOptionOverrides,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -321,9 +337,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	registerControllers(ctx, mgr)
-
-	registerWebhooks(mgr)
+	if webhookPort == 0 {
+		registerControllers(ctx, mgr)
+	} else {
+		registerWebhooks(mgr)
+	}
 
 	// +kubebuilder:scaffold:builder
 	setupLog.Info("starting manager", "version", version.Get().String())
@@ -333,11 +351,39 @@ func main() {
 	}
 }
 
+// GetTLSOptionOverrideFuncs returns a list of TLS configuration overrides to be used
+// by the webhook server.
+func GetTLSOptionOverrideFuncs(options TLSOptions) ([]func(*tls.Config), error) {
+	var tlsOptions []func(config *tls.Config)
+	tlsVersion, err := cliflag.TLSVersion(options.TLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	tlsOptions = append(tlsOptions, func(cfg *tls.Config) {
+		cfg.MinVersion = tlsVersion
+		cfg.CipherSuites = GetDefaultTLSCipherSuits()
+		cfg.MaxVersion = tlsVersion
+	})
+
+	return tlsOptions, nil
+}
+
+// GetDefaultTLSCipherSuits returns the default Cipher values.
+func GetDefaultTLSCipherSuits() []uint16 {
+	return []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	}
+}
+
 func registerControllers(ctx context.Context, mgr manager.Manager) {
 	machineCache, err := coalescing.NewRequestCache(debouncingTimer)
 	if err != nil {
 		setupLog.Error(err, "failed to build machineCache ReconcileCache")
 	}
+	setupLog.V(0).Info("registerControllers")
 	if err := controllers.NewAzureMachineReconciler(mgr.GetClient(),
 		mgr.GetEventRecorderFor("azuremachine-reconciler"),
 		reconcileTimeout,
@@ -492,6 +538,7 @@ func registerControllers(ctx context.Context, mgr manager.Manager) {
 }
 
 func registerWebhooks(mgr manager.Manager) {
+	setupLog.V(0).Info("registerWebhooks")
 	if err := (&infrav1.AzureCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AzureCluster")
 		os.Exit(1)

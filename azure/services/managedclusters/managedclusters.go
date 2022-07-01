@@ -18,6 +18,7 @@ package managedclusters
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4"
 	"github.com/pkg/errors"
@@ -57,6 +58,8 @@ type ManagedClusterScope interface {
 	IsAADEnabled() bool
 	AreLocalAccountsDisabled() bool
 	SetOIDCIssuerProfileStatus(*infrav1.OIDCIssuerProfileStatus)
+	SetAutoUpgradeVersionStatus(version string)
+	IsManagedVersionUpgrade() bool
 }
 
 // Service provides operations on azure resources.
@@ -133,6 +136,11 @@ func (s *Service) Reconcile(ctx context.Context) error {
 				IssuerURL: managedCluster.Properties.OidcIssuerProfile.IssuerURL,
 			})
 		}
+
+		if s.Scope.IsManagedVersionUpgrade() && managedCluster.Properties.KubernetesVersion != nil {
+			kubernetesVersion := fmt.Sprintf("v%s", *managedCluster.Properties.KubernetesVersion)
+			s.Scope.SetAutoUpgradeVersionStatus(kubernetesVersion)
+		}
 	}
 	s.Scope.UpdatePutStatus(infrav1.ManagedClusterRunningCondition, serviceName, resultErr)
 	return resultErr
@@ -164,11 +172,11 @@ func (s *Service) IsManaged(ctx context.Context) (bool, error) {
 // ReconcileKubeconfig will reconcile admin kubeconfig and user kubeconfig.
 /*
   Returns the admin kubeconfig and user kubeconfig
-  If aad is enabled a user kubeconfig will also get generated and stored in the secret <cluster-name>-kubeconfig-user
-  If we disable local accounts for aad clusters we do not have access to admin kubeconfig, hence we need to create
+  If AAD is enabled a user kubeconfig will also get generated and stored in the secret <cluster-name>-kubeconfig-user
+  If we disable local accounts for AAD clusters we do not have access to admin kubeconfig, hence we need to create
   the admin kubeconfig by authenticating with the user credentials and retrieving the token for kubeconfig.
   The token is used to create the admin kubeconfig.
-  The user needs to ensure to provide service principle with admin aad privileges.
+  The user needs to ensure to provide service principal with admin AAD privileges.
 */
 func (s *Service) ReconcileKubeconfig(ctx context.Context, managedClusterSpec azure.ResourceSpecGetter) (userKubeConfigData []byte, adminKubeConfigData []byte, err error) {
 	if s.Scope.IsAADEnabled() {

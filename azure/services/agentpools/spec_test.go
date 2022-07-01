@@ -53,7 +53,7 @@ func fakeAgentPool(changes ...func(*AgentPoolSpec)) AgentPoolSpec {
 		OSType:            ptr.To("fake-os-type"),
 		Replicas:          1,
 		SKU:               "fake-sku",
-		Version:           ptr.To("fake-version"),
+		Version:           ptr.To("1.25.11"),
 		VnetSubnetID:      "fake-vnet-subnet-id",
 		Headers:           map[string]string{"fake-header": "fake-value"},
 		AdditionalTags:    infrav1.Tags{"fake": "tag"},
@@ -98,7 +98,7 @@ func sdkFakeAgentPool(changes ...func(*armcontainerservice.AgentPool)) armcontai
 			Mode:                ptr.To(armcontainerservice.AgentPoolMode("fake-mode")), // updates if changed
 			NodeLabels:          map[string]*string{"fake-label": ptr.To("fake-value")}, // updates if changed
 			NodeTaints:          []*string{ptr.To("fake-taint")},                        // updates if changed
-			OrchestratorVersion: ptr.To("fake-version"),                                 // updates if changed
+			OrchestratorVersion: ptr.To("1.25.11"),                                      // updates if changed
 			OSDiskSizeGB:        ptr.To[int32](2),
 			OSDiskType:          ptr.To(armcontainerservice.OSDiskType("fake-os-disk-type")),
 			OSType:              ptr.To(armcontainerservice.OSType("fake-os-type")),
@@ -490,6 +490,64 @@ func TestParameters(t *testing.T) {
 			),
 			existing: sdkFakeAgentPool(
 				func(pool *armcontainerservice.AgentPool) { pool.Properties.NodeLabels = nil },
+				sdkWithProvisioningState("Succeeded"),
+			),
+			expected:      nil,
+			expectedError: nil,
+		},
+		{
+			name: "existing kubernetes version is nil",
+			spec: fakeAgentPool(),
+			existing: sdkFakeAgentPool(
+				func(ap *armcontainerservice.AgentPool) {
+					ap.Properties.OrchestratorVersion = nil
+				},
+				sdkWithProvisioningState("Succeeded"),
+			),
+			expected: sdkFakeAgentPool(
+				func(ap *armcontainerservice.AgentPool) {
+					ap.Properties.OrchestratorVersion = ptr.To("1.25.11")
+				},
+			),
+			expectedError: nil,
+		},
+		{
+			name: "existing kubernetes version is higher",
+			spec: fakeAgentPool(),
+			existing: sdkFakeAgentPool(
+				func(ap *armcontainerservice.AgentPool) {
+					ap.Properties.OrchestratorVersion = ptr.To("1.26.6")
+				},
+				sdkWithProvisioningState("Succeeded"),
+			),
+			expected:      nil,
+			expectedError: nil,
+		},
+		{
+			name: "desired kubernetes version is higher",
+			spec: fakeAgentPool(
+				func(aps *AgentPoolSpec) {
+					aps.Version = ptr.To("1.27.3")
+				},
+			),
+			existing: sdkFakeAgentPool(
+				sdkWithProvisioningState("Succeeded"),
+			),
+			expected: sdkFakeAgentPool(
+				func(ap *armcontainerservice.AgentPool) {
+					ap.Properties.OrchestratorVersion = ptr.To("1.27.3")
+				},
+			),
+			expectedError: nil,
+		},
+		{
+			name: "kubernetes version did not change",
+			spec: fakeAgentPool(
+				func(aps *AgentPoolSpec) {
+					aps.Version = ptr.To("1.25.11")
+				},
+			),
+			existing: sdkFakeAgentPool(
 				sdkWithProvisioningState("Succeeded"),
 			),
 			expected:      nil,

@@ -29,6 +29,8 @@ const (
 	Node string = "node"
 	// Bastion subnet label.
 	Bastion string = "bastion"
+	// All subnet label.
+	All string = "all"
 )
 
 // SecurityEncryptionType represents the Encryption Type when the virtual machine is a
@@ -356,6 +358,16 @@ const (
 	Internal = LBType("Internal")
 	// Public is the value for the Azure load balancer public type.
 	Public = LBType("Public")
+)
+
+// IPAllocationMethod defines wheather the ip is allocated dynamically or statically.
+type IPAllocationMethod string
+
+const (
+	// Dynamic is the value for allocating dynamic ip.
+	Dynamic = IPAllocationMethod("Dynamic")
+	// Static is the value for allocating static ip.
+	Static = IPAllocationMethod("Static")
 )
 
 // FrontendIP defines a load balancer frontend IP configuration.
@@ -710,6 +722,9 @@ const (
 
 	// SubnetBastion defines a Bastion subnet role.
 	SubnetBastion = SubnetRole(Bastion)
+
+	// SubnetAll defines a role that can be used for both Kubernetes control plane node and Kubernetes workload node.
+	SubnetAll = SubnetRole(All)
 )
 
 // SubnetSpec configures an Azure subnet.
@@ -804,17 +819,17 @@ type NetworkInterface struct {
 // GetControlPlaneSubnet returns the cluster control plane subnet.
 func (n *NetworkSpec) GetControlPlaneSubnet() (SubnetSpec, error) {
 	for _, sn := range n.Subnets {
-		if sn.Role == SubnetControlPlane {
+		if sn.Role == SubnetControlPlane || sn.Role == SubnetAll {
 			return sn, nil
 		}
 	}
-	return SubnetSpec{}, errors.Errorf("no subnet found with role %s", SubnetControlPlane)
+	return SubnetSpec{}, errors.Errorf("no subnet found with role %s or %s", SubnetControlPlane, SubnetAll)
 }
 
 // UpdateControlPlaneSubnet updates the cluster control plane subnet.
 func (n *NetworkSpec) UpdateControlPlaneSubnet(subnet SubnetSpec) {
 	for i, sn := range n.Subnets {
-		if sn.Role == SubnetControlPlane {
+		if sn.Role == SubnetControlPlane || sn.Role == SubnetAll {
 			n.Subnets[i] = subnet
 		}
 	}
@@ -823,7 +838,7 @@ func (n *NetworkSpec) UpdateControlPlaneSubnet(subnet SubnetSpec) {
 // UpdateNodeSubnet updates the cluster node subnet.
 func (n *NetworkSpec) UpdateNodeSubnet(subnet SubnetSpec) {
 	for i, sn := range n.Subnets {
-		if sn.Role == SubnetNode {
+		if sn.Role == SubnetNode || sn.Role == SubnetAll {
 			n.Subnets[i] = subnet
 		}
 	}

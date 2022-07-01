@@ -141,7 +141,7 @@ func TestAPIServerHost(t *testing.T) {
 					},
 				},
 			},
-			want: "apiserver.example.private",
+			want: "apiserver.my-cluster.example.private",
 		},
 	}
 

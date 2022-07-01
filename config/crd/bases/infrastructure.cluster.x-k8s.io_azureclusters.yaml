@@ -286,6 +286,7 @@ spec:
                             - node
                             - control-plane
                             - bastion
+                            - all
                             type: string
                           routeTable:
                             description: RouteTable defines the route table that should
@@ -696,6 +697,10 @@ spec:
                           the TCP idle connection.
                         format: int32
                         type: integer
+                      ipAllocationMethod:
+                        description: IPAllocationMethod defines wheather the ip is
+                          allocated dynamically or statically.
+                        type: string
                       name:
                         type: string
                       sku:
@@ -779,6 +784,10 @@ spec:
                           the TCP idle connection.
                         format: int32
                         type: integer
+                      ipAllocationMethod:
+                        description: IPAllocationMethod defines wheather the ip is
+                          allocated dynamically or statically.
+                        type: string
                       name:
                         type: string
                       sku:
@@ -860,6 +869,10 @@ spec:
                           the TCP idle connection.
                         format: int32
                         type: integer
+                      ipAllocationMethod:
+                        description: IPAllocationMethod defines wheather the ip is
+                          allocated dynamically or statically.
+                        type: string
                       name:
                         type: string
                       sku:
@@ -1022,6 +1035,7 @@ spec:
                           - node
                           - control-plane
                           - bastion
+                          - all
                           type: string
                         routeTable:
                           description: RouteTable defines the route table that should

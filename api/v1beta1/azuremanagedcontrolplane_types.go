@@ -34,6 +34,50 @@ const (
 	PrivateDNSZoneModeNone string = "None"
 )
 
+// UpgradeChannel determines the type of upgrade channel for automatically upgrading the cluster.
+type UpgradeChannel string
+
+const (
+	// UpgradeChannelNodeImage automatically upgrades the node image to the latest version available.
+	// Consider using nodeOSUpgradeChannel instead as that allows you to configure node OS patching separate from Kubernetes version patching.
+	UpgradeChannelNodeImage UpgradeChannel = "node-image"
+	// UpgradeChannelNone disables auto-upgrades and keeps the cluster at its current version of Kubernetes.
+	UpgradeChannelNone UpgradeChannel = "none"
+	// UpgradeChannelPatch automatically upgrade the cluster to the latest supported patch version when it becomes available
+	// while keeping the minor version the same. For example, if a cluster is running version 1.17.7 and versions 1.17.9, 1.18.4,
+	// 1.18.6, and 1.19.1 are available, your cluster is upgraded to 1.17.9.
+	UpgradeChannelPatch UpgradeChannel = "patch"
+	// UpgradeChannelRapid automatically upgrade the cluster to the latest supported patch release on the latest supported minor
+	// version. In cases where the cluster is at a version of Kubernetes that is at an N-2 minor version where N is the latest
+	// supported minor version, the cluster first upgrades to the latest supported patch version on N-1 minor version. For example,
+	// if a cluster is running version 1.17.7 and versions 1.17.9, 1.18.4, 1.18.6, and 1.19.1 are available, your cluster first
+	// is upgraded to 1.18.6, then is upgraded to 1.19.1.
+	UpgradeChannelRapid UpgradeChannel = "rapid"
+	// UpgradeChannelStable automatically upgrade the cluster to the latest supported patch release on minor version N-1, where
+	// N is the latest supported minor version. For example, if a cluster is running version 1.17.7 and versions 1.17.9, 1.18.4,
+	// 1.18.6, and 1.19.1 are available, your cluster is upgraded to 1.18.6.
+	UpgradeChannelStable UpgradeChannel = "stable"
+)
+
+// NodeOSUpgradeChannel determines the manner in which the OS on your nodes is updated. The default is NodeImage.
+type NodeOSUpgradeChannel string
+
+const (
+	// NodeOSUpgradeChannelNodeImage channel instructs AKS to update the nodes with a newly patched VHD containing security fixes and bugfixes
+	// on a weekly cadence. With the VHD update machines will be rolling reimaged to that VHD following maintenance windows and
+	// surge settings. No extra VHD cost is incurred when choosing this option as AKS hosts the images.
+	NodeOSUpgradeChannelNodeImage NodeOSUpgradeChannel = "NodeImage"
+	// NodeOSUpgradeChannelNone channel instructs AKS to not perform update on your machines OS, either by OS or by rolling VHDs. This means
+	// you are responsible for your security updates.
+	NodeOSUpgradeChannelNone NodeOSUpgradeChannel = "None"
+	// NodeOSUpgradeChannelUnmanaged channel instructs AKS to apply OS updates automatically through the OS built-in patching infrastructure.
+	// Newly scaled in machines will be unpatched initially and will be patched at some point by the OS's infrastructure. Behavior
+	// of this option depends on the OS in question. Ubuntu and Mariner apply security patches through unattended upgrade roughly
+	// once a day around 06:00 UTC. Windows does not apply security patches automatically and so for them this option is equivalent
+	// to None till further notice.
+	NodeOSUpgradeChannelUnmanaged NodeOSUpgradeChannel = "Unmanaged"
+)
+
 // ManagedControlPlaneOutboundType enumerates the values for the managed control plane OutboundType.
 type ManagedControlPlaneOutboundType string
 
@@ -77,7 +121,7 @@ const (
 // AzureManagedControlPlaneSpec defines the desired state of AzureManagedControlPlane.
 type AzureManagedControlPlaneSpec struct {
 	// Version defines the desired Kubernetes version.
-	// +kubebuilder:validation:MinLength:=2
+	// +kubebuilder:validation:MinLength=2
 	Version string `json:"version"`
 
 	// ResourceGroupName is the name of the Azure resource group for this AKS Cluster.
@@ -221,6 +265,23 @@ type AzureManagedControlPlaneSpec struct {
 	// DisableLocalAccounts disables getting static credentials for this cluster when set. Expected to only be used for AAD clusters.
 	// +optional
 	DisableLocalAccounts *bool `json:"disableLocalAccounts,omitempty"`
+
+	// AutoUpgradeProfile - Profile of auto upgrade configuration.
+	// +optional
+	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile `json:"autoUpgradeProfile,omitempty"`
+}
+
+// ManagedClusterAutoUpgradeProfile - Auto upgrade profile for a managed cluster.
+type ManagedClusterAutoUpgradeProfile struct {
+	// NodeOSUpgradeChannel is a manner in which the OS on your nodes is updated. The default is NodeImage. Possible values include: NodeImage,Unmanaged,None
+	// +kubebuilder:validation:Enum=NodeImage;Unmanaged;None
+	// +optional
+	NodeOSUpgradeChannel *NodeOSUpgradeChannel `json:"nodeOSUpgradeChannel,omitempty"`
+
+	// UpgradeChannel upgrade channel for auto upgrade. Possible values include: 'node-image','none','patch','rapid','stable'
+	// +kubebuilder:validation:Enum=node-image;none;patch;rapid;stable
+	// +optional
+	UpgradeChannel *UpgradeChannel `json:"upgradeChannel,omitempty"`
 }
 
 // HTTPProxyConfig is the HTTP proxy configuration for the cluster.
@@ -364,6 +425,11 @@ type ManagedControlPlaneSubnet struct {
 
 // AzureManagedControlPlaneStatus defines the observed state of AzureManagedControlPlane.
 type AzureManagedControlPlaneStatus struct {
+	// AutoUpgradeVersion is the Kubernetes version populated after autoupgrade based on the upgrade channel.
+	// +kubebuilder:validation:MinLength=2
+	// +optional
+	AutoUpgradeVersion string `json:"autoUpgradeVersion,omitempty"`
+
 	// Ready is true when the provider resource is ready.
 	// +optional
 	Ready bool `json:"ready,omitempty"`

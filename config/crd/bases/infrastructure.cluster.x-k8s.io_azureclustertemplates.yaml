@@ -187,6 +187,7 @@ spec:
                                     - node
                                     - control-plane
                                     - bastion
+                                    - all
                                     type: string
                                   securityGroup:
                                     description: SecurityGroup defines the NSG (network
@@ -510,6 +511,10 @@ spec:
                                   for the TCP idle connection.
                                 format: int32
                                 type: integer
+                              ipAllocationMethod:
+                                description: IPAllocationMethod defines wheather the
+                                  ip is allocated dynamically or statically.
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -529,6 +534,10 @@ spec:
                                   for the TCP idle connection.
                                 format: int32
                                 type: integer
+                              ipAllocationMethod:
+                                description: IPAllocationMethod defines wheather the
+                                  ip is allocated dynamically or statically.
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -546,6 +555,10 @@ spec:
                                   for the TCP idle connection.
                                 format: int32
                                 type: integer
+                              ipAllocationMethod:
+                                description: IPAllocationMethod defines wheather the
+                                  ip is allocated dynamically or statically.
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -679,6 +692,7 @@ spec:
                                   - node
                                   - control-plane
                                   - bastion
+                                  - all
                                   type: string
                                 securityGroup:
                                   description: SecurityGroup defines the NSG (network

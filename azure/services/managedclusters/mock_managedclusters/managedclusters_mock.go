@@ -210,6 +210,20 @@ func (mr *MockManagedClusterScopeMockRecorder) IsAADEnabled() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAADEnabled", reflect.TypeOf((*MockManagedClusterScope)(nil).IsAADEnabled))
 }
 
+// IsManagedVersionUpgrade mocks base method.
+func (m *MockManagedClusterScope) IsManagedVersionUpgrade() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsManagedVersionUpgrade")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsManagedVersionUpgrade indicates an expected call of IsManagedVersionUpgrade.
+func (mr *MockManagedClusterScopeMockRecorder) IsManagedVersionUpgrade() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsManagedVersionUpgrade", reflect.TypeOf((*MockManagedClusterScope)(nil).IsManagedVersionUpgrade))
+}
+
 // MakeEmptyKubeConfigSecret mocks base method.
 func (m *MockManagedClusterScope) MakeEmptyKubeConfigSecret() v1.Secret {
 	m.ctrl.T.Helper()
@@ -248,6 +262,18 @@ func (m *MockManagedClusterScope) SetAdminKubeconfigData(arg0 []byte) {
 func (mr *MockManagedClusterScopeMockRecorder) SetAdminKubeconfigData(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAdminKubeconfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).SetAdminKubeconfigData), arg0)
+}
+
+// SetAutoUpgradeVersionStatus mocks base method.
+func (m *MockManagedClusterScope) SetAutoUpgradeVersionStatus(version string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetAutoUpgradeVersionStatus", version)
+}
+
+// SetAutoUpgradeVersionStatus indicates an expected call of SetAutoUpgradeVersionStatus.
+func (mr *MockManagedClusterScopeMockRecorder) SetAutoUpgradeVersionStatus(version any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAutoUpgradeVersionStatus", reflect.TypeOf((*MockManagedClusterScope)(nil).SetAutoUpgradeVersionStatus), version)
 }
 
 // SetControlPlaneEndpoint mocks base method.
