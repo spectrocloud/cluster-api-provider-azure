@@ -98,12 +98,23 @@ func (r *AzureManagedMachinePool) ValidateUpdate(oldRaw runtime.Object, client c
 				"field is immutable"))
 	}
 
-	if r.Spec.OSType != old.Spec.OSType {
-		allErrs = append(allErrs,
-			field.Invalid(
-				field.NewPath("Spec", "OSType"),
-				r.Spec.OSType,
-				"field is immutable"))
+	if old.Spec.OSType != nil {
+		// Prevent OSType modification if it was already set to some value
+		if m.Spec.OSType == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "OSType"),
+					m.Spec.OSType,
+					"field is immutable, unsetting is not allowed"))
+		} else if *m.Spec.OSType != *old.Spec.OSType {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "OSType"),
+					*m.Spec.OSType,
+					"field is immutable"))
+		}
 	}
 
 	if old.Spec.OSDiskSizeGB != nil {
