@@ -2,10 +2,6 @@ namespace: capi-webhook-system
 
 namePrefix: capz-
 
-# Labels to add to all resources and selectors.
-commonLabels:
-  cluster.x-k8s.io/provider: "infrastructure-azure"
-
 resources:
 - ../../config/default/namespace.yaml
 - ../../config/default/aad-pod-identity-deployment.yaml
@@ -115,6 +111,8 @@ patches:
 - path: ../../config/default/manager_pull_policy.yaml
 - path: ../../config/default/manager_webhook_patch.yaml
 - path: ../../config/default/webhookcainjection_patch.yaml
+
+
 replacements:
 - source:
     fieldPath: metadata.namespace
@@ -128,7 +126,6 @@ replacements:
     select:
       kind: MutatingWebhookConfiguration
       name: webhook
-
 - source:
     kind: Certificate
     name: serving-cert
@@ -141,7 +138,6 @@ replacements:
     select:
       kind: MutatingWebhookConfiguration
       name: webhook
-
 - source:
     fieldPath: metadata.namespace
     kind: Service

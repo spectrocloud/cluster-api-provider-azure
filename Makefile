@@ -171,7 +171,7 @@ CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= v1.18.0-spectro-${SPECTRO_VERSION}
 ARCH ?= amd64
 # ALL_ARCH = amd64 arm arm64 ppc64le s390x
-ALL_ARCH = arm64 amd64 
+ALL_ARCH = arm64 amd64
 
 # Allow overriding manifest generation destination directory
 MANIFEST_ROOT ?= config
