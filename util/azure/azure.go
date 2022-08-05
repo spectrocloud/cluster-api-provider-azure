@@ -18,6 +18,8 @@ package azure
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,6 +28,8 @@ import (
 	expv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+var azureResourceGroupNameRE = regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.+)/providers/(?:.*)`)
 
 // AzureSystemNodeLabelPrefix is a standard node label prefix for Azure features, e.g., kubernetes.azure.com/scalesetpriority.
 const AzureSystemNodeLabelPrefix = "kubernetes.azure.com"
@@ -74,4 +78,16 @@ func FindParentMachinePoolWithRetry(ampName string, cli client.Client, maxAttemp
 // ParseResourceID parses a string to an *arm.ResourceID, first removing any "azure://" prefix.
 func ParseResourceID(id string) (*arm.ResourceID, error) {
 	return arm.ParseResourceID(strings.TrimPrefix(id, ProviderIDPrefix))
+}
+
+// ConvertResourceGroupNameToLower converts the resource group name in the resource ID to be lowered.
+// Inspired by https://github.com/kubernetes-sigs/cloud-provider-azure/blob/88c9b89611e7c1fcbd39266928cce8406eb0e728/pkg/provider/azure_wrap.go#L409
+func ConvertResourceGroupNameToLower(resourceID string) (string, error) {
+	matches := azureResourceGroupNameRE.FindStringSubmatch(resourceID)
+	if len(matches) != 2 {
+		return "", fmt.Errorf("%q isn't in Azure resource ID format %q", resourceID, azureResourceGroupNameRE.String())
+	}
+
+	resourceGroup := matches[1]
+	return strings.Replace(resourceID, resourceGroup, strings.ToLower(resourceGroup), 1), nil
 }

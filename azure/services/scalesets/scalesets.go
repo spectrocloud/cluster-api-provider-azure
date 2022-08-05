@@ -80,7 +80,7 @@ func (s *Service) Name() string {
 
 // Reconcile idempotently gets, creates, and updates a scale set.
 func (s *Service) Reconcile(ctx context.Context) (retErr error) {
-	ctx, _, done := tele.StartSpanWithLogger(ctx, "scalesets.Service.Reconcile")
+	ctx, log, done := tele.StartSpanWithLogger(ctx, "scalesets.Service.Reconcile")
 	defer done()
 
 	ctx, cancel := context.WithTimeout(ctx, s.Scope.DefaultedAzureServiceReconcileTimeout())
@@ -91,10 +91,44 @@ func (s *Service) Reconcile(ctx context.Context) (retErr error) {
 		return err
 	}
 
+	var err error
+
 	spec := s.Scope.ScaleSetSpec(ctx)
 	scaleSetSpec, ok := spec.(*ScaleSetSpec)
 	if !ok {
 		return errors.Errorf("%T is not of type ScaleSetSpec", spec)
+	}
+
+	// check if there is an ongoing long running operation
+	var (
+		future      = s.Scope.GetLongRunningOperationState(s.Scope.ScaleSetSpec(ctx).ResourceName(), serviceName, infrav1.PutFuture)
+		fetchedVMSS *azure.VMSS
+	)
+
+	defer func() {
+		// save the updated state of the VMSS for the MachinePoolScope to use for updating K8s state
+		if fetchedVMSS == nil {
+			fetchedVMSS, err = s.getVirtualMachineScaleSet(ctx, scaleSetSpec)
+			if err != nil && !azure.ResourceNotFound(err) {
+				log.Error(err, "failed to get vmss in deferred update")
+			}
+		}
+
+		if fetchedVMSS != nil {
+			// Transform the VMSS resource representation to conform to the cloud-provider-azure representation
+			providerID, err := azureutil.ConvertResourceGroupNameToLower(azureutil.ProviderIDPrefix + fetchedVMSS.ID)
+			if err != nil {
+				log.Error(err, "failed to parse VMSS ID", "ID", fetchedVMSS.ID)
+			}
+			s.Scope.SetProviderID(providerID)
+			s.Scope.SetVMSSState(fetchedVMSS)
+		}
+	}()
+
+	if future == nil {
+		fetchedVMSS, err = s.getVirtualMachineScaleSet(ctx, scaleSetSpec)
+	} else {
+		fetchedVMSS, err = s.getVirtualMachineScaleSetIfDone(ctx, future)
 	}
 
 	result, err := s.Client.Get(ctx, spec)
@@ -305,6 +339,26 @@ func (s *Service) getVirtualMachineScaleSet(ctx context.Context, spec azure.Reso
 	}
 
 	vmssInstances, err := s.Client.ListInstances(ctx, spec.ResourceGroupName(), spec.ResourceName())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list instances")
+	}
+
+	result := converters.SDKToVMSS(vmss, vmssInstances)
+
+	return &result, nil
+}
+
+// getVirtualMachineScaleSetIfDone gets a Virtual Machine Scale Set and its instances from Azure if the future is completed.
+func (s *Service) getVirtualMachineScaleSetIfDone(ctx context.Context, future *infrav1.Future) (*azure.VMSS, error) {
+	ctx, _, done := tele.StartSpanWithLogger(ctx, "scalesets.Service.getVirtualMachineScaleSetIfDone")
+	defer done()
+
+	vmss, err := s.GetResultIfDone(ctx, future)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get result from future")
+	}
+
+	vmssInstances, err := s.Client.ListInstances(ctx, future.ResourceGroup, future.Name)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list instances")
 	}
