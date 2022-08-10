@@ -259,6 +259,7 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			VNetName:             s.Vnet().Name,
 			VNetResourceGroup:    s.Vnet().ResourceGroup,
 			SubnetName:           s.ControlPlaneSubnet().Name,
+			FrontendIPConfigs:    s.APIServerLB().FrontendIPs,
 			APIServerPort:        s.APIServerPort(),
 			Type:                 s.APIServerLB().Type,
 			SKU:                  s.APIServerLB().SKU,
