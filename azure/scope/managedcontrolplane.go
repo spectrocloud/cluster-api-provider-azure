@@ -192,8 +192,12 @@ func (s *ManagedControlPlaneScope) Close(ctx context.Context) error {
 
 // Vnet returns the cluster Vnet.
 func (s *ManagedControlPlaneScope) Vnet() *infrav1.VnetSpec {
+	resourceGroupName := s.ControlPlane.Spec.ResourceGroupName
+	if s.ControlPlane.Spec.VirtualNetwork.ResourceGroupName != "" {
+		resourceGroupName = s.ControlPlane.Spec.VirtualNetwork.ResourceGroupName
+	}
 	return &infrav1.VnetSpec{
-		ResourceGroup: s.ControlPlane.Spec.ResourceGroupName,
+		ResourceGroup: resourceGroupName,
 		Name:          s.ControlPlane.Spec.VirtualNetwork.Name,
 		CIDRBlocks:    []string{s.ControlPlane.Spec.VirtualNetwork.CIDRBlock},
 	}

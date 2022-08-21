@@ -185,11 +185,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*v1alpha4.AzureManagedMachinePoolSpec)(nil), (*AzureManagedMachinePoolSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha4_AzureManagedMachinePoolSpec_To_v1alpha3_AzureManagedMachinePoolSpec(a.(*v1alpha4.AzureManagedMachinePoolSpec), b.(*AzureManagedMachinePoolSpec), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*AzureManagedMachinePoolStatus)(nil), (*v1alpha4.AzureManagedMachinePoolStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha3_AzureManagedMachinePoolStatus_To_v1alpha4_AzureManagedMachinePoolStatus(a.(*AzureManagedMachinePoolStatus), b.(*v1alpha4.AzureManagedMachinePoolStatus), scope)
 	}); err != nil {
@@ -277,6 +272,11 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddConversionFunc((*v1alpha4.AzureManagedControlPlaneStatus)(nil), (*AzureManagedControlPlaneStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha4_AzureManagedControlPlaneStatus_To_v1alpha3_AzureManagedControlPlaneStatus(a.(*v1alpha4.AzureManagedControlPlaneStatus), b.(*AzureManagedControlPlaneStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1alpha4.AzureManagedMachinePoolSpec)(nil), (*AzureManagedMachinePoolSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha4_AzureManagedMachinePoolSpec_To_v1alpha3_AzureManagedMachinePoolSpec(a.(*v1alpha4.AzureManagedMachinePoolSpec), b.(*AzureManagedMachinePoolSpec), scope)
 	}); err != nil {
 		return err
 	}
@@ -948,6 +948,7 @@ func autoConvert_v1alpha3_ManagedControlPlaneVirtualNetwork_To_v1alpha4_ManagedC
 	if err := Convert_v1alpha3_ManagedControlPlaneSubnet_To_v1alpha4_ManagedControlPlaneSubnet(&in.Subnet, &out.Subnet, s); err != nil {
 		return err
 	}
+	out.ResourceGroupName = in.ResourceGroupName
 	return nil
 }
 
@@ -962,6 +963,7 @@ func autoConvert_v1alpha4_ManagedControlPlaneVirtualNetwork_To_v1alpha3_ManagedC
 	if err := Convert_v1alpha4_ManagedControlPlaneSubnet_To_v1alpha3_ManagedControlPlaneSubnet(&in.Subnet, &out.Subnet, s); err != nil {
 		return err
 	}
+	out.ResourceGroupName = in.ResourceGroupName
 	return nil
 }
 
