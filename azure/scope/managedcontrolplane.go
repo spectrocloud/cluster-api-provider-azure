@@ -365,7 +365,7 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() (azure.ManagedClusterSpe
 		DNSServiceIP:          s.ControlPlane.Spec.DNSServiceIP,
 		VnetSubnetID: azure.SubnetID(
 			s.ControlPlane.Spec.SubscriptionID,
-			s.ControlPlane.Spec.VirtualNetwork.ResourceGroupName,
+			s.VNetSpec().ResourceGroup,
 			s.ControlPlane.Spec.VirtualNetwork.Name,
 			s.ControlPlane.Spec.VirtualNetwork.Subnet.Name,
 		),
@@ -547,7 +547,7 @@ func (s *ManagedControlPlaneScope) AgentPoolSpec() azure.AgentPoolSpec {
 		Version:       normalizedVersion,
 		VnetSubnetID: azure.SubnetID(
 			s.ControlPlane.Spec.SubscriptionID,
-			s.ControlPlane.Spec.VirtualNetwork.ResourceGroupName,
+			s.VNetSpec().ResourceGroup,
 			s.ControlPlane.Spec.VirtualNetwork.Name,
 			s.ControlPlane.Spec.VirtualNetwork.Subnet.Name,
 		),
