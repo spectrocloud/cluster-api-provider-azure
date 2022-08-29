@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -196,8 +195,8 @@ func (r *AzureJSONTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 
 	if azureMachineTemplate.Spec.Template.Spec.Identity == infrav1.VMIdentityNone {
-		log.Info(fmt.Sprintf("WARNING, %s", spIdentityWarning))
-		r.Recorder.Eventf(azureMachineTemplate, corev1.EventTypeWarning, "VMIdentityNone", spIdentityWarning)
+		//log.Info(fmt.Sprintf("WARNING, %s", spIdentityWarning))
+		//r.Recorder.Eventf(azureMachineTemplate, corev1.EventTypeWarning, "VMIdentityNone", spIdentityWarning)
 	}
 
 	newSecret, err := GetCloudProviderSecret(
