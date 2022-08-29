@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -238,8 +237,12 @@ func (r *AzureJSONMachineReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	if azureMachine.Spec.Identity == infrav1.VMIdentityNone && isUsingSPCredentials(ctx, r.Client, azureCluster) {
-		log.Info(fmt.Sprintf("WARNING, %s", spIdentityWarning))
-		r.Recorder.Eventf(azureMachine, corev1.EventTypeWarning, "VMIdentityNone", spIdentityWarning)
+		// Spectro fork (9972a7a1): suppress the ServicePrincipal-auth warning. Palette
+		// provisions every machine with SP credentials + identity:None, so the upstream
+		// warning event/log would spam once per machine per reconcile. Gate retained for
+		// upstream mergeability; body intentionally silenced.
+		//log.Info(fmt.Sprintf("WARNING, %s", spIdentityWarning))
+		//r.Recorder.Eventf(azureMachine, corev1.EventTypeWarning, "VMIdentityNone", spIdentityWarning)
 	}
 
 	newSecret, err := GetCloudProviderSecret(
