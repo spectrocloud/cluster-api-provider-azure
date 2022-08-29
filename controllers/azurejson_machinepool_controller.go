@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -170,8 +169,8 @@ func (r *AzureJSONMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	if azureMachinePool.Spec.Identity == infrav1.VMIdentityNone {
-		log.Info(fmt.Sprintf("WARNING, %s", spIdentityWarning))
-		r.Recorder.Eventf(azureMachinePool, corev1.EventTypeWarning, "VMIdentityNone", spIdentityWarning)
+		//log.Info(fmt.Sprintf("WARNING, %s", spIdentityWarning))
+		//r.Recorder.Eventf(azureMachinePool, corev1.EventTypeWarning, "VMIdentityNone", spIdentityWarning)
 	}
 
 	newSecret, err := GetCloudProviderSecret(
