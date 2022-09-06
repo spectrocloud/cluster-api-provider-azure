@@ -368,3 +368,13 @@ func getManagedMachinePoolVersion(managedControlPlane *infrav1.AzureManagedContr
 	}
 	return ptr.To(strings.TrimPrefix(higherVersion, "v"))
 }
+
+// UpdateCAPIMachinePoolReplicas updates the associated MachinePool replica count.
+func (s *ManagedMachinePoolScope) UpdateCAPIMachinePoolReplicas(ctx context.Context, replicas *int32) {
+	s.MachinePool.Spec.Replicas = replicas
+}
+
+// UpdateCAPIMachinePoolAnnotations updates the associated MachinePool annotation.
+func (s *ManagedMachinePoolScope) UpdateCAPIMachinePoolAnnotations(ctx context.Context, key, value string) {
+	s.MachinePool.Annotations[key] = value
+}
