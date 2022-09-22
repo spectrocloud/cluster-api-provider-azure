@@ -202,6 +202,12 @@ func buildAgentPoolSpec(managedControlPlane *infrav1.AzureManagedControlPlane,
 		Preview:                ptr.Deref(managedControlPlane.Spec.EnablePreviewFeatures, false),
 	}
 
+	// Set OSType to Linux by default if not specified
+	if managedMachinePool.Spec.OSType == nil || *managedMachinePool.Spec.OSType == "" {
+		osType := azure.LinuxOS
+		agentPoolSpec.OSType = &osType
+	}
+
 	if managedMachinePool.Spec.OSDiskSizeGB != nil {
 		agentPoolSpec.OSDiskSizeGB = *managedMachinePool.Spec.OSDiskSizeGB
 	}
