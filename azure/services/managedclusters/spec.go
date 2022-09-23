@@ -576,7 +576,11 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 
 		if s.APIServerAccessProfile.AuthorizedIPRanges != nil {
 			managedCluster.Spec.ApiServerAccessProfile.AuthorizedIPRanges = s.APIServerAccessProfile.AuthorizedIPRanges
+		} else if s.APIServerAccessProfile.AuthorizedIPRanges == nil || len(s.APIServerAccessProfile.AuthorizedIPRanges) == 0 {
+			managedCluster.Spec.ApiServerAccessProfile.AuthorizedIPRanges = nil
 		}
+
+
 	}
 
 	if s.OutboundType != nil {
