@@ -187,7 +187,7 @@ func validateNetworkSpec(controlPlaneEnabled bool, networkSpec NetworkSpec, old 
 
 	var needOutboundLB bool
 	for _, subnet := range networkSpec.Subnets {
-		if (subnet.Role == SubnetNode || subnet.Role == SubnetCluster) && subnet.IsIPv6Enabled() {
+		if (subnet.Role == SubnetNode || subnet.Role == SubnetAll || subnet.Role == SubnetCluster) && !subnet.IsNatGatewayEnabled() && subnet.IsIPv6Enabled() {
 			needOutboundLB = true
 			break
 		}
@@ -232,21 +232,27 @@ func validateSubnets(controlPlaneEnabled bool, subnets Subnets, vnet VnetSpec, f
 	}
 	clusterSubnet := false
 	numberofClusterSubnets := 0
+	subnetAllRoleSpecified := false
+
 	for i, subnet := range subnets {
 		if err := validateSubnetName(subnet.Name, fldPath.Index(i).Child("name")); err != nil {
 			allErrs = append(allErrs, err)
 		}
-		if _, ok := subnetNames[subnet.Name]; ok {
-			allErrs = append(allErrs, field.Duplicate(fldPath, subnet.Name))
-		}
-		subnetNames[subnet.Name] = true
-		if subnet.Role == SubnetCluster {
-			clusterSubnet = true
-			numberofClusterSubnets++
+		if subnet.Role == SubnetAll {
+			subnetAllRoleSpecified = true
 		} else {
-			for role := range requiredSubnetRoles {
-				if role == string(subnet.Role) {
-					requiredSubnetRoles[role] = true
+			if _, ok := subnetNames[subnet.Name]; ok {
+				allErrs = append(allErrs, field.Duplicate(fldPath, subnet.Name))
+			}
+			subnetNames[subnet.Name] = true
+			if subnet.Role == SubnetCluster {
+				clusterSubnet = true
+				numberofClusterSubnets++
+			} else {
+				for role := range requiredSubnetRoles {
+					if role == string(subnet.Role) {
+						requiredSubnetRoles[role] = true
+					}
 				}
 			}
 		}
@@ -276,12 +282,15 @@ func validateSubnets(controlPlaneEnabled bool, subnets Subnets, vnet VnetSpec, f
 		return allErrs
 	}
 
-	for k, v := range requiredSubnetRoles {
-		if !v {
-			allErrs = append(allErrs, field.Required(fldPath,
-				fmt.Sprintf("required role %s not included in provided subnets", k)))
+	if !subnetAllRoleSpecified {
+		for k, v := range requiredSubnetRoles {
+			if !v {
+				allErrs = append(allErrs, field.Required(fldPath,
+					fmt.Sprintf("required role %s not included in provided subnets", k)))
+			}
 		}
 	}
+
 	return allErrs
 }
 

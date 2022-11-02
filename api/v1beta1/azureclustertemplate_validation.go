@@ -71,7 +71,7 @@ func (c *AzureClusterTemplate) validateNetworkSpec() field.ErrorList {
 	var needOutboundLB bool
 	networkSpec := c.Spec.Template.Spec.NetworkSpec
 	for _, subnet := range networkSpec.Subnets {
-		if subnet.Role == SubnetNode && subnet.IsIPv6Enabled() {
+		if (subnet.Role == SubnetNode || subnet.Role == SubnetAll) && subnet.IsIPv6Enabled() && !subnet.IsNatGatewayEnabled(){
 			needOutboundLB = true
 			break
 		}

@@ -29,6 +29,8 @@ const (
 	Node string = "node"
 	// Bastion subnet label.
 	Bastion string = "bastion"
+	// All subnet label.
+	All string = "all"
 	// Cluster subnet label.
 	Cluster string = "cluster"
 )
@@ -745,6 +747,9 @@ const (
 
 	// SubnetCluster defines a role that can be used for both Kubernetes control plane node and Kubernetes workload node.
 	SubnetCluster = SubnetRole(Cluster)
+
+	// SubnetAll defines a role that can be used for both Kubernetes control plane node and Kubernetes workload node.
+	SubnetAll = SubnetRole(All)
 )
 
 // SubnetSpec configures an Azure subnet.
@@ -753,6 +758,9 @@ type SubnetSpec struct {
 	// READ-ONLY
 	// +optional
 	ID string `json:"id,omitempty"`
+
+	// Name defines a name for the subnet resource.
+	Name string `json:"name"`
 
 	// SecurityGroup defines the NSG (network security group) that should be attached to this subnet.
 	// +optional
@@ -853,17 +861,18 @@ func (n *NetworkSpec) GetControlPlaneSubnet() (SubnetSpec, error) {
 // GetSubnet returns a subnet based on the subnet role.
 func (n *NetworkSpec) GetSubnet(role SubnetRole) (SubnetSpec, error) {
 	for _, sn := range n.Subnets {
-		if sn.Role == role {
+		if sn.Role == role || sn.Role == SubnetControlPlane || sn.Role == SubnetAll {
 			return sn, nil
 		}
 	}
-	return SubnetSpec{}, errors.Errorf("no subnet found with role %s", role)
+	return SubnetSpec{}, errors.Errorf("no subnet found with role %s or %s", SubnetControlPlane, SubnetAll)
 }
 
 // UpdateControlPlaneSubnet updates the cluster control plane subnets.
 func (n *NetworkSpec) UpdateControlPlaneSubnet(subnet SubnetSpec) {
 	n.UpdateSubnet(subnet, SubnetControlPlane)
 	n.UpdateSubnet(subnet, SubnetCluster)
+	n.UpdateSubnet(subnet, SubnetAll)
 }
 
 // UpdateSubnet updates the subnet based on the subnet role.

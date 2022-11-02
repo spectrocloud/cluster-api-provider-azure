@@ -311,6 +311,7 @@ spec:
                             - control-plane
                             - bastion
                             - cluster
+                            - all
                             type: string
                           routeTable:
                             description: RouteTable defines the route table that should
@@ -1065,6 +1066,7 @@ spec:
                           - control-plane
                           - bastion
                           - cluster
+                          - all
                           type: string
                         routeTable:
                           description: RouteTable defines the route table that should

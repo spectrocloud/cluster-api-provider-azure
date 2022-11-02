@@ -16,6 +16,18 @@ metadata:
     cluster.x-k8s.io/v1beta1: v1alpha1
   name: azureasomanagedclusters.infrastructure.cluster.x-k8s.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        caBundle: Cg==
+        service:
+          name: capz-webhook-service
+          namespace: capi-webhook-system
+          path: /convert
+      conversionReviewVersions:
+      - v1
+      - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     kind: AzureASOManagedCluster
@@ -1139,6 +1151,7 @@ spec:
                             - control-plane
                             - bastion
                             - cluster
+                            - all
                             type: string
                           routeTable:
                             description: RouteTable defines the route table that should
@@ -1893,6 +1906,7 @@ spec:
                           - control-plane
                           - bastion
                           - cluster
+                          - all
                           type: string
                         routeTable:
                           description: RouteTable defines the route table that should
@@ -2501,6 +2515,7 @@ spec:
                                     - control-plane
                                     - bastion
                                     - cluster
+                                    - all
                                     type: string
                                   securityGroup:
                                     description: SecurityGroup defines the NSG (network
@@ -2994,6 +3009,7 @@ spec:
                                   - control-plane
                                   - bastion
                                   - cluster
+                                  - all
                                   type: string
                                 securityGroup:
                                   description: SecurityGroup defines the NSG (network
@@ -3512,6 +3528,7 @@ spec:
                   Scale Set
                 type: string
             required:
+            - instanceID
             - providerID
             type: object
           status:
@@ -5597,6 +5614,7 @@ spec:
                 type: string
             required:
             - osDisk
+            - sshPublicKey
             - vmSize
             type: object
           status:
@@ -6507,6 +6525,7 @@ spec:
                         type: string
                     required:
                     - osDisk
+                    - sshPublicKey
                     - vmSize
                     type: object
                 required:
@@ -7756,6 +7775,7 @@ spec:
             - identityRef
             - location
             - resourceGroupName
+            - sshPublicKey
             - version
             type: object
           status:
@@ -10786,7 +10806,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: gcr.io/spectro-dev-public/snehal/cluster-api-azure/cluster-api-azure-controller:spectro-v1.3.2-20220912
+        image: gcr.io/spectro-dev-public/snehal/cluster-api-azure/cluster-api-azure-controller:spectro-v1.3.2-20221102
         imagePullPolicy: Always
         livenessProbe:
           httpGet:

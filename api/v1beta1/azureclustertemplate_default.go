@@ -76,7 +76,7 @@ func (c *AzureClusterTemplate) setSubnetsTemplateDefaults() {
 	var nodeSubnetFound bool
 	var nodeSubnetCounter int
 	for i, subnet := range c.Spec.Template.Spec.NetworkSpec.Subnets {
-		if subnet.Role != SubnetNode {
+		if subnet.Role == SubnetNode || subnet.Role == SubnetAll {
 			continue
 		}
 		nodeSubnetCounter++
@@ -105,7 +105,7 @@ func (c *AzureClusterTemplate) setNodeOutboundLBDefaults() {
 
 		var needsOutboundLB bool
 		for _, subnet := range c.Spec.Template.Spec.NetworkSpec.Subnets {
-			if (subnet.Role == SubnetNode || subnet.Role == SubnetCluster) && subnet.IsIPv6Enabled() {
+			if (subnet.Role == SubnetNode || subnet.Role == SubnetCluster || subnet.Role == SubnetAll) && subnet.IsIPv6Enabled() && !subnet.IsNatGatewayEnabled() {
 				needsOutboundLB = true
 				break
 			}

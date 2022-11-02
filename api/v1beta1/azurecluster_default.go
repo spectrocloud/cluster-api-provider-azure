@@ -119,13 +119,30 @@ func (c *AzureCluster) setSubnetDefaults() {
 	var nodeSubnetFound bool
 	var nodeSubnetCounter int
 	for i, subnet := range c.Spec.NetworkSpec.Subnets {
-		if subnet.Role != SubnetNode {
-			continue
+		if subnet.Role == SubnetNode || subnet.Role == SubnetAll {
+			nodeSubnetCounter++
+			nodeSubnetFound = true
+			if subnet.Name == "" {
+				subnet.Name = withIndex(generateNodeSubnetName(c.ObjectMeta.Name), nodeSubnetCounter)
+			}
+			subnet.SubnetClassSpec.setDefaults(fmt.Sprintf(DefaultNodeSubnetCIDRPattern, nodeSubnetCounter))
+
+			if subnet.SecurityGroup.Name == "" {
+				subnet.SecurityGroup.Name = generateNodeSecurityGroupName(c.ObjectMeta.Name)
+			}
+			cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults(SecurityRuleDirectionInbound)
+
+			if subnet.RouteTable.Name == "" {
+				subnet.RouteTable.Name = generateNodeRouteTableName(c.ObjectMeta.Name)
+			}
+			if subnet.IsNatGatewayEnabled() {
+				if subnet.NatGateway.NatGatewayIP.Name == "" {
+					subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(c.ObjectMeta.Name, subnet.Name)
+				}
+			}
+
+			c.Spec.NetworkSpec.Subnets[i] = subnet
 		}
-		nodeSubnetCounter++
-		nodeSubnetFound = true
-		subnet.setNodeSubnetDefaults(c.ObjectMeta.Name, nodeSubnetCounter)
-		c.Spec.NetworkSpec.Subnets[i] = subnet
 	}
 
 	if !nodeSubnetFound && !clusterSubnetExists {
@@ -297,7 +314,7 @@ func (c *AzureCluster) SetNodeOutboundLBDefaults() {
 
 		var needsOutboundLB bool
 		for _, subnet := range c.Spec.NetworkSpec.Subnets {
-			if (subnet.Role == SubnetNode || subnet.Role == SubnetCluster) && subnet.IsIPv6Enabled() {
+			if (subnet.Role == SubnetNode || subnet.Role == SubnetAll || subnet.Role == SubnetCluster) && !subnet.IsNatGatewayEnabled() && subnet.IsIPv6Enabled() {
 				needsOutboundLB = true
 				break
 			}
