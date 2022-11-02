@@ -184,7 +184,7 @@ func validateNetworkSpec(networkSpec NetworkSpec, old NetworkSpec, fldPath *fiel
 
 	var needOutboundLB bool
 	for _, subnet := range networkSpec.Subnets {
-		if subnet.Role == SubnetNode && subnet.IsIPv6Enabled() {
+		if (subnet.Role == SubnetNode || subnet.Role == SubnetAll) && subnet.IsIPv6Enabled() {
 			needOutboundLB = true
 			break
 		}
@@ -220,20 +220,26 @@ func validateSubnets(subnets Subnets, vnet VnetSpec, fldPath *field.Path) field.
 		"control-plane": false,
 		"node":          false,
 	}
+	subnetAllRoleSpecified := false
 
 	for i, subnet := range subnets {
 		if err := validateSubnetName(subnet.Name, fldPath.Index(i).Child("name")); err != nil {
 			allErrs = append(allErrs, err)
 		}
-		if _, ok := subnetNames[subnet.Name]; ok {
-			allErrs = append(allErrs, field.Duplicate(fldPath, subnet.Name))
-		}
-		subnetNames[subnet.Name] = true
-		for role := range requiredSubnetRoles {
-			if role == string(subnet.Role) {
-				requiredSubnetRoles[role] = true
+		if subnet.Role == SubnetAll {
+			subnetAllRoleSpecified = true
+		} else {
+			if _, ok := subnetNames[subnet.Name]; ok {
+				allErrs = append(allErrs, field.Duplicate(fldPath, subnet.Name))
+			}
+			subnetNames[subnet.Name] = true
+			for role := range requiredSubnetRoles {
+				if role == string(subnet.Role) {
+					requiredSubnetRoles[role] = true
+				}
 			}
 		}
+
 		for _, rule := range subnet.SecurityGroup.SecurityRules {
 			if err := validateSecurityRule(
 				rule,
@@ -252,10 +258,12 @@ func validateSubnets(subnets Subnets, vnet VnetSpec, fldPath *field.Path) field.
 			allErrs = append(allErrs, validatePrivateEndpoints(subnet.PrivateEndpoints, subnet.CIDRBlocks, fldPath.Index(i).Child("privateEndpoints"))...)
 		}
 	}
-	for k, v := range requiredSubnetRoles {
-		if !v {
-			allErrs = append(allErrs, field.Required(fldPath,
-				fmt.Sprintf("required role %s not included in provided subnets", k)))
+	if !subnetAllRoleSpecified {
+		for k, v := range requiredSubnetRoles {
+			if !v {
+				allErrs = append(allErrs, field.Required(fldPath,
+					fmt.Sprintf("required role %s not included in provided subnets", k)))
+			}
 		}
 	}
 	return allErrs

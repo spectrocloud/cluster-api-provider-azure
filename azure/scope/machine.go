@@ -725,14 +725,21 @@ func (m *MachineScope) SetSubnetName() error {
 		subnetName := ""
 		subnets := m.Subnets()
 		var subnetCount int
+		subnetAllSpecified := false
 		for _, subnet := range subnets {
 			if string(subnet.Role) == m.Role() {
 				subnetCount++
 				subnetName = subnet.Name
 			}
+			if subnet.Role == infrav1.SubnetAll {
+				subnetAllSpecified = true
+				subnetName = subnet.Name
+			}
 		}
-		if subnetCount == 0 || subnetCount > 1 || subnetName == "" {
-			return errors.New("a subnet name must be specified when no subnets are specified or more than 1 subnet of the same role exist")
+		if !subnetAllSpecified {
+			if subnetCount == 0 || subnetCount > 1 || subnetName == "" {
+				return errors.New("a subnet name must be specified when no subnets are specified or more than 1 subnet of the same role exist")
+			}
 		}
 
 		m.AzureMachine.Spec.NetworkInterfaces[0].SubnetName = subnetName
