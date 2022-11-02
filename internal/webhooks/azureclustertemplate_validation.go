@@ -78,7 +78,8 @@ func validateAzureClusterTemplateNetworkSpec(c *infrav1.AzureClusterTemplate) fi
 	var needOutboundLB bool
 	networkSpec := c.Spec.Template.Spec.NetworkSpec
 	for _, subnet := range networkSpec.Subnets {
-		if subnet.Role == infrav1.SubnetNode && subnet.IsIPv6Enabled() {
+		// Spectro fork (5fb2ad0a): include role=all subnets, exclude NAT-gateway subnets.
+		if (subnet.Role == infrav1.SubnetNode || subnet.Role == infrav1.SubnetAll) && subnet.IsIPv6Enabled() && !subnet.IsNatGatewayEnabled() {
 			needOutboundLB = true
 			break
 		}

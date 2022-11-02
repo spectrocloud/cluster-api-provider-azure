@@ -83,7 +83,10 @@ func setDefaultAzureClusterTemplateSubnetsTemplate(c *infrav1.AzureClusterTempla
 	var nodeSubnetFound bool
 	var nodeSubnetCounter int
 	for i, subnet := range c.Spec.Template.Spec.NetworkSpec.Subnets {
-		if subnet.Role != infrav1.SubnetNode {
+		// Spectro fork (5fb2ad0a): a role=all subnet serves both control-plane and
+		// worker nodes, so it is defaulted as a node subnet (de-bugged port of the
+		// fork's inverted-logic hunk on the pre-restructure api/v1beta1 file).
+		if subnet.Role != infrav1.SubnetNode && subnet.Role != infrav1.SubnetAll {
 			continue
 		}
 		nodeSubnetCounter++

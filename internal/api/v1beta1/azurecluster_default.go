@@ -133,8 +133,10 @@ func setDefaultAzureClusterSubnets(c *infrav1.AzureCluster) {
 	// nodeSubnetCounter tracks all node subnets to aid automatic CIDR configuration.
 	var nodeSubnetCounter int
 	for i, subnet := range c.Spec.NetworkSpec.Subnets {
-		// Skip all non-node subnets
-		if subnet.Role != infrav1.SubnetNode {
+		// Skip all non-node subnets. Spectro fork (5fb2ad0a): a role=all subnet is
+		// a single subnet that serves both control-plane and worker nodes, so it is
+		// defaulted as a node subnet here.
+		if subnet.Role != infrav1.SubnetNode && subnet.Role != infrav1.SubnetAll {
 			continue
 		}
 		nodeSubnetCounter++
@@ -358,7 +360,9 @@ func setDefaultAzureClusterNodeOutboundLB(c *infrav1.AzureCluster) {
 
 		var needsOutboundLB bool
 		for _, subnet := range c.Spec.NetworkSpec.Subnets {
-			if (subnet.Role == infrav1.SubnetNode || subnet.Role == infrav1.SubnetCluster) && subnet.IsIPv6Enabled() {
+			// Spectro fork (5fb2ad0a): include role=all subnets, and exclude
+			// NAT-gateway-enabled subnets (NAT gateway already provides outbound).
+			if (subnet.Role == infrav1.SubnetNode || subnet.Role == infrav1.SubnetAll || subnet.Role == infrav1.SubnetCluster) && !subnet.IsNatGatewayEnabled() && subnet.IsIPv6Enabled() {
 				needsOutboundLB = true
 				break
 			}

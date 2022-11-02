@@ -188,7 +188,9 @@ func validateNetworkSpec(controlPlaneEnabled bool, networkSpec infrav1.NetworkSp
 
 	var needOutboundLB bool
 	for _, subnet := range networkSpec.Subnets {
-		if (subnet.Role == infrav1.SubnetNode || subnet.Role == infrav1.SubnetCluster) && subnet.IsIPv6Enabled() {
+		// Spectro fork (5fb2ad0a): include role=all subnets, and exclude
+		// NAT-gateway-enabled subnets (NAT gateway already provides outbound).
+		if (subnet.Role == infrav1.SubnetNode || subnet.Role == infrav1.SubnetAll || subnet.Role == infrav1.SubnetCluster) && !subnet.IsNatGatewayEnabled() && subnet.IsIPv6Enabled() {
 			needOutboundLB = true
 			break
 		}
@@ -233,20 +235,27 @@ func validateSubnets(controlPlaneEnabled bool, subnets infrav1.Subnets, vnet inf
 		requiredSubnetRoles["control-plane"] = false
 	}
 	clusterSubnet := false
+	// Spectro fork (5fb2ad0a): a role=all subnet satisfies both control-plane and
+	// node role requirements, so it bypasses the required-role check below.
+	subnetAllRoleSpecified := false
 	for i, subnet := range subnets {
 		if err := validateSubnetName(subnet.Name, fldPath.Index(i).Child("name")); err != nil {
 			allErrs = append(allErrs, err)
 		}
-		if _, ok := subnetNames[subnet.Name]; ok {
-			allErrs = append(allErrs, field.Duplicate(fldPath, subnet.Name))
-		}
-		subnetNames[subnet.Name] = true
-		if subnet.Role == infrav1.SubnetCluster {
-			clusterSubnet = true
+		if subnet.Role == infrav1.SubnetAll {
+			subnetAllRoleSpecified = true
 		} else {
-			for role := range requiredSubnetRoles {
-				if role == string(subnet.Role) {
-					requiredSubnetRoles[role] = true
+			if _, ok := subnetNames[subnet.Name]; ok {
+				allErrs = append(allErrs, field.Duplicate(fldPath, subnet.Name))
+			}
+			subnetNames[subnet.Name] = true
+			if subnet.Role == infrav1.SubnetCluster {
+				clusterSubnet = true
+			} else {
+				for role := range requiredSubnetRoles {
+					if role == string(subnet.Role) {
+						requiredSubnetRoles[role] = true
+					}
 				}
 			}
 		}
@@ -276,12 +285,15 @@ func validateSubnets(controlPlaneEnabled bool, subnets infrav1.Subnets, vnet inf
 		return allErrs
 	}
 
-	for k, v := range requiredSubnetRoles {
-		if !v {
-			allErrs = append(allErrs, field.Required(fldPath,
-				fmt.Sprintf("required role %s not included in provided subnets", k)))
+	if !subnetAllRoleSpecified {
+		for k, v := range requiredSubnetRoles {
+			if !v {
+				allErrs = append(allErrs, field.Required(fldPath,
+					fmt.Sprintf("required role %s not included in provided subnets", k)))
+			}
 		}
 	}
+
 	return allErrs
 }
 
