@@ -20,7 +20,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-08-01/network"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/pkg/errors"
-	"os"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
@@ -42,6 +41,7 @@ type LBSpec struct {
 	BackendPoolName      string
 	FrontendIPConfigs    []infrav1.FrontendIP
 	APIServerPort        int32
+	IPAllocationMethod   string
 	IdleTimeoutInMinutes *int32
 	AdditionalTags       map[string]string
 }
@@ -162,22 +162,15 @@ func (s *LBSpec) Parameters(existing interface{}) (parameters interface{}, err e
 func getFrontendIPConfigs(lbSpec LBSpec) ([]network.FrontendIPConfiguration, []network.SubResource) {
 	frontendIPConfigurations := make([]network.FrontendIPConfiguration, 0)
 	frontendIDs := make([]network.SubResource, 0)
-	lbIPAllocationMethod := os.Getenv("AZURE_APISERVER_LB_IP_ALLOCATION")
-	var privateIPAllocationMethod network.IPAllocationMethod
-	if lbIPAllocationMethod == "Dynamic" {
-		privateIPAllocationMethod = network.IPAllocationMethodDynamic
-	} else {
-		privateIPAllocationMethod = network.IPAllocationMethodStatic
-	}
 	for _, ipConfig := range lbSpec.FrontendIPConfigs {
 		var properties network.FrontendIPConfigurationPropertiesFormat
 		var privateIPAddress string
-		if lbIPAllocationMethod == "Static" {
+		if lbSpec.IPAllocationMethod == "Static" {
 			privateIPAddress = ipConfig.PrivateIPAddress
 		}
 		if lbSpec.Type == infrav1.Internal {
 			properties = network.FrontendIPConfigurationPropertiesFormat{
-				PrivateIPAllocationMethod: privateIPAllocationMethod,
+				PrivateIPAllocationMethod: network.IPAllocationMethod(lbSpec.IPAllocationMethod),
 				Subnet: &network.Subnet{
 					ID: to.StringPtr(azure.SubnetID(lbSpec.SubscriptionID, lbSpec.VNetResourceGroup, lbSpec.VNetName, lbSpec.SubnetName)),
 				},
