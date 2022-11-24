@@ -39,6 +39,8 @@ type LBSpec struct {
 	Role                 string
 	Type                 infrav1.LBType
 	SKU                  infrav1.SKU
+	IPAllocationMethod   string
+	PrivateIP            string
 	VNetName             string
 	VNetResourceGroup    string
 	SubnetName           string

@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -419,6 +420,29 @@ func validateAPIServerLB(lb *LoadBalancerSpec, old *LoadBalancerSpec, cidrs []st
 	// Name should be immutable.
 	if old != nil && old.Name != "" && old.Name != lb.Name {
 		allErrs = append(allErrs, field.Forbidden(fldPath.Child("name"), "API Server load balancer name should not be modified after AzureCluster creation."))
+	}
+
+	// There should only be one IP config.
+	if len(lb.FrontendIPs) != 1 || pointer.Int32Deref(lb.FrontendIPsCount, 1) != 1 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("frontendIPConfigs"), lb.FrontendIPs,
+			"API Server Load balancer should have 1 Frontend IP"))
+	} else {
+		// if Internal, IP config should not have a public IP.
+		if lb.Type == Internal {
+			if lb.FrontendIPs[0].PublicIP != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("frontendIPConfigs").Index(0).Child("publicIP"),
+					"Internal Load Balancers cannot have a Public IP"))
+			}
+			if lb.FrontendIPs[0].PrivateIPAddress != "" {
+				if err := validateInternalLBIPAddress(lb.FrontendIPs[0].PrivateIPAddress, cidrs,
+					fldPath.Child("frontendIPConfigs").Index(0).Child("privateIP")); err != nil {
+					allErrs = append(allErrs, err)
+				}
+				if lb.IPAllocationMethod == "Static" && len(old.FrontendIPs) != 0 && old.FrontendIPs[0].PrivateIPAddress == "" && old.FrontendIPs[0].PrivateIPAddress != lb.FrontendIPs[0].PrivateIPAddress {
+					allErrs = append(allErrs, field.Forbidden(fldPath.Child("name"), "API Server load balancer private IP should not be modified after AzureCluster creation."))
+				}
+			}
+		}
 	}
 
 	publicIPCount, privateIPCount := 0, 0
