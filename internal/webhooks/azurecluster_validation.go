@@ -461,17 +461,32 @@ func validateAPIServerLB(lb *infrav1.LoadBalancerSpec, old *infrav1.LoadBalancer
 			allErrs = append(allErrs, field.Forbidden(fldPath.Child("frontendIPConfigs").Index(0).Child("publicIP"),
 				"Internal Load Balancers cannot have a Public IP"))
 		}
-		if privateIPCount != 1 {
-			allErrs = append(allErrs, field.Invalid(fldPath.Child("frontendIPConfigs"), lb.FrontendIPs,
-				"API Server Load balancer of type private should have 1 frontend private IP"))
-		} else {
+		// spectro/private-cluster: the API-server internal LB private IP may be either user-pinned
+		// (IPAllocationMethod == "Static") or Azure-assigned (Dynamic, the default). For Dynamic, the
+		// frontend private IP is empty at creation and is filled in by CAPZ after the LB is created
+		// (read-back), so we must NOT require exactly one private IP nor enforce immutability — that
+		// ""->assigned update is expected. The exactly-one requirement and immutability are enforced
+		// ONLY for Static. Replaces upstream's unconditional immutability + privateIPCount!=1 check,
+		// which would reject the dynamic read-back and wedge every dynamic private cluster.
+		if lb.IPAllocationMethod == "Static" {
+			if privateIPCount != 1 {
+				allErrs = append(allErrs, field.Invalid(fldPath.Child("frontendIPConfigs"), lb.FrontendIPs,
+					"API Server Load balancer of type private should have 1 frontend private IP"))
+			} else {
+				if err := validateInternalLBIPAddress(lb.FrontendIPs[0].PrivateIPAddress, cidrs,
+					fldPath.Child("frontendIPConfigs").Index(0).Child("privateIP")); err != nil {
+					allErrs = append(allErrs, err)
+				}
+
+				if old != nil && len(old.FrontendIPs) != 0 && old.FrontendIPs[0].PrivateIPAddress != lb.FrontendIPs[0].PrivateIPAddress {
+					allErrs = append(allErrs, field.Forbidden(fldPath.Child("name"), "API Server load balancer private IP should not be modified after AzureCluster creation."))
+				}
+			}
+		} else if privateIPCount == 1 {
+			// Dynamic with an already-assigned IP: still validate the address is within the allowed CIDRs.
 			if err := validateInternalLBIPAddress(lb.FrontendIPs[0].PrivateIPAddress, cidrs,
 				fldPath.Child("frontendIPConfigs").Index(0).Child("privateIP")); err != nil {
 				allErrs = append(allErrs, err)
-			}
-
-			if old != nil && len(old.FrontendIPs) != 0 && old.FrontendIPs[0].PrivateIPAddress != lb.FrontendIPs[0].PrivateIPAddress {
-				allErrs = append(allErrs, field.Forbidden(fldPath.Child("name"), "API Server load balancer private IP should not be modified after AzureCluster creation."))
 			}
 		}
 	}

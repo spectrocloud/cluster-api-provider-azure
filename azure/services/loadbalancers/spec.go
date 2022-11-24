@@ -39,6 +39,8 @@ type LBSpec struct {
 	Role                 string
 	Type                 infrav1.LBType
 	SKU                  infrav1.SKU
+	IPAllocationMethod   string
+	PrivateIP            string
 	VNetName             string
 	VNetResourceGroup    string
 	SubnetName           string
@@ -191,13 +193,20 @@ func getFrontendIPConfigs(lbSpec LBSpec) ([]*armnetwork.FrontendIPConfiguration,
 
 	for _, ipConfig := range lbSpec.FrontendIPConfigs {
 		var properties armnetwork.FrontendIPConfigurationPropertiesFormat
+		// spectro/private-cluster: only send an explicit private IP to Azure when the user pinned a
+		// Static IP. For Dynamic (the default) leave the address empty so Azure assigns one, which the
+		// loadbalancers.Reconcile read-back then persists into the spec.
+		var privateIPAddress string
+		if lbSpec.IPAllocationMethod == "Static" {
+			privateIPAddress = ipConfig.PrivateIPAddress
+		}
 		if lbSpec.Type == infrav1.Internal {
 			properties = armnetwork.FrontendIPConfigurationPropertiesFormat{
 				PrivateIPAllocationMethod: ptr.To(armnetwork.IPAllocationMethodStatic),
 				Subnet: &armnetwork.Subnet{
 					ID: ptr.To(azure.SubnetID(lbSpec.SubscriptionID, lbSpec.VNetResourceGroup, lbSpec.VNetName, lbSpec.SubnetName)),
 				},
-				PrivateIPAddress: ptr.To(ipConfig.PrivateIPAddress),
+				PrivateIPAddress: ptr.To(privateIPAddress),
 			}
 		} else {
 			properties = armnetwork.FrontendIPConfigurationPropertiesFormat{

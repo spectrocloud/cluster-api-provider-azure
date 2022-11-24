@@ -21,6 +21,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
+	"github.com/pkg/errors"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/async"
@@ -74,7 +75,46 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, s.Scope.DefaultedAzureServiceReconcileTimeout())
 	defer cancel()
 
-	return azure.ReconcileAll(ctx, s.Reconciler, s.Scope, s.Scope.LBSpecs(), serviceName, infrav1.LoadBalancersReadyCondition)
+	// NOTE(spectro/private-cluster): do NOT use azure.ReconcileAll here — it discards the created
+	// resource so the dynamic-IP read-back below (assigned private IP -> spec) has no home. Re-inline
+	// the reconcile loop over LBSpecs and keep the read-back for the API-server internal LB.
+	specs := s.Scope.LBSpecs()
+	if len(specs) == 0 {
+		return nil
+	}
+
+	// We go through the list of LBSpecs to reconcile each one, independently of the result of the previous one.
+	// If multiple errors occur, we return the most pressing one.
+	//  Order of precedence (highest -> lowest) is: error that is not an operationNotDoneError (i.e. error creating) -> operationNotDoneError (i.e. creating in progress) -> no error (i.e. created)
+	var result error
+	for _, lbSpec := range specs {
+		if lb, err := s.CreateOrUpdateResource(ctx, lbSpec, serviceName); err != nil {
+			if !azure.IsOperationNotDoneError(err) || result == nil {
+				result = err
+			}
+		} else {
+			loadBalancer, ok := lb.(armnetwork.LoadBalancer)
+			if !ok {
+				// Return out of loop since this would be an unexpected fatal error
+				result = errors.Errorf("created resource %T is not an armnetwork.LoadBalancer", lb)
+				break
+			}
+			if lbSpec.ResourceName() == s.Scope.APIServerLB().Name {
+				// Read back the private IP that Azure actually assigned to the API-server internal LB
+				// frontend (dynamic allocation leaves the request empty; Azure fills it in) and persist
+				// it into the spec so subsequent reconciles are stable.
+				lbIPConfig := loadBalancer.Properties.FrontendIPConfigurations
+				if lbIPConfig != nil && len(lbIPConfig) > 0 &&
+					lbIPConfig[0].Properties.PrivateIPAddress != nil &&
+					*lbIPConfig[0].Properties.PrivateIPAddress != "" {
+					s.Scope.APIServerLB().FrontendIPs[0].PrivateIPAddress = *lbIPConfig[0].Properties.PrivateIPAddress
+				}
+			}
+		}
+	}
+
+	s.Scope.UpdatePutStatus(infrav1.LoadBalancersReadyCondition, serviceName, result)
+	return result
 }
 
 // Delete deletes the public load balancer with the provided name.

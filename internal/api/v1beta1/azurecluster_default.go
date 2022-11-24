@@ -334,6 +334,14 @@ func setDefaultAzureClusterAPIServerLB(c *infrav1.AzureCluster) {
 			}
 		}
 	} else if lb.Type == infrav1.Internal {
+		// spectro/private-cluster: honor a user-pinned private IP for the internal API-server LB;
+		// fall back to the default internal LB IP when none is supplied.
+		var privateIP string
+		if lb.PrivateIP == "" {
+			privateIP = DefaultInternalLBIPAddress
+		} else {
+			privateIP = lb.PrivateIP
+		}
 		if lb.Name == "" {
 			lb.Name = generateInternalLBName(c.ObjectMeta.Name)
 		}
@@ -342,7 +350,7 @@ func setDefaultAzureClusterAPIServerLB(c *infrav1.AzureCluster) {
 				{
 					Name: generateFrontendIPConfigName(lb.Name),
 					FrontendIPClass: infrav1.FrontendIPClass{
-						PrivateIPAddress: DefaultInternalLBIPAddress,
+						PrivateIPAddress: privateIP,
 					},
 				},
 			}
@@ -501,6 +509,11 @@ func setDefaultLoadBalancerClassSpecAPIServerLB(lb *infrav1.LoadBalancerClassSpe
 	}
 	if lb.SKU == "" {
 		lb.SKU = infrav1.SKUStandard
+	}
+	// spectro/private-cluster: default the API-server internal LB IP allocation method to Dynamic so
+	// Azure assigns the private IP (read back into the spec at reconcile) unless the user pins Static.
+	if lb.IPAllocationMethod == "" {
+		lb.IPAllocationMethod = "Dynamic"
 	}
 	if lb.IdleTimeoutInMinutes == nil {
 		lb.IdleTimeoutInMinutes = ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes)
