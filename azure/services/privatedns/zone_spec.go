@@ -63,7 +63,7 @@ func (s ZoneSpec) Parameters(existing interface{}) (params interface{}, err erro
 		Tags: converters.TagsToMap(infrav1.Build(infrav1.BuildParams{
 			ClusterName: s.ClusterName,
 			Lifecycle:   infrav1.ResourceLifecycleOwned,
-			Additional:  s.AdditionalTags,
+			//Additional:  s.AdditionalTags,
 		})),
 	}, nil
 }

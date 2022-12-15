@@ -668,6 +668,9 @@ func (s *ClusterScope) OutboundPoolName(loadBalancerName string) string {
 
 // ResourceGroup returns the cluster resource group.
 func (s *ClusterScope) ResourceGroup() string {
+	if len(s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneResourceGroup) > 0 {
+		return s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneResourceGroup
+	}
 	return s.AzureCluster.Spec.ResourceGroup
 }
 

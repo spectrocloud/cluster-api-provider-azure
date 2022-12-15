@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
-	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
 )
 
 // LinkSpec defines the specification for a virtual network link in a private DNS zone.
@@ -70,10 +69,10 @@ func (s LinkSpec) Parameters(existing interface{}) (params interface{}, err erro
 			RegistrationEnabled: to.BoolPtr(false),
 		},
 		Location: to.StringPtr(azure.Global),
-		Tags: converters.TagsToMap(infrav1.Build(infrav1.BuildParams{
-			ClusterName: s.ClusterName,
-			Lifecycle:   infrav1.ResourceLifecycleOwned,
-			Additional:  s.AdditionalTags,
-		})),
+		//Tags: converters.TagsToMap(infrav1.Build(infrav1.BuildParams{
+		//	ClusterName: s.ClusterName,
+		//	Lifecycle:   infrav1.ResourceLifecycleOwned,
+		//	Additional:  s.AdditionalTags,
+		//})),
 	}, nil
 }
