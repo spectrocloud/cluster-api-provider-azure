@@ -409,7 +409,7 @@ func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, link
 	if s.IsAPIServerPrivate() {
 		zone := privatedns.ZoneSpec{
 			Name:           s.GetPrivateDNSZoneName(),
-			ResourceGroup:  s.ResourceGroup(),
+			ResourceGroup:  s.PrivateDNSZoneResourceGroup(),
 			ClusterName:    s.ClusterName(),
 			AdditionalTags: s.AdditionalTags(),
 		}
@@ -421,7 +421,7 @@ func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, link
 			SubscriptionID:    s.SubscriptionID(),
 			VNetResourceGroup: s.Vnet().ResourceGroup,
 			VNetName:          s.Vnet().Name,
-			ResourceGroup:     s.ResourceGroup(),
+			ResourceGroup:     s.PrivateDNSZoneResourceGroup(),
 			ClusterName:       s.ClusterName(),
 			AdditionalTags:    s.AdditionalTags(),
 		}
@@ -432,7 +432,7 @@ func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, link
 				SubscriptionID:    s.SubscriptionID(),
 				VNetResourceGroup: peering.ResourceGroup,
 				VNetName:          peering.RemoteVnetName,
-				ResourceGroup:     s.ResourceGroup(),
+				ResourceGroup:     s.PrivateDNSZoneResourceGroup(),
 				ClusterName:       s.ClusterName(),
 				AdditionalTags:    s.AdditionalTags(),
 			}
@@ -445,7 +445,7 @@ func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, link
 				IP:       s.APIServerPrivateIP(),
 			},
 			ZoneName:      s.GetPrivateDNSZoneName(),
-			ResourceGroup: s.ResourceGroup(),
+			ResourceGroup: s.PrivateDNSZoneResourceGroup(),
 		}
 
 		return zone, links, records
@@ -668,6 +668,11 @@ func (s *ClusterScope) OutboundPoolName(loadBalancerName string) string {
 
 // ResourceGroup returns the cluster resource group.
 func (s *ClusterScope) ResourceGroup() string {
+	return s.AzureCluster.Spec.ResourceGroup
+}
+
+// ResourceGroup returns the cluster resource group.
+func (s *ClusterScope) PrivateDNSZoneResourceGroup() string {
 	if len(s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneResourceGroup) > 0 {
 		return s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneResourceGroup
 	}
