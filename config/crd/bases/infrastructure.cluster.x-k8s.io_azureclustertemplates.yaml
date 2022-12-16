@@ -389,6 +389,8 @@ spec:
                             description: PrivateDNSZoneName defines the zone name
                               for the Azure Private DNS.
                             type: string
+                          privateDNSZoneResourceGroup:
+                            type: string
                           subnets:
                             description: Subnets is the configuration for the control-plane
                               subnet and the node subnet.
