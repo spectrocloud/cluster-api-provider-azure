@@ -31,7 +31,9 @@ import (
 
 	infrav1alpha4 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha4"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
+	expv1aplha4 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha4"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ManagedMachinePoolScope defines the scope interface for a managed machine pool.
@@ -44,6 +46,11 @@ type ManagedMachinePoolScope interface {
 	SetAgentPoolProviderIDList([]string)
 	SetAgentPoolReplicas(int32)
 	SetAgentPoolReady(bool)
+	GetAgentPoolAnnotations() map[string]string
+	SetAgentPoolAnnotations(k, v string)
+	DeleteAgentPoolAnnotation(k string)
+	GetNodeDrainTimeout() time.Duration
+	GetInfraClient() client.Client
 }
 
 // Service provides operations on Azure resources.
@@ -138,10 +145,20 @@ func (s *Service) Reconcile(ctx context.Context) error {
 
 		// Diff and check if we require an update
 		diff := cmp.Diff(existingProfile, normalizedProfile)
+		klog.V(2).Info("updating agentpool annotations for nodepool")
 		if diff != "" {
 			klog.V(2).Infof("Update required (+new -old):\n%s", diff)
 			ps := *existingPool.ManagedClusterAgentPoolProfileProperties.ProvisioningState
 			if ps != string(infrav1alpha4.Canceled) && ps != string(infrav1alpha4.Failed) && ps != string(infrav1alpha4.Succeeded) {
+				ndt := s.scope.GetNodeDrainTimeout()
+				if ndt.Seconds() != 0 {	
+					annotations := s.scope.GetAgentPoolAnnotations()
+					_, ok := annotations[expv1aplha4.NodeDrainTimeoutAnnotation]
+					if !ok {
+						s.scope.Info("NodeDrainTimeoutAnnotation missing") 
+						s.scope.SetAgentPoolAnnotations(expv1aplha4.NodeDrainTimeoutAnnotation, time.Now().UTC().String())
+					}
+				}	
 				msg := fmt.Sprintf("Unable to update existing agent pool in non terminal state. Agent pool must be in one of the following provisioning states: canceled, failed, or succeeded. Actual state: %s", ps)
 				klog.V(2).Infof(msg)
 				return errors.New(msg)

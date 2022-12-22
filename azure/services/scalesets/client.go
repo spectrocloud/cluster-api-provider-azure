@@ -96,7 +96,7 @@ func newVirtualMachineScaleSetsClient(subscriptionID string, baseURI string, aut
 }
 
 // ListInstances retrieves information about the model views of a virtual machine scale set.
-func (ac *AzureClient) ListInstances(ctx context.Context, resourceGroupName, vmssName string) ([]compute.VirtualMachineScaleSetVM, error) {
+func (ac AzureClient) ListInstances(ctx context.Context, resourceGroupName, vmssName string) ([]compute.VirtualMachineScaleSetVM, error) {
 	ctx, _, done := tele.StartSpanWithLogger(ctx, "scalesets.AzureClient.ListInstances")
 	defer done()
 
@@ -117,7 +117,7 @@ func (ac *AzureClient) ListInstances(ctx context.Context, resourceGroupName, vms
 }
 
 // List returns all scale sets in a resource group.
-func (ac *AzureClient) List(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachineScaleSet, error) {
+func (ac AzureClient) List(ctx context.Context, resourceGroupName string) ([]compute.VirtualMachineScaleSet, error) {
 	ctx, _, done := tele.StartSpanWithLogger(ctx, "scalesets.AzureClient.List")
 	defer done()
 
@@ -325,4 +325,17 @@ func (da *deleteResultAdapter) Result(client compute.VirtualMachineScaleSetsClie
 // Result returns the Result so that we can treat it generically.
 func (g *genericScaleSetFutureImpl) Result(client compute.VirtualMachineScaleSetsClient) (compute.VirtualMachineScaleSet, error) {
 	return g.result(client)
+}
+
+func (ac AzureClient) DeleteInstance(ctx context.Context, nodeResourceGroupName, scalesetName, scalesetVMName, instanceId string) (error) {
+	ctx, _, done := tele.StartSpanWithLogger(ctx, "scalesets.AzureClient.DeleteInstance")
+	defer done()
+	
+	future, err := ac.scalesetvms.Delete(ctx, nodeResourceGroupName, scalesetName, instanceId, nil)
+	if err != nil {
+		return  errors.Wrapf(err, "failed deleting vmssvm  named %q", scalesetVMName)
+	}
+	//wait for future to finish
+	err = future.WaitForCompletionRef(ctx, ac.scalesetvms.Client)
+	return err
 }
