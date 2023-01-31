@@ -203,6 +203,9 @@ type AzureManagedMachinePoolSpec struct {
 	// +kubebuilder:validation:Enum=OS;Temporary
 	// +optional
 	KubeletDiskType *KubeletDiskType `json:"kubeletDiskType,omitempty"`
+	// SubnetName specifies the Subnet where the MachinePool will be placed
+	// +optional
+	SubnetName string `json:"subnetName,omitempty"`
 }
 
 // ManagedMachinePoolScaling specifies scaling options.

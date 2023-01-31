@@ -78,6 +78,7 @@ func (m *AzureManagedMachinePool) ValidateCreate(client client.Client) error {
 		m.validateNodePublicIPPrefixID,
 		m.validateEnableNodePublicIP,
 		m.validateKubeletConfig,
+		m.validateSubnetName,
 	}
 
 	var errs []error
@@ -128,6 +129,13 @@ func (m *AzureManagedMachinePool) ValidateUpdate(oldRaw runtime.Object, client c
 		field.NewPath("Spec", "OSDiskSizeGB"),
 		old.Spec.OSDiskSizeGB,
 		m.Spec.OSDiskSizeGB); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	if err := webhookutils.ValidateImmutable(
+		field.NewPath("Spec", "SubnetName"),
+		old.Spec.SubnetName,
+		m.Spec.SubnetName); err != nil {
 		allErrs = append(allErrs, err)
 	}
 
@@ -339,6 +347,17 @@ func (m *AzureManagedMachinePool) validateEnableNodePublicIP() error {
 			field.NewPath("Spec", "EnableNodePublicIP"),
 			m.Spec.EnableNodePublicIP,
 			"must be set to true when NodePublicIPPrefixID is set")
+	}
+	return nil
+}
+
+func (m *AzureManagedMachinePool) validateSubnetName() error {
+	if m.Spec.SubnetName != "" {
+		subnetRegex := `^[-\w\._]+$`
+		if success, _ := regexp.Match(subnetRegex, []byte(m.Spec.SubnetName)); !success {
+			return field.Invalid(field.NewPath("Spec", "SubnetName"), m.Spec.SubnetName,
+				fmt.Sprintf("name of subnet doesn't match regex %s", subnetRegex))
+		}
 	}
 	return nil
 }

@@ -514,6 +514,34 @@ func TestAzureManagedMachinePoolUpdatingWebhook(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "Can't update SubnetName with error",
+			new: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					SubnetName: "my-subnet",
+				},
+			},
+			old: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					SubnetName: "",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Can't update SubnetName without error",
+			new: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					SubnetName: "my-subnet",
+				},
+			},
+			old: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					SubnetName: "my-subnet",
+				},
+			},
+			wantErr: false,
+		},
 	}
 	var client client.Client
 	for _, tc := range tests {
@@ -571,6 +599,25 @@ func TestAzureManagedMachinePool_ValidateCreate(t *testing.T) {
 			},
 			wantErr:  true,
 			errorLen: 1,
+		},
+		{
+			name: "invalid subnetname",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					SubnetName: "1+subnet",
+				},
+			},
+			wantErr:  true,
+			errorLen: 1,
+		},
+		{
+			name: "valid subnetname",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					SubnetName: "my-subnet",
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name: "too few MaxPods",
