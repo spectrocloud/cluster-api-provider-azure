@@ -59,7 +59,7 @@ func (m *AzureManagedControlPlane) SetupWebhookWithManager(mgr ctrl.Manager) err
 // +kubebuilder:webhook:path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedcontrolplane,mutating=true,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedcontrolplanes,verbs=create;update,versions=v1beta1,name=default.azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type.
-func (m *AzureManagedControlPlane) Default(_ client.Client) {
+func (m *AzureManagedControlPlane) Default(_ client.Client) error {
 	if m.Spec.NetworkPlugin == nil {
 		networkPlugin := "azure"
 		m.Spec.NetworkPlugin = &networkPlugin
@@ -83,6 +83,7 @@ func (m *AzureManagedControlPlane) Default(_ client.Client) {
 	m.setDefaultSubnet()
 	m.setDefaultSku()
 	m.setDefaultAutoScalerProfile()
+	return nil
 }
 
 // +kubebuilder:webhook:verbs=create;update,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedcontrolplane,mutating=false,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedcontrolplanes,versions=v1beta1,name=validation.azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1

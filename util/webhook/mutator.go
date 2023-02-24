@@ -29,7 +29,7 @@ import (
 // Defaulter defines functions for setting defaults on resources.
 type Defaulter interface {
 	runtime.Object
-	Default(client client.Client)
+	Default(client client.Client) error
 }
 
 // NewMutatingWebhook creates a new Webhook for Defaulting the provided type.
@@ -69,7 +69,10 @@ func (h *mutatingHandler) Handle(ctx context.Context, req admission.Request) adm
 	}
 
 	// Default the object
-	obj.Default(h.Client)
+	if 	err := obj.Default(h.Client); err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
+	
 	marshalled, err := json.Marshal(obj)
 	if err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)

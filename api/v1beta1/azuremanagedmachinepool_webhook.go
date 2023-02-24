@@ -43,7 +43,7 @@ var validNodePublicPrefixID = regexp.MustCompile(`(?i)^/?subscriptions/[0-9a-f]{
 //+kubebuilder:webhook:path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedmachinepool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedmachinepools,verbs=create;update,versions=v1beta1,name=default.azuremanagedmachinepools.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type.
-func (m *AzureManagedMachinePool) Default(client client.Client) {
+func (m *AzureManagedMachinePool) Default(cli client.Client) error {
 	if m.Labels == nil {
 		m.Labels = make(map[string]string)
 	}
@@ -56,6 +56,37 @@ func (m *AzureManagedMachinePool) Default(client client.Client) {
 	if m.Spec.OSType == nil {
 		m.Spec.OSType = to.StringPtr(DefaultOSType)
 	}
+	return m.defaultSubnetName(cli)
+}
+
+func (m *AzureManagedMachinePool) defaultSubnetName(cli client.Client) error {
+
+	clusterName, ok := m.Labels[clusterv1.ClusterLabelName]
+	if !ok {
+		// fmt.Println(errors.Errorf("capi has not yet set label %s", clusterv1.ClusterLabelName))
+		return nil
+	}
+
+	// Fetch the amcp.
+	amcp := &AzureManagedControlPlane{}
+	key := client.ObjectKey{
+		Namespace: m.Namespace,
+		Name:      clusterName,
+	}
+
+	ctx := context.Background()
+
+	if err := cli.Get(ctx, key, amcp); err != nil {
+		return err
+	}
+
+	if amcp.Spec.VirtualNetwork.Name != "" && m.Spec.SubnetName == "" {
+		if amcp.Spec.VirtualNetwork.Subnet.Name == "" {
+			return errors.New("a virtualnetwork is defined but a subnet was undefined")
+		}
+		m.Spec.SubnetName = amcp.Spec.VirtualNetwork.Subnet.Name
+	}
+	return nil
 }
 
 //+kubebuilder:webhook:verbs=update;delete,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedmachinepool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedmachinepools,versions=v1beta1,name=validation.azuremanagedmachinepools.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
@@ -135,7 +166,7 @@ func (m *AzureManagedMachinePool) ValidateUpdate(oldRaw runtime.Object, client c
 	if err := webhookutils.ValidateImmutable(
 		field.NewPath("Spec", "SubnetName"),
 		old.Spec.SubnetName,
-		m.Spec.SubnetName); err != nil {
+		m.Spec.SubnetName); old.Spec.SubnetName != "" && err != nil {
 		allErrs = append(allErrs, err)
 	}
 
