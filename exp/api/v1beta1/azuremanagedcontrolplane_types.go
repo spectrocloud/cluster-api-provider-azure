@@ -167,6 +167,14 @@ type AzureManagedControlPlaneSpec struct {
 	// AutoUpgradeProfile - Profile of auto upgrade configuration.
 	// +optional
 	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile `json:"autoUpgradeProfile,omitempty"`
+	
+	// AzureEnvironment is the name of the AzureCloud to be used.
+	// The default value that would be used by most users is "AzurePublicCloud", other values are:
+	// - ChinaCloud: "AzureChinaCloud"
+	// - PublicCloud: "AzurePublicCloud"
+	// - USGovernmentCloud: "AzureUSGovernmentCloud"
+	// +optional
+	AzureEnvironment string `json:"azureEnvironment,omitempty"`
 
 	// DisableLocalAccounts - If set to true, getting static credential will be disabled for this cluster. Expected to only be used for AAD clusters.
 	// +optional
