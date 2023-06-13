@@ -42,8 +42,6 @@ spec:
     - name: control-plane-subnet
       role: control-plane
     - name: node-subnet
-      natGateway:
-        name: node-natgateway
       role: node
     vnet:
       name: ${AZURE_VNET_NAME:=${CLUSTER_NAME}-vnet}
@@ -62,27 +60,14 @@ spec:
     clusterConfiguration:
       apiServer:
         extraArgs:
-          cloud-config: /etc/kubernetes/azure.json
-          cloud-provider: azure
-          feature-gates: ${K8S_FEATURE_GATES:-""}
-        extraVolumes:
-        - hostPath: /etc/kubernetes/azure.json
-          mountPath: /etc/kubernetes/azure.json
-          name: cloud-config
-          readOnly: true
+          cloud-provider: external
         timeoutForControlPlane: 20m
       controllerManager:
         extraArgs:
           allocate-node-cidrs: "false"
-          cloud-config: /etc/kubernetes/azure.json
-          cloud-provider: azure
+          cloud-provider: external
           cluster-name: ${CLUSTER_NAME}
           v: "4"
-        extraVolumes:
-        - hostPath: /etc/kubernetes/azure.json
-          mountPath: /etc/kubernetes/azure.json
-          name: cloud-config
-          readOnly: true
       etcd:
         local:
           dataDir: /var/lib/etcddisk/etcd
@@ -114,11 +99,13 @@ spec:
         set -o pipefail
         set -o errexit
 
+        systemctl stop kubelet
         declare -a BINARIES=("kubeadm" "kubectl" "kubelet")
         for BINARY in "$${BINARIES[@]}"; do
           echo "* installing package: $${BINARY} ${KUBE_GIT_VERSION}"
           curl --retry 10 --retry-delay 5 "https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${JOB_NAME}/${KUBE_GIT_VERSION}/bin/linux/amd64/$${BINARY}" --output "/usr/bin/$${BINARY}"
         done
+        systemctl restart kubelet
 
         # prepull images from gcr.io/k8s-staging-ci-images and retag it to
         # registry.k8s.io so kubeadm can fetch correct images no matter what
@@ -148,11 +135,11 @@ spec:
         rm /tmp/yq_linux_amd64.tar.gz
 
         export KUBECONFIG=/etc/kubernetes/admin.conf
-        kubectl -n kube-system set image daemonset/kube-proxy kube-proxy="${REGISTRY}/kube-proxy:${IMAGE_TAG}"
+        kubectl -n kube-system set image daemonset/kube-proxy kube-proxy="${REGISTRY}/kube-proxy:${KUBE_IMAGE_TAG}"
         systemctl stop kubelet
-        yq e '.spec.containers[0].image = "${REGISTRY}/kube-apiserver:${IMAGE_TAG}"' -i /etc/kubernetes/manifests/kube-apiserver.yaml
-        yq e '.spec.containers[0].image = "${REGISTRY}/kube-controller-manager:${IMAGE_TAG}"' -i /etc/kubernetes/manifests/kube-controller-manager.yaml
-        yq e '.spec.containers[0].image = "${REGISTRY}/kube-scheduler:${IMAGE_TAG}"' -i /etc/kubernetes/manifests/kube-scheduler.yaml
+        yq e '.spec.containers[0].image = "${REGISTRY}/kube-apiserver:${KUBE_IMAGE_TAG}"' -i /etc/kubernetes/manifests/kube-apiserver.yaml
+        yq e '.spec.containers[0].image = "${REGISTRY}/kube-controller-manager:${KUBE_IMAGE_TAG}"' -i /etc/kubernetes/manifests/kube-controller-manager.yaml
+        yq e '.spec.containers[0].image = "${REGISTRY}/kube-scheduler:${KUBE_IMAGE_TAG}"' -i /etc/kubernetes/manifests/kube-scheduler.yaml
         systemctl restart kubelet
       owner: root:root
       path: /tmp/replace-k8s-components.sh
@@ -168,15 +155,13 @@ spec:
       nodeRegistration:
         kubeletExtraArgs:
           azure-container-registry-config: /etc/kubernetes/azure.json
-          cloud-config: /etc/kubernetes/azure.json
-          cloud-provider: azure
+          cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     joinConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
           azure-container-registry-config: /etc/kubernetes/azure.json
-          cloud-config: /etc/kubernetes/azure.json
-          cloud-provider: azure
+          cloud-provider: external
         name: '{{ ds.meta_data["local_hostname"] }}'
     mounts:
     - - LABEL=etcd_disk
@@ -210,7 +195,7 @@ spec:
         marketplace:
           offer: capi
           publisher: cncf-upstream
-          sku: ubuntu-1804-gen1
+          sku: ubuntu-2204-gen1
           version: latest
       osDisk:
         diskSizeGB: 128
@@ -258,7 +243,7 @@ spec:
       marketplace:
         offer: capi
         publisher: cncf-upstream
-        sku: ubuntu-1804-gen1
+        sku: ubuntu-2204-gen1
         version: latest
     osDisk:
       diskSizeGB: 30
@@ -291,11 +276,13 @@ spec:
       set -o pipefail
       set -o errexit
 
+      systemctl stop kubelet
       declare -a BINARIES=("kubeadm" "kubectl" "kubelet")
       for BINARY in "$${BINARIES[@]}"; do
         echo "* installing package: $${BINARY} ${KUBE_GIT_VERSION}"
         curl --retry 10 --retry-delay 5 "https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${JOB_NAME}/${KUBE_GIT_VERSION}/bin/linux/amd64/$${BINARY}" --output "/usr/bin/$${BINARY}"
       done
+      systemctl restart kubelet
 
       echo "kubeadm version: $(kubeadm version -o=short)"
       echo "kubectl version: $(kubectl version --client=true --short=true)"
@@ -314,8 +301,7 @@ spec:
     nodeRegistration:
       kubeletExtraArgs:
         azure-container-registry-config: /etc/kubernetes/azure.json
-        cloud-config: /etc/kubernetes/azure.json
-        cloud-provider: azure
+        cloud-provider: external
       name: '{{ ds.meta_data["local_hostname"] }}'
   preKubeadmCommands:
   - bash -c /tmp/replace-k8s-binaries.sh
@@ -369,6 +355,12 @@ metadata:
 spec:
   location: ${AZURE_LOCATION}
   template:
+    image:
+      marketplace:
+        offer: capi-windows
+        publisher: cncf-upstream
+        sku: ${WINDOWS_SERVER_VERSION:=windows-2019}-containerd-gen1
+        version: latest
     osDisk:
       diskSizeGB: 128
       managedDisk:
@@ -394,21 +386,48 @@ spec:
   - content: Add-MpPreference -ExclusionProcess C:/opt/cni/bin/calico.exe
     path: C:/defender-exclude-calico.ps1
     permissions: "0744"
+  - content: |
+      $ErrorActionPreference = 'Stop'
+
+      Stop-Service kubelet -Force
+
+      $$KUBE_GIT_VERSION="${KUBE_GIT_VERSION}"
+      if($$KUBE_GIT_VERSION -ne "")
+      {
+        $$binaries=@("kubeadm", "kubectl", "kubelet", "kube-proxy")
+        $$ci_url="https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${JOB_NAME}/${KUBE_GIT_VERSION}/bin/windows/amd64"
+        foreach ( $$binary in $$binaries )
+        {
+          echo "downloading binary: $$ci_url/$$binary.exe"
+          curl.exe --retry 10 --retry-delay 5 "$$ci_url/$$binary.exe" --output "c:/k/$$binary.exe"
+        }
+      }
+
+      # Tag it to the ci version.  The image knows how to use the copy locally with the configmap
+      # that is applied at at this stage (windows-kubeproxy-ci.yaml)
+      ctr.exe -n k8s.io images pull docker.io/sigwindowstools/kube-proxy:v1.23.1-calico-hostprocess
+      ctr.exe -n k8s.io images tag docker.io/sigwindowstools/kube-proxy:v1.23.1-calico-hostprocess "docker.io/sigwindowstools/kube-proxy:${CI_VERSION/+/_}-calico-hostprocess"
+
+      kubeadm.exe version -o=short
+      kubectl.exe version --client=true --short=true
+      kubelet.exe --version
+      kube-proxy.exe --version
+    path: C:/replace-pr-binaries.ps1
+    permissions: "0744"
   joinConfiguration:
     nodeRegistration:
       criSocket: npipe:////./pipe/containerd-containerd
       kubeletExtraArgs:
         azure-container-registry-config: c:/k/azure.json
-        cloud-config: c:/k/azure.json
-        cloud-provider: azure
-        feature-gates: WindowsHostProcessContainers=true
-        pod-infra-container-image: mcr.microsoft.com/oss/kubernetes/pause:3.4.1
+        cloud-provider: external
+        pod-infra-container-image: mcr.microsoft.com/oss/kubernetes/pause:3.9
       name: '{{ ds.meta_data["local_hostname"] }}'
   postKubeadmCommands:
   - nssm set kubelet start SERVICE_AUTO_START
   - powershell C:/defender-exclude-calico.ps1
   preKubeadmCommands:
   - powershell c:/create-external-network.ps1
+  - powershell C:/replace-pr-binaries.ps1
   users:
   - groups: Administrators
     name: capi
@@ -459,6 +478,14 @@ spec:
 ---
 apiVersion: v1
 data:
+  kube-proxy-patch: |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: windows-kubeproxy-ci
+      namespace: kube-system
+    data:
+      KUBEPROXY_PATH: "c:/k/kube-proxy.exe"
   proxy: |
     apiVersion: apps/v1
     kind: DaemonSet
@@ -565,7 +592,7 @@ data:
     for rescheduling.\n      - key: CriticalAddonsOnly\n        operator: Exists\n
     \     - effect: NoExecute\n        operator: Exists\n      initContainers:\n        #
     This container installs the CNI binaries\n        # and CNI network config file
-    on each node.\n        - name: install-cni\n          image: sigwindowstools/calico-install:v3.25.0-hostprocess\n
+    on each node.\n        - name: install-cni\n          image: sigwindowstools/calico-install:v3.25.1-hostprocess\n
     \         args: [\"$env:CONTAINER_SANDBOX_MOUNT_POINT/calico/install.ps1\"]\n
     \         imagePullPolicy: Always\n          env:\n            # Name of the CNI
     config file to create.\n            - name: CNI_CONF_NAME\n              value:
@@ -584,7 +611,7 @@ data:
     cni-net-dir\n            - name: kubeadm-config\n              mountPath: /etc/kubeadm-config/\n
     \         securityContext:\n            windowsOptions:\n              hostProcess:
     true\n              runAsUserName: \"NT AUTHORITY\\\\system\"\n      containers:\n
-    \     - name: calico-node-startup\n        image: sigwindowstools/calico-node:v3.25.0-hostprocess\n
+    \     - name: calico-node-startup\n        image: sigwindowstools/calico-node:v3.25.1-hostprocess\n
     \       args: [\"$env:CONTAINER_SANDBOX_MOUNT_POINT/calico/node-service.ps1\"]\n
     \       workingDir: \"$env:CONTAINER_SANDBOX_MOUNT_POINT/calico/\"\n        imagePullPolicy:
     Always\n        volumeMounts:\n        - name: calico-config-windows\n          mountPath:
@@ -595,7 +622,7 @@ data:
     name: CNI_IPAM_TYPE\n          value: \"calico-ipam\"\n        - name: CALICO_NETWORKING_BACKEND\n
     \         value: \"vxlan\"\n        - name: KUBECONFIG\n          value: \"C:/etc/cni/net.d/calico-kubeconfig\"\n
     \       - name: VXLAN_VNI\n          value: \"4096\"\n      - name: calico-node-felix\n
-    \       image: sigwindowstools/calico-node:v3.25.0-hostprocess\n        args:
+    \       image: sigwindowstools/calico-node:v3.25.1-hostprocess\n        args:
     [\"$env:CONTAINER_SANDBOX_MOUNT_POINT/calico/felix-service.ps1\"]\n        imagePullPolicy:
     Always\n        workingDir: \"$env:CONTAINER_SANDBOX_MOUNT_POINT/calico/\"\n        volumeMounts:\n
     \       - name: calico-config-windows\n          mountPath: /etc/kube-calico-windows/\n
@@ -610,7 +637,30 @@ data:
     \       configMap:\n          name: calico-static-rules\n      # Used to install
     CNI.\n      - name: cni-bin-dir\n        hostPath:\n          path: /opt/cni/bin\n
     \     - name: cni-net-dir\n        hostPath:\n          path: /etc/cni/net.d\n
-    \     - name: kubeadm-config\n        configMap:\n          name: kubeadm-config\n"
+    \     - name: kubeadm-config\n        configMap:\n          name: kubeadm-config\n---\napiVersion:
+    apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nmetadata:\n  name: ipamconfigs.crd.projectcalico.org\nspec:\n
+    \ group: crd.projectcalico.org\n  names:\n    kind: IPAMConfig\n    listKind:
+    IPAMConfigList\n    plural: ipamconfigs\n    singular: ipamconfig\n  preserveUnknownFields:
+    false\n  scope: Cluster\n  versions:\n  - name: v1\n    schema:\n      openAPIV3Schema:\n
+    \       properties:\n          apiVersion:\n            description: 'APIVersion
+    defines the versioned schema of this representation\n              of an object.
+    Servers should convert recognized schemas to the latest\n              internal
+    value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'\n
+    \           type: string\n          kind:\n            description: 'Kind is a
+    string value representing the REST resource this\n              object represents.
+    Servers may infer this from the endpoint the client\n              submits requests
+    to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'\n
+    \           type: string\n          metadata:\n            type: object\n          spec:\n
+    \           description: IPAMConfigSpec contains the specification for an IPAMConfig\n
+    \             resource.\n            properties:\n              autoAllocateBlocks:\n
+    \               type: boolean\n              maxBlocksPerHost:\n                description:
+    MaxBlocksPerHost, if non-zero, is the max number of blocks\n                  that
+    can be affine to each host.\n                maximum: 2147483647\n                minimum:
+    0\n                type: integer\n              strictAffinity:\n                type:
+    boolean\n            required:\n            - autoAllocateBlocks\n            -
+    strictAffinity\n            type: object\n        type: object\n    served: true\n
+    \   storage: true\nstatus:\n  acceptedNames:\n    kind: \"\"\n    plural: \"\"\n
+    \ conditions: []\n  storedVersions: []\n"
 kind: ConfigMap
 metadata:
   annotations:

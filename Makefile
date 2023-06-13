@@ -81,7 +81,7 @@ ENVSUBST_VER := v2.0.0-20210730161058-179042472c46
 ENVSUBST_BIN := envsubst
 ENVSUBST := $(TOOLS_BIN_DIR)/$(ENVSUBST_BIN)-$(ENVSUBST_VER)
 
-GOLANGCI_LINT_VER := v1.51.2
+GOLANGCI_LINT_VER := v1.52.1
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER)
 
@@ -101,11 +101,11 @@ KPROMO_VER := v3.5.1
 KPROMO_BIN := kpromo
 KPROMO := $(TOOLS_BIN_DIR)/$(KPROMO_BIN)-$(KPROMO_VER)
 
-GO_APIDIFF_VER := v0.5.0
+GO_APIDIFF_VER := v0.6.0
 GO_APIDIFF_BIN := go-apidiff
 GO_APIDIFF := $(TOOLS_BIN_DIR)/$(GO_APIDIFF_BIN)
 
-GINKGO_VER := v2.8.4
+GINKGO_VER := v2.9.7
 GINKGO_BIN := ginkgo
 GINKGO := $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER)
 
@@ -113,7 +113,7 @@ KUBECTL_VER := v1.25.6
 KUBECTL_BIN := kubectl
 KUBECTL := $(TOOLS_BIN_DIR)/$(KUBECTL_BIN)-$(KUBECTL_VER)
 
-HELM_VER := v3.8.1
+HELM_VER := v3.11.3
 HELM_BIN := helm
 HELM := $(TOOLS_BIN_DIR)/$(HELM_BIN)-$(HELM_VER)
 
@@ -121,7 +121,7 @@ YQ_VER := v4.14.2
 YQ_BIN := yq
 YQ :=  $(TOOLS_BIN_DIR)/$(YQ_BIN)-$(YQ_VER)
 
-KIND_VER := v0.17.0
+KIND_VER := v0.19.0
 KIND_BIN := kind
 KIND :=  $(TOOLS_BIN_DIR)/$(KIND_BIN)-$(KIND_VER)
 
@@ -151,6 +151,9 @@ MANIFEST_ROOT ?= config
 CRD_ROOT ?= $(MANIFEST_ROOT)/crd/bases
 WEBHOOK_ROOT ?= $(MANIFEST_ROOT)/webhook
 RBAC_ROOT ?= $(MANIFEST_ROOT)/rbac
+ASO_CRDS_PATH := $(MANIFEST_ROOT)/aso/crds.yaml
+ASO_VERSION := v2.0.0
+ASO_CRDS := resourcegroups.resources.azure.com
 
 # Allow overriding the imagePullPolicy
 PULL_POLICY ?= Always
@@ -213,8 +216,12 @@ clean-temporary: ## Remove all temporary files and folders.
 	rm -f *.kubeconfig
 
 .PHONY: clean-release
-clean-release: ## Remove the release folder.
+clean-release: clean-release-git ## Remove the release folder.
 	rm -rf $(RELEASE_DIR)
+
+.PHONY: clean-release-git
+clean-release-git: ## Restores the git files usually modified during a release
+	git restore ./*manager_image_patch.yaml ./*manager_pull_policy.yaml
 
 APIDIFF_OLD_COMMIT ?= $(shell git rev-parse origin/main)
 
@@ -281,7 +288,7 @@ create-management-cluster: $(KUSTOMIZE) $(ENVSUBST) $(KUBECTL) $(KIND) ## Create
 	./hack/create-custom-cloud-provider-config.sh
 
 	# Deploy CAPI
-	curl --retry $(CURL_RETRIES) -sSL https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.3.5/cluster-api-components.yaml | $(ENVSUBST) | $(KUBECTL) apply -f -
+	curl --retry $(CURL_RETRIES) -sSL https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.4.2/cluster-api-components.yaml | $(ENVSUBST) | $(KUBECTL) apply -f -
 
 	# Deploy CAPZ
 	$(KIND) load docker-image $(CONTROLLER_IMG)-$(ARCH):$(TAG) --name=$(KIND_CLUSTER_NAME)
@@ -364,14 +371,14 @@ delete-workload-cluster: $(KUBECTL) ## Deletes the example workload Kubernetes c
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites: ## Pull prerequisites for building controller-manager.
 	docker pull docker/dockerfile:1.4
-	docker pull docker.io/library/golang:1.19
+	docker pull docker.io/library/golang:1.20
 	docker pull gcr.io/distroless/static:latest
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager.
 	DOCKER_BUILDKIT=1 docker build --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
-	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/default/manager_image_patch.yaml"
-	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/default/manager_pull_policy.yaml"
+	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/capz/manager_image_patch.yaml"
+	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/capz/manager_pull_policy.yaml"
 
 .PHONY: docker-push
 docker-push: ## Push the docker image
@@ -408,12 +415,12 @@ docker-push-manifest: ## Push the fat manifest docker image.
 .PHONY: set-manifest-image
 set-manifest-image: ## Update kustomize image patch file for default resource.
 	$(info Updating kustomize image patch file for default resource)
-	sed -i'' -e 's@image: .*@image: '"${MANIFEST_IMG}:$(MANIFEST_TAG)"'@' ./config/default/manager_image_patch.yaml
+	sed -i'' -e 's@image: .*@image: '"${MANIFEST_IMG}:$(MANIFEST_TAG)"'@' ./config/capz/manager_image_patch.yaml
 
 .PHONY: set-manifest-pull-policy
 set-manifest-pull-policy: ## Update kustomize pull policy file for default resource.
 	$(info Updating kustomize pull policy file for default resource)
-	sed -i'' -e 's@imagePullPolicy: .*@imagePullPolicy: '"$(PULL_POLICY)"'@' ./config/default/manager_pull_policy.yaml
+	sed -i'' -e 's@imagePullPolicy: .*@imagePullPolicy: '"$(PULL_POLICY)"'@' ./config/capz/manager_pull_policy.yaml
 
 ## --------------------------------------
 ## Generate
@@ -428,6 +435,7 @@ generate: ## Generate go related targets, manifests, flavors, e2e-templates and 
 	$(MAKE) generate-flavors
 	$(MAKE) generate-e2e-templates
 	$(MAKE) generate-addons
+	$(MAKE) generate-aso-crds
 
 .PHONY: generate-go
 generate-go: $(CONTROLLER_GEN) $(MOCKGEN) $(CONVERSION_GEN) ## Runs Go related generate targets.
@@ -435,26 +443,6 @@ generate-go: $(CONTROLLER_GEN) $(MOCKGEN) $(CONVERSION_GEN) ## Runs Go related g
 		paths=./api/... \
 		paths=./$(EXP_DIR)/api/... \
 		object:headerFile=./hack/boilerplate/boilerplate.generatego.txt
-	$(CONVERSION_GEN) \
-		--input-dirs=./api/v1alpha3 \
-		--build-tag=ignore_autogenerated_core_v1alpha3 \
-		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1alpha3 \
-		--output-file-base=zz_generated.conversion \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt $(OUTPUT_BASE)
-	$(CONVERSION_GEN) \
-		--input-dirs=./api/v1alpha4 \
-		--build-tag=ignore_autogenerated_core_v1alpha4 \
-		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1alpha4 \
-		--output-file-base=zz_generated.conversion \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt $(OUTPUT_BASE)
-	$(CONVERSION_GEN) \
-		--input-dirs=./$(EXP_DIR)/api/v1alpha3 \
-		--output-file-base=zz_generated.conversion \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt $(OUTPUT_BASE)
-	$(CONVERSION_GEN) \
-		--input-dirs=./$(EXP_DIR)/api/v1alpha4 \
-		--output-file-base=zz_generated.conversion \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt $(OUTPUT_BASE)
 	go generate ./...
 
 .PHONY: generate-manifests
@@ -478,7 +466,7 @@ generate-flavors: $(KUSTOMIZE) generate-addons
 	./hack/gen-flavors.sh
 
 .PHONY: generate-e2e-templates
-generate-e2e-templates: $(KUSTOMIZE) ## Generate Azure infrastructure templates for the v1alpha4 CAPI test suite.
+generate-e2e-templates: $(KUSTOMIZE) ## Generate Azure infrastructure templates for the v1beta1 CAPI test suite.
 	$(KUSTOMIZE) build $(AZURE_TEMPLATES)/v1beta1/cluster-template --load-restrictor LoadRestrictionsNone > $(AZURE_TEMPLATES)/v1beta1/cluster-template.yaml
 	$(KUSTOMIZE) build $(AZURE_TEMPLATES)/v1beta1/cluster-template-md-remediation --load-restrictor LoadRestrictionsNone > $(AZURE_TEMPLATES)/v1beta1/cluster-template-md-remediation.yaml
 	$(KUSTOMIZE) build $(AZURE_TEMPLATES)/v1beta1/cluster-template-kcp-remediation --load-restrictor LoadRestrictionsNone > $(AZURE_TEMPLATES)/v1beta1/cluster-template-kcp-remediation.yaml
@@ -494,14 +482,29 @@ generate-addons: fetch-calico-manifests ## Generate metric-server, calico calico
 	$(KUSTOMIZE) build $(ADDONS_DIR)/calico-ipv6 > $(ADDONS_DIR)/calico-ipv6.yaml
 	$(KUSTOMIZE) build $(ADDONS_DIR)/calico-dual-stack > $(ADDONS_DIR)/calico-dual-stack.yaml
 
+.PHONY: generate-aso-crds
+# The yq command filters the list of all ASO CRDs to just the ones specified by ASO_CRDS.
+# The sed command changes '$$' to '$$$$' so once the CRDs get run through
+# envsubst, '$$$$' changes back to '$$' so ASO will not detect a diff and try to
+# update the CRDs for which we don't give it permission.
+generate-aso-crds: $(YQ)
+	curl -fSsL "https://github.com/Azure/azure-service-operator/releases/download/$(ASO_VERSION)/azureserviceoperator_customresourcedefinitions_$(ASO_VERSION).yaml" | \
+		$(YQ) e '. | select($(foreach name,$(ASO_CRDS),.metadata.name == "$(name)" or )false)' - | \
+		sed 's/\$$\$$/$$$$$$$$/g' \
+		> $(ASO_CRDS_PATH)
+
 # When updating this, make sure to also update the Windows image version in templates/addons/windows/calico.
-CALICO_VERSION := v3.25.0
+export CALICO_VERSION := v3.25.1
 # Where all downloaded Calico manifests are unpacked and stored.
 CALICO_RELEASES := $(ARTIFACTS)/calico
 # Path to manifests directory in a Calico release archive.
 CALICO_RELEASE_MANIFESTS_DIR := release-$(CALICO_VERSION)/manifests
 # Path where Calico manifests are stored which should be used for addons generation.
 CALICO_MANIFESTS_DIR := $(ARTIFACTS)/calico/$(CALICO_RELEASE_MANIFESTS_DIR)
+
+.PHONY: get-calico-version
+get-calico-version: ## Print the Calico version used for CNI in the repo.
+	@echo $(CALICO_VERSION)
 
 .PHONY: fetch-calico-manifests
 fetch-calico-manifests: $(CALICO_MANIFESTS_DIR) ## Get Calico release manifests and unzip them.
@@ -610,7 +613,7 @@ release-binary: $(RELEASE_DIR) ## Compile and build release binaries.
 		-e GOARCH=$(GOARCH) \
 		-v "$$(pwd):/workspace" \
 		-w /workspace \
-		golang:1.19 \
+		golang:1.20 \
 		go build -a -ldflags '$(LDFLAGS) -extldflags "-static"' \
 		-o $(RELEASE_DIR)/$(notdir $(RELEASE_BINARY))-$(GOOS)-$(GOARCH) $(RELEASE_BINARY)
 
@@ -656,6 +659,7 @@ go-test: $(SETUP_ENVTEST) ## Run go tests.
 test-cover: TEST_ARGS+= -coverprofile coverage.out
 test-cover: test ## Run tests with code coverage and generate reports.
 	go tool cover -func=coverage.out -o coverage.txt
+	./hack/codecov-ignore.sh
 	go tool cover -html=coverage.out -o coverage.html
 
 .PHONY: test-e2e-run
@@ -665,7 +669,8 @@ test-e2e-run: generate-e2e-templates install-tools ## Run e2e tests.
     	-e2e.artifacts-folder="$(ARTIFACTS)" \
     	-e2e.config="$(E2E_CONF_FILE_ENVSUBST)" \
     	-e2e.skip-log-collection="$(SKIP_LOG_COLLECTION)" \
-    	-e2e.skip-resource-cleanup=$(SKIP_CLEANUP) -e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER) $(E2E_ARGS)
+    	-e2e.skip-resource-cleanup=$(SKIP_CLEANUP) -e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER) $(E2E_ARGS) ; \
+	$(MAKE) clean-release-git
 
 .PHONY: test-e2e
 test-e2e: ## Run "docker-build" and "docker-push" rules then run e2e tests.
@@ -681,8 +686,8 @@ test-e2e-skip-push: ## Run "docker-build" rule then run e2e tests.
 
 .PHONY: test-e2e-skip-build-and-push
 test-e2e-skip-build-and-push:
-	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/default/manager_image_patch.yaml"
-	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/default/manager_pull_policy.yaml" PULL_POLICY=IfNotPresent
+	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/capz/manager_image_patch.yaml"
+	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/capz/manager_pull_policy.yaml" PULL_POLICY=IfNotPresent
 	MANAGER_IMAGE=$(CONTROLLER_IMG)-$(ARCH):$(TAG) \
 	$(MAKE) test-e2e-run
 
@@ -702,6 +707,14 @@ ifneq ($(WIN_REPO_URL), )
 	curl --retry $(CURL_RETRIES) $(WIN_REPO_URL) -o $(KUBETEST_REPO_LIST_PATH)/custom-repo-list.yaml
 endif
 	$(MAKE) test-conformance CONFORMANCE_E2E_ARGS="-kubetest.config-file=$(KUBETEST_WINDOWS_CONF_PATH) -kubetest.repo-list-path=$(KUBETEST_REPO_LIST_PATH) $(E2E_ARGS)"
+
+## --------------------------------------
+## Security Scanning
+## --------------------------------------
+
+.PHONY: verify-container-images
+verify-container-images: ## Verify container images
+	./hack/verify-container-images.sh
 
 ## --------------------------------------
 ## Tilt / Kind
@@ -785,7 +798,7 @@ $(GINKGO): ## Build ginkgo from tools folder.
 $(KUBECTL): ## Build kubectl from tools folder.
 	mkdir -p $(TOOLS_BIN_DIR)
 	rm -f "$(TOOLS_BIN_DIR)/$(KUBECTL_BIN)*"
-	curl --retry $(CURL_RETRIES) -fsL https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VER)/bin/$(GOOS)/$(GOARCH)/kubectl -o $(KUBECTL)
+	curl --retry $(CURL_RETRIES) -fsL https://dl.k8s.io/release/$(KUBECTL_VER)/bin/$(GOOS)/$(GOARCH)/kubectl -o $(KUBECTL)
 	ln -sf $(KUBECTL) $(TOOLS_BIN_DIR)/$(KUBECTL_BIN)
 	chmod +x $(KUBECTL) $(TOOLS_BIN_DIR)/$(KUBECTL_BIN)
 

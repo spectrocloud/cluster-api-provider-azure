@@ -81,7 +81,7 @@ func (mw *azureManagedMachinePoolWebhook) Default(ctx context.Context, obj runti
 	return nil
 }
 
-//+kubebuilder:webhook:verbs=update;delete,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedmachinepool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedmachinepools,versions=v1beta1,name=validation.azuremanagedmachinepools.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
+//+kubebuilder:webhook:verbs=create;update;delete,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedmachinepool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedmachinepools,versions=v1beta1,name=validation.azuremanagedmachinepools.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (mw *azureManagedMachinePoolWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
@@ -106,6 +106,7 @@ func (mw *azureManagedMachinePoolWebhook) ValidateCreate(ctx context.Context, ob
 		m.validateEnableNodePublicIP,
 		m.validateKubeletConfig,
 		m.validateLinuxOSConfig,
+		m.validateSubnetName,
 	}
 
 	var errs []error
@@ -163,6 +164,13 @@ func (mw *azureManagedMachinePoolWebhook) ValidateUpdate(ctx context.Context, ol
 		field.NewPath("Spec", "OSDiskSizeGB"),
 		old.Spec.OSDiskSizeGB,
 		m.Spec.OSDiskSizeGB); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	if err := webhookutils.ValidateImmutable(
+		field.NewPath("Spec", "SubnetName"),
+		old.Spec.SubnetName,
+		m.Spec.SubnetName); err != nil && old.Spec.SubnetName != nil {
 		allErrs = append(allErrs, err)
 	}
 
@@ -281,7 +289,7 @@ func (m *AzureManagedMachinePool) validateLastSystemNodePool(cli client.Client) 
 	ctx := context.Background()
 
 	// Fetch the Cluster.
-	clusterName, ok := m.Labels[clusterv1.ClusterLabelName]
+	clusterName, ok := m.Labels[clusterv1.ClusterNameLabel]
 	if !ok {
 		return nil
 	}
@@ -306,7 +314,7 @@ func (m *AzureManagedMachinePool) validateLastSystemNodePool(cli client.Client) 
 
 	opt1 := client.InNamespace(m.Namespace)
 	opt2 := client.MatchingLabels(map[string]string{
-		clusterv1.ClusterLabelName: clusterName,
+		clusterv1.ClusterNameLabel: clusterName,
 		LabelAgentPoolMode:         string(NodePoolModeSystem),
 	})
 
@@ -347,13 +355,12 @@ func (m *AzureManagedMachinePool) validateOSType() error {
 }
 
 func (m *AzureManagedMachinePool) validateName() error {
-	if m.Spec.OSType != nil && *m.Spec.OSType == WindowsOS {
-		if len(m.Name) > 6 {
-			return field.Invalid(
-				field.NewPath("Name"),
-				m.Name,
-				"Windows agent pool name can not be longer than 6 characters.")
-		}
+	if m.Spec.OSType != nil && *m.Spec.OSType == WindowsOS &&
+		m.Spec.Name != nil && len(*m.Spec.Name) > 6 {
+		return field.Invalid(
+			field.NewPath("Spec", "Name"),
+			m.Spec.Name,
+			"Windows agent pool name can not be longer than 6 characters.")
 	}
 
 	return nil
@@ -389,6 +396,18 @@ func (m *AzureManagedMachinePool) validateEnableNodePublicIP() error {
 			field.NewPath("Spec", "EnableNodePublicIP"),
 			m.Spec.EnableNodePublicIP,
 			"must be set to true when NodePublicIPPrefixID is set")
+	}
+	return nil
+}
+
+func (m *AzureManagedMachinePool) validateSubnetName() error {
+	if m.Spec.SubnetName != nil {
+		subnetRegex := "^[a-zA-Z0-9][a-zA-Z0-9-]{0,78}[a-zA-Z0-9]$"
+		regex := regexp.MustCompile(subnetRegex)
+		if success := regex.MatchString(pointer.StringDeref(m.Spec.SubnetName, "")); !success {
+			return field.Invalid(field.NewPath("Spec", "SubnetName"), m.Spec.SubnetName,
+				fmt.Sprintf("name of subnet doesn't match regex %s", subnetRegex))
+		}
 	}
 	return nil
 }

@@ -103,9 +103,6 @@ var _ = Describe("Conformance Tests", func() {
 
 		kubernetesVersion := e2eConfig.GetVariable(capi_e2e.KubernetesVersion)
 		flavor := e2eConfig.GetVariable("CONFORMANCE_FLAVOR")
-		if isWindows(kubetestConfigFilePath) {
-			flavor = getWindowsFlavor()
-		}
 
 		// clusters with CI artifacts or PR artifacts are based on a known CI version
 		// PR artifacts will replace the CI artifacts during kubeadm init
@@ -118,10 +115,6 @@ var _ = Describe("Conformance Tests", func() {
 				flavor = "conformance-ci-artifacts"
 			} else if usePRArtifacts {
 				flavor = "conformance-presubmit-artifacts"
-			}
-
-			if isWindows(kubetestConfigFilePath) {
-				flavor = flavor + "-" + getWindowsFlavor()
 			}
 		}
 
@@ -147,15 +140,6 @@ var _ = Describe("Conformance Tests", func() {
 			// Conformance for windows doesn't require any linux worker machines.
 			// The templates use WORKER_MACHINE_COUNT for linux machines for backwards compatibility so clear it
 			linuxWorkerMachineCount = 0
-
-			// Can only enable HostProcessContainers Feature gate in versions that know about it.
-			v122 := semver.MustParse("1.22.0")
-			v, err := semver.ParseTolerant(kubernetesVersion)
-			Expect(err).NotTo(HaveOccurred())
-			if v.GTE(v122) {
-				// Opt into using WindowsHostProcessContainers
-				Expect(os.Setenv("K8S_FEATURE_GATES", "WindowsHostProcessContainers=true,HPAContainerMetrics=true")).To(Succeed())
-			}
 		}
 
 		controlPlaneMachineCount, err := strconv.ParseInt(e2eConfig.GetVariable("CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT"), 10, 64)
@@ -255,17 +239,6 @@ var _ = Describe("Conformance Tests", func() {
 	})
 
 })
-
-// getWindowsFlavor helps choose the correct deployment files. Windows has multiple OS and runtime options that need
-// to be run for conformance.  Current valid options are blank (dockershim) and containerd.  In future will have options
-// for OS version
-func getWindowsFlavor() string {
-	additionalWindowsFlavor := os.Getenv("WINDOWS_FLAVOR")
-	if additionalWindowsFlavor != "" {
-		return "windows" + "-" + additionalWindowsFlavor
-	}
-	return "windows"
-}
 
 func isWindows(kubetestConfigFilePath string) bool {
 	return strings.Contains(kubetestConfigFilePath, "windows")

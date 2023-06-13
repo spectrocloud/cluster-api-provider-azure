@@ -45,21 +45,28 @@ func InstallCalicoAndCloudProviderAzureHelmChart(ctx context.Context, input clus
 	specName := "cloud-provider-azure-install"
 	By("Installing cloud-provider-azure components via helm")
 	options := &helmVals.Options{
-		Values:       []string{fmt.Sprintf("infra.clusterName=%s", input.ConfigCluster.ClusterName)},
+		Values: []string{
+			fmt.Sprintf("infra.clusterName=%s", input.ConfigCluster.ClusterName),
+			"cloudControllerManager.logVerbosity=4",
+		},
 		StringValues: []string{fmt.Sprintf("cloudControllerManager.clusterCIDR=%s", strings.Join(cidrBlocks, `\,`))},
 	}
 	// If testing a CI version of Kubernetes, use CCM and CNM images built from source.
-	if useCIArtifacts {
+	if useCIArtifacts || usePRArtifacts {
 		options.Values = append(options.Values, fmt.Sprintf("cloudControllerManager.imageName=%s", os.Getenv("CCM_IMAGE_NAME")))
 		options.Values = append(options.Values, fmt.Sprintf("cloudNodeManager.imageName=%s", os.Getenv("CNM_IMAGE_NAME")))
 		options.Values = append(options.Values, fmt.Sprintf("cloudControllerManager.imageRepository=%s", os.Getenv("IMAGE_REGISTRY")))
 		options.Values = append(options.Values, fmt.Sprintf("cloudNodeManager.imageRepository=%s", os.Getenv("IMAGE_REGISTRY")))
-		options.StringValues = append(options.StringValues, fmt.Sprintf("cloudControllerManager.imageTag=%s", os.Getenv("IMAGE_TAG")))
-		options.StringValues = append(options.StringValues, fmt.Sprintf("cloudNodeManager.imageTag=%s", os.Getenv("IMAGE_TAG")))
+		options.StringValues = append(options.StringValues, fmt.Sprintf("cloudControllerManager.imageTag=%s", os.Getenv("IMAGE_TAG_CCM")))
+		options.StringValues = append(options.StringValues, fmt.Sprintf("cloudNodeManager.imageTag=%s", os.Getenv("IMAGE_TAG_CNM")))
+	}
+
+	if input.ConfigCluster.Flavor == "flatcar" {
+		options.StringValues = append(options.StringValues, "cloudControllerManager.caCertDir=/usr/share/ca-certificates")
 	}
 
 	clusterProxy := input.ClusterProxy.GetWorkloadCluster(ctx, input.ConfigCluster.Namespace, input.ConfigCluster.ClusterName)
-	InstallHelmChart(ctx, clusterProxy, defaultNamespace, cloudProviderAzureHelmRepoURL, cloudProviderAzureChartName, cloudProviderAzureHelmReleaseName, options)
+	InstallHelmChart(ctx, clusterProxy, defaultNamespace, cloudProviderAzureHelmRepoURL, cloudProviderAzureChartName, cloudProviderAzureHelmReleaseName, options, "")
 
 	// Install Calico CNI Helm Chart. We do this before waiting for the pods to be ready because there is a co-dependency between CNI (nodes ready) and cloud-provider being initialized.
 	InstallCalicoHelmChart(ctx, input, cidrBlocks, hasWindows)
@@ -83,7 +90,7 @@ func InstallAzureDiskCSIDriverHelmChart(ctx context.Context, input clusterctl.Ap
 		options.Values = append(options.Values, "windows.useHostProcessContainers=true")
 	}
 	clusterProxy := input.ClusterProxy.GetWorkloadCluster(ctx, input.ConfigCluster.Namespace, input.ConfigCluster.ClusterName)
-	InstallHelmChart(ctx, clusterProxy, kubesystem, azureDiskCSIDriverHelmRepoURL, azureDiskCSIDriverChartName, azureDiskCSIDriverHelmReleaseName, options)
+	InstallHelmChart(ctx, clusterProxy, kubesystem, azureDiskCSIDriverHelmRepoURL, azureDiskCSIDriverChartName, azureDiskCSIDriverHelmReleaseName, options, "")
 	By("Waiting for Ready csi-azuredisk-controller deployment pods")
 	for _, d := range []string{"csi-azuredisk-controller"} {
 		waitInput := GetWaitForDeploymentsAvailableInput(ctx, clusterProxy, d, kubesystem, specName)

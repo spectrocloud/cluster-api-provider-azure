@@ -155,7 +155,7 @@ func (amcpr *AzureManagedControlPlaneReconciler) Reconcile(ctx context.Context, 
 	// Fetch all the ManagedMachinePools owned by this Cluster.
 	opt1 := client.InNamespace(azureControlPlane.Namespace)
 	opt2 := client.MatchingLabels(map[string]string{
-		clusterv1.ClusterLabelName: cluster.Name,
+		clusterv1.ClusterNameLabel: cluster.Name,
 	})
 
 	ammpList := &infrav1.AzureManagedMachinePoolList{}
@@ -223,14 +223,14 @@ func (amcpr *AzureManagedControlPlaneReconciler) reconcileNormal(ctx context.Con
 
 	log.Info("Reconciling AzureManagedControlPlane")
 
-	// Remove deprecated Cluster finalizer if it exists.
-	controllerutil.RemoveFinalizer(scope.ControlPlane, infrav1.ClusterFinalizer)
-	// If the AzureManagedControlPlane doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(scope.ControlPlane, infrav1.ManagedClusterFinalizer)
-	// Register the finalizer immediately to avoid orphaning Azure resources on delete
-	if err := scope.PatchObject(ctx); err != nil {
-		amcpr.Recorder.Eventf(scope.ControlPlane, corev1.EventTypeWarning, "AzureManagedControlPlane unavailable", "failed to patch resource: %s", err)
-		return reconcile.Result{}, err
+	// Remove deprecated Cluster finalizer if it exists, if the AzureManagedControlPlane doesn't have our finalizer, add it.
+	if controllerutil.RemoveFinalizer(scope.ControlPlane, infrav1.ClusterFinalizer) ||
+		controllerutil.AddFinalizer(scope.ControlPlane, infrav1.ManagedClusterFinalizer) {
+		// Register the finalizer immediately to avoid orphaning Azure resources on delete
+		if err := scope.PatchObject(ctx); err != nil {
+			amcpr.Recorder.Eventf(scope.ControlPlane, corev1.EventTypeWarning, "AzureManagedControlPlane unavailable", "failed to patch resource: %s", err)
+			return reconcile.Result{}, err
+		}
 	}
 
 	if err := newAzureManagedControlPlaneReconciler(scope).Reconcile(ctx); err != nil {
@@ -270,6 +270,16 @@ func (amcpr *AzureManagedControlPlaneReconciler) reconcileDelete(ctx context.Con
 	log.Info("Reconciling AzureManagedControlPlane delete")
 
 	if err := newAzureManagedControlPlaneReconciler(scope).Delete(ctx); err != nil {
+		// Handle transient errors
+		var reconcileError azure.ReconcileError
+		if errors.As(err, &reconcileError) && reconcileError.IsTransient() {
+			if azure.IsOperationNotDoneError(reconcileError) {
+				log.V(2).Info(fmt.Sprintf("AzureManagedControlPlane delete not done: %s", reconcileError.Error()))
+			} else {
+				log.V(2).Info("transient failure to delete AzureManagedControlPlane, retrying")
+			}
+			return reconcile.Result{RequeueAfter: reconcileError.RequeueAfter()}, nil
+		}
 		return reconcile.Result{}, errors.Wrapf(err, "error deleting AzureManagedControlPlane %s/%s", scope.ControlPlane.Namespace, scope.ControlPlane.Name)
 	}
 

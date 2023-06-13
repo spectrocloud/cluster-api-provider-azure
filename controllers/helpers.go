@@ -110,7 +110,7 @@ func AzureClusterToAzureMachinesMapper(ctx context.Context, c client.Client, obj
 		machineList := &clusterv1.MachineList{}
 		machineList.SetGroupVersionKind(gvk)
 		// list all of the requested objects within the cluster namespace with the cluster name label
-		if err := c.List(ctx, machineList, client.InNamespace(azCluster.Namespace), client.MatchingLabels{clusterv1.ClusterLabelName: clusterName}); err != nil {
+		if err := c.List(ctx, machineList, client.InNamespace(azCluster.Namespace), client.MatchingLabels{clusterv1.ClusterNameLabel: clusterName}); err != nil {
 			return nil
 		}
 
@@ -146,7 +146,7 @@ func GetOwnerClusterName(obj metav1.ObjectMeta) (string, bool) {
 // GetObjectsToRequestsByNamespaceAndClusterName returns the slice of ctrl.Requests consisting the list items contained in the unstructured list.
 func GetObjectsToRequestsByNamespaceAndClusterName(ctx context.Context, c client.Client, clusterKey client.ObjectKey, list *unstructured.UnstructuredList) []ctrl.Request {
 	// list all of the requested objects within the cluster namespace with the cluster name label
-	if err := c.List(ctx, list, client.InNamespace(clusterKey.Namespace), client.MatchingLabels{clusterv1.ClusterLabelName: clusterKey.Name}); err != nil {
+	if err := c.List(ctx, list, client.InNamespace(clusterKey.Namespace), client.MatchingLabels{clusterv1.ClusterNameLabel: clusterKey.Name}); err != nil {
 		return nil
 	}
 
@@ -404,7 +404,7 @@ func toCloudProviderRateLimitConfig(source infrav1.RateLimitConfig) *RateLimitCo
 }
 
 // CloudProviderRateLimitConfig represents the rate limiting configurations in azure cloud provider config.
-// See: https://kubernetes-sigs.github.io/cloud-provider-azure/install/configs/#per-client-rate-limiting.
+// See: https://cloud-provider-azure.sigs.k8s.io/install/configs/#per-client-rate-limiting.
 // This is a copy of the struct used in cloud-provider-azure: https://github.com/kubernetes-sigs/cloud-provider-azure/blob/d585c2031925b39c925624302f22f8856e29e352/pkg/provider/azure_ratelimit.go#L25
 type CloudProviderRateLimitConfig struct {
 	RateLimitConfig
@@ -649,20 +649,24 @@ func EnsureClusterIdentity(ctx context.Context, c client.Client, object conditio
 	if err != nil {
 		return err
 	}
+
 	if !scope.IsClusterNamespaceAllowed(ctx, c, identity.Spec.AllowedNamespaces, namespace) {
 		conditions.MarkFalse(object, infrav1.NetworkInfrastructureReadyCondition, infrav1.NamespaceNotAllowedByIdentity, clusterv1.ConditionSeverityError, "")
 		return errors.New("AzureClusterIdentity list of allowed namespaces doesn't include current cluster namespace")
 	}
-	identityHelper, err := patch.NewHelper(identity, c)
-	if err != nil {
-		return errors.Wrap(err, "failed to init patch helper")
+
+	// Remove deprecated finalizer if it exists, Register the finalizer immediately to avoid orphaning Azure resources on delete.
+	if controllerutil.RemoveFinalizer(identity, deprecatedClusterIdentityFinalizer(finalizerPrefix, namespace, name)) ||
+		controllerutil.AddFinalizer(identity, clusterIdentityFinalizer(finalizerPrefix, namespace, name)) {
+		// finalizers are added/removed then patch the object
+		identityHelper, err := patch.NewHelper(identity, c)
+		if err != nil {
+			return errors.Wrap(err, "failed to init patch helper")
+		}
+		return identityHelper.Patch(ctx, identity)
 	}
-	// Remove deprecated finalizer if it exists.
-	controllerutil.RemoveFinalizer(identity, deprecatedClusterIdentityFinalizer(finalizerPrefix, namespace, name))
-	// If the AzureClusterIdentity doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(identity, clusterIdentityFinalizer(finalizerPrefix, namespace, name))
-	// Register the finalizer immediately to avoid orphaning Azure resources on delete.
-	return identityHelper.Patch(ctx, identity)
+
+	return nil
 }
 
 // RemoveClusterIdentityFinalizer removes the finalizer on an AzureClusterIdentity.
@@ -752,7 +756,7 @@ func AzureManagedClusterToAzureManagedMachinePoolsMapper(ctx context.Context, c 
 		machineList := &expv1.MachinePoolList{}
 		machineList.SetGroupVersionKind(gvk)
 		// list all of the requested objects within the cluster namespace with the cluster name label
-		if err := c.List(ctx, machineList, client.InNamespace(azCluster.Namespace), client.MatchingLabels{clusterv1.ClusterLabelName: clusterName}); err != nil {
+		if err := c.List(ctx, machineList, client.InNamespace(azCluster.Namespace), client.MatchingLabels{clusterv1.ClusterNameLabel: clusterName}); err != nil {
 			return nil
 		}
 
@@ -805,7 +809,7 @@ func AzureManagedControlPlaneToAzureManagedMachinePoolsMapper(ctx context.Contex
 		machineList := &expv1.MachinePoolList{}
 		machineList.SetGroupVersionKind(gvk)
 		// list all of the requested objects within the cluster namespace with the cluster name label
-		if err := c.List(ctx, machineList, client.InNamespace(azControlPlane.Namespace), client.MatchingLabels{clusterv1.ClusterLabelName: clusterName}); err != nil {
+		if err := c.List(ctx, machineList, client.InNamespace(azControlPlane.Namespace), client.MatchingLabels{clusterv1.ClusterNameLabel: clusterName}); err != nil {
 			return nil
 		}
 

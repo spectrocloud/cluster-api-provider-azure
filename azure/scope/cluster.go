@@ -27,10 +27,12 @@ import (
 
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
+	"sigs.k8s.io/cluster-api-provider-azure/azure/services/asogroups"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/bastionhosts"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/groups"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/loadbalancers"
@@ -132,6 +134,11 @@ func (s *ClusterScope) BaseURI() string {
 // Authorizer returns the Azure client Authorizer.
 func (s *ClusterScope) Authorizer() autorest.Authorizer {
 	return s.AzureClients.Authorizer
+}
+
+// GetClient returns the controller-runtime client.
+func (s *ClusterScope) GetClient() client.Client {
+	return s.Client
 }
 
 // PublicIPSpecs returns the public IP specs.
@@ -420,25 +427,45 @@ func (s *ClusterScope) GroupSpec() azure.ResourceSpecGetter {
 	}
 }
 
+// ASOGroupSpec returns the resource group spec.
+func (s *ClusterScope) ASOGroupSpec() azure.ASOResourceSpecGetter {
+	return &asogroups.GroupSpec{
+		Name:           s.ResourceGroup(),
+		Namespace:      s.Namespace(),
+		Location:       s.Location(),
+		ClusterName:    s.ClusterName(),
+		AdditionalTags: s.AdditionalTags(),
+		Owner:          *metav1.NewControllerRef(s.AzureCluster, infrav1.GroupVersion.WithKind("AzureCluster")),
+	}
+}
+
 // VnetPeeringSpecs returns the virtual network peering specs.
 func (s *ClusterScope) VnetPeeringSpecs() []azure.ResourceSpecGetter {
 	peeringSpecs := make([]azure.ResourceSpecGetter, 2*len(s.Vnet().Peerings))
 	for i, peering := range s.Vnet().Peerings {
 		forwardPeering := &vnetpeerings.VnetPeeringSpec{
-			PeeringName:         azure.GenerateVnetPeeringName(s.Vnet().Name, peering.RemoteVnetName),
-			SourceVnetName:      s.Vnet().Name,
-			SourceResourceGroup: s.Vnet().ResourceGroup,
-			RemoteVnetName:      peering.RemoteVnetName,
-			RemoteResourceGroup: peering.ResourceGroup,
-			SubscriptionID:      s.SubscriptionID(),
+			PeeringName:               azure.GenerateVnetPeeringName(s.Vnet().Name, peering.RemoteVnetName),
+			SourceVnetName:            s.Vnet().Name,
+			SourceResourceGroup:       s.Vnet().ResourceGroup,
+			RemoteVnetName:            peering.RemoteVnetName,
+			RemoteResourceGroup:       peering.ResourceGroup,
+			SubscriptionID:            s.SubscriptionID(),
+			AllowForwardedTraffic:     peering.ForwardPeeringProperties.AllowForwardedTraffic,
+			AllowGatewayTransit:       peering.ForwardPeeringProperties.AllowGatewayTransit,
+			AllowVirtualNetworkAccess: peering.ForwardPeeringProperties.AllowVirtualNetworkAccess,
+			UseRemoteGateways:         peering.ForwardPeeringProperties.UseRemoteGateways,
 		}
 		reversePeering := &vnetpeerings.VnetPeeringSpec{
-			PeeringName:         azure.GenerateVnetPeeringName(peering.RemoteVnetName, s.Vnet().Name),
-			SourceVnetName:      peering.RemoteVnetName,
-			SourceResourceGroup: peering.ResourceGroup,
-			RemoteVnetName:      s.Vnet().Name,
-			RemoteResourceGroup: s.Vnet().ResourceGroup,
-			SubscriptionID:      s.SubscriptionID(),
+			PeeringName:               azure.GenerateVnetPeeringName(peering.RemoteVnetName, s.Vnet().Name),
+			SourceVnetName:            peering.RemoteVnetName,
+			SourceResourceGroup:       peering.ResourceGroup,
+			RemoteVnetName:            s.Vnet().Name,
+			RemoteResourceGroup:       s.Vnet().ResourceGroup,
+			SubscriptionID:            s.SubscriptionID(),
+			AllowForwardedTraffic:     peering.ReversePeeringProperties.AllowForwardedTraffic,
+			AllowGatewayTransit:       peering.ReversePeeringProperties.AllowGatewayTransit,
+			AllowVirtualNetworkAccess: peering.ReversePeeringProperties.AllowVirtualNetworkAccess,
+			UseRemoteGateways:         peering.ReversePeeringProperties.UseRemoteGateways,
 		}
 		peeringSpecs[i*2] = forwardPeering
 		peeringSpecs[i*2+1] = reversePeering
@@ -789,7 +816,7 @@ func (s *ClusterScope) GenerateLegacyFQDN() (ip string, domain string) {
 // ListOptionsLabelSelector returns a ListOptions with a label selector for clusterName.
 func (s *ClusterScope) ListOptionsLabelSelector() client.ListOption {
 	return client.MatchingLabels(map[string]string{
-		clusterv1.ClusterLabelName: s.Cluster.Name,
+		clusterv1.ClusterNameLabel: s.Cluster.Name,
 	})
 }
 

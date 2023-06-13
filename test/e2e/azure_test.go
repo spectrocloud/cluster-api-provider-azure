@@ -84,7 +84,7 @@ var _ = Describe("Workload cluster creation", func() {
 				Name:      "cluster-identity-secret",
 				Namespace: defaultNamespace,
 				Labels: map[string]string{
-					clusterctlv1.ClusterctlMoveHierarchyLabelName: "true",
+					clusterctlv1.ClusterctlMoveHierarchyLabel: "true",
 				},
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -213,7 +213,6 @@ var _ = Describe("Workload cluster creation", func() {
 
 			// Opt into using windows with prow template
 			Expect(os.Setenv("WINDOWS_WORKER_MACHINE_COUNT", "2")).To(Succeed())
-			Expect(os.Setenv("K8S_FEATURE_GATES", "WindowsHostProcessContainers=true")).To(Succeed())
 
 			clusterctl.ApplyClusterTemplateAndWait(ctx, createApplyClusterTemplateInput(
 				specName,
@@ -298,7 +297,6 @@ var _ = Describe("Workload cluster creation", func() {
 	Context("Creating a Flatcar cluster [OPTIONAL]", func() {
 		It("With Flatcar control-plane and worker nodes", func() {
 			clusterName = getClusterName(clusterNamePrefix, "flatcar")
-
 			clusterctl.ApplyClusterTemplateAndWait(ctx, createApplyClusterTemplateInput(
 				specName,
 				withFlavor("flatcar"),
@@ -310,7 +308,27 @@ var _ = Describe("Workload cluster creation", func() {
 				withControlPlaneWaiters(clusterctl.ControlPlaneWaiters{
 					WaitForControlPlaneInitialized: EnsureControlPlaneInitialized,
 				}),
+				withPostMachinesProvisioned(func() {
+					EnsureDaemonsets(ctx, func() DaemonsetsSpecInput {
+						return DaemonsetsSpecInput{
+							BootstrapClusterProxy: bootstrapClusterProxy,
+							Namespace:             namespace,
+							ClusterName:           clusterName,
+						}
+					})
+				}),
 			), result)
+
+			By("can create and access a load balancer", func() {
+				AzureLBSpec(ctx, func() AzureLBSpecInput {
+					return AzureLBSpecInput{
+						BootstrapClusterProxy: bootstrapClusterProxy,
+						Namespace:             namespace,
+						ClusterName:           clusterName,
+						SkipCleanup:           skipCleanup,
+					}
+				})
+			})
 		})
 	})
 
@@ -374,7 +392,6 @@ var _ = Describe("Workload cluster creation", func() {
 
 			// Opt into using windows with prow template
 			Expect(os.Setenv("WINDOWS_WORKER_MACHINE_COUNT", "2")).To(Succeed())
-			Expect(os.Setenv("K8S_FEATURE_GATES", "WindowsHostProcessContainers=true")).To(Succeed())
 
 			clusterctl.ApplyClusterTemplateAndWait(ctx, createApplyClusterTemplateInput(
 				specName,
@@ -433,17 +450,16 @@ var _ = Describe("Workload cluster creation", func() {
 				})
 			})
 
-			// TODO: Implement more robust cordon and drain test
-			// By("Cordon and draining a node", func() {
-			// 	AzureMachinePoolDrainSpec(ctx, func() AzureMachinePoolDrainSpecInput {
-			// 		return AzureMachinePoolDrainSpecInput{
-			// 			BootstrapClusterProxy: bootstrapClusterProxy,
-			// 			Namespace:             namespace,
-			// 			ClusterName:           clusterName,
-			// 			SkipCleanup:           skipCleanup,
-			// 		}
-			// 	})
-			// })
+			By("Cordon and draining a node", func() {
+				AzureMachinePoolDrainSpec(ctx, func() AzureMachinePoolDrainSpecInput {
+					return AzureMachinePoolDrainSpecInput{
+						BootstrapClusterProxy: bootstrapClusterProxy,
+						Namespace:             namespace,
+						ClusterName:           clusterName,
+						SkipCleanup:           skipCleanup,
+					}
+				})
+			})
 
 			By("PASSED!")
 		})
@@ -824,7 +840,6 @@ var _ = Describe("Workload cluster creation", func() {
 
 			// Opt into using windows with prow template
 			Expect(os.Setenv("WINDOWS_WORKER_MACHINE_COUNT", "1")).To(Succeed())
-			Expect(os.Setenv("K8S_FEATURE_GATES", "WindowsHostProcessContainers=true")).To(Succeed())
 
 			// Create a cluster using the cluster class created above
 			clusterctl.ApplyClusterTemplateAndWait(ctx, createApplyClusterTemplateInput(

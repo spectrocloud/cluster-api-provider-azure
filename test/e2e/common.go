@@ -32,6 +32,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/blang/semver"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -83,6 +84,7 @@ const (
 	FlatcarVersion                  = "FLATCAR_VERSION"
 	SecurityScanFailThreshold       = "SECURITY_SCAN_FAIL_THRESHOLD"
 	SecurityScanContainer           = "SECURITY_SCAN_CONTAINER"
+	CalicoVersion                   = "CALICO_VERSION"
 	ManagedClustersResourceType     = "managedClusters"
 	capiImagePublisher              = "cncf-upstream"
 	capiOfferName                   = "capi"
@@ -294,10 +296,10 @@ func EnsureControlPlaneInitialized(ctx context.Context, input clusterctl.ApplyCl
 // CheckTestBeforeCleanup checks to see if the current running Ginkgo test failed, and prints
 // a status message regarding cleanup.
 func CheckTestBeforeCleanup() {
-	if CurrentGinkgoTestDescription().Failed {
+	if CurrentSpecReport().State.Is(types.SpecStateFailureStates) {
 		Logf("FAILED!")
 	}
-	Logf("Cleaning up after \"%s\" spec", CurrentGinkgoTestDescription().FullTestText)
+	Logf("Cleaning up after \"%s\" spec", CurrentSpecReport().FullText())
 }
 
 func discoveryAndWaitForControlPlaneInitialized(ctx context.Context, input clusterctl.ApplyClusterTemplateAndWaitInput, result *clusterctl.ApplyClusterTemplateAndWaitResult) *kubeadmv1.KubeadmControlPlane {
@@ -319,8 +321,8 @@ func createApplyClusterTemplateInput(specName string, changes ...func(*clusterct
 			Namespace:                "default",
 			ClusterName:              "cluster",
 			KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
-			ControlPlaneMachineCount: pointer.Int64Ptr(1),
-			WorkerMachineCount:       pointer.Int64Ptr(1),
+			ControlPlaneMachineCount: pointer.Int64(1),
+			WorkerMachineCount:       pointer.Int64(1),
 		},
 		WaitForClusterIntervals:      e2eConfig.GetIntervals(specName, "wait-cluster"),
 		WaitForControlPlaneIntervals: e2eConfig.GetIntervals(specName, "wait-control-plane"),
@@ -365,13 +367,13 @@ func withKubernetesVersion(version string) func(*clusterctl.ApplyClusterTemplate
 
 func withControlPlaneMachineCount(count int64) func(*clusterctl.ApplyClusterTemplateAndWaitInput) {
 	return func(input *clusterctl.ApplyClusterTemplateAndWaitInput) {
-		input.ConfigCluster.ControlPlaneMachineCount = pointer.Int64Ptr(count)
+		input.ConfigCluster.ControlPlaneMachineCount = pointer.Int64(count)
 	}
 }
 
 func withWorkerMachineCount(count int64) func(*clusterctl.ApplyClusterTemplateAndWaitInput) {
 	return func(input *clusterctl.ApplyClusterTemplateAndWaitInput) {
-		input.ConfigCluster.WorkerMachineCount = pointer.Int64Ptr(count)
+		input.ConfigCluster.WorkerMachineCount = pointer.Int64(count)
 	}
 }
 

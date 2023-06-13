@@ -24,7 +24,7 @@ import (
 	"io"
 	"strings"
 
-	azureautorest "github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,6 +140,7 @@ func (m *MachinePoolScope) ScaleSetSpec() azure.ScaleSetSpec {
 		FailureDomains:               m.MachinePool.Spec.FailureDomains,
 		TerminateNotificationTimeout: m.AzureMachinePool.Spec.Template.TerminateNotificationTimeout,
 		NetworkInterfaces:            m.AzureMachinePool.Spec.Template.NetworkInterfaces,
+		IPv6Enabled:                  m.IsIPv6Enabled(),
 		OrchestrationMode:            m.AzureMachinePool.Spec.OrchestrationMode,
 	}
 }
@@ -269,7 +270,7 @@ func (m *MachinePoolScope) getMachinePoolMachines(ctx context.Context) ([]infrav
 	defer done()
 
 	labels := map[string]string{
-		clusterv1.ClusterLabelName:      m.ClusterName(),
+		clusterv1.ClusterNameLabel:      m.ClusterName(),
 		infrav1exp.MachinePoolNameLabel: m.AzureMachinePool.Name,
 	}
 	ampml := &infrav1exp.AzureMachinePoolMachineList{}
@@ -290,7 +291,7 @@ func (m *MachinePoolScope) applyAzureMachinePoolMachines(ctx context.Context) er
 	}
 
 	labels := map[string]string{
-		clusterv1.ClusterLabelName:      m.ClusterName(),
+		clusterv1.ClusterNameLabel:      m.ClusterName(),
 		infrav1exp.MachinePoolNameLabel: m.AzureMachinePool.Name,
 	}
 	ampml := &infrav1exp.AzureMachinePoolMachineList{}
@@ -377,11 +378,11 @@ func (m *MachinePoolScope) createMachine(ctx context.Context, machine azure.VMSS
 	ctx, _, done := tele.StartSpanWithLogger(ctx, "scope.MachinePoolScope.createMachine")
 	defer done()
 
-	parsed, err := azureautorest.ParseResourceID(machine.ID)
+	parsed, err := arm.ParseResourceID(machine.ID)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to parse resource id %q", machine.ID))
 	}
-	instanceID := strings.ReplaceAll(parsed.ResourceName, "_", "-")
+	instanceID := strings.ReplaceAll(parsed.Name, "_", "-")
 
 	ampm := infrav1exp.AzureMachinePoolMachine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -398,7 +399,7 @@ func (m *MachinePoolScope) createMachine(ctx context.Context, machine azure.VMSS
 			},
 			Labels: map[string]string{
 				m.ClusterName():                 string(infrav1.ResourceLifecycleOwned),
-				clusterv1.ClusterLabelName:      m.ClusterName(),
+				clusterv1.ClusterNameLabel:      m.ClusterName(),
 				infrav1exp.MachinePoolNameLabel: m.AzureMachinePool.Name,
 			},
 		},

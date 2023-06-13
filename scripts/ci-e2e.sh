@@ -57,6 +57,13 @@ if [[ "${BUILD_MANAGER_IMAGE}" == "true" ]]; then
   export TAG="${defaultTag:-dev}"
 fi
 
+if [[ "$(capz::util::should_build_ccm)" == "true" ]]; then
+  # shellcheck source=scripts/ci-build-azure-ccm.sh
+  source "${REPO_ROOT}/scripts/ci-build-azure-ccm.sh"
+  echo "Will use the ${IMAGE_REGISTRY}/${CCM_IMAGE_NAME}:${IMAGE_TAG_CCM} cloud-controller-manager image for external cloud-provider-cluster"
+  echo "Will use the ${IMAGE_REGISTRY}/${CNM_IMAGE_NAME}:${IMAGE_TAG_CNM} cloud-node-manager image for external cloud-provider-azure cluster"
+fi
+
 export GINKGO_NODES=10
 
 export AZURE_LOCATION="${AZURE_LOCATION:-$(capz::util::get_random_region)}"
@@ -64,7 +71,9 @@ export AZURE_LOCATION_GPU="${AZURE_LOCATION_GPU:-$(capz::util::get_random_region
 export AZURE_LOCATION_EDGEZONE="${AZURE_LOCATION_EDGEZONE:-$(capz::util::get_random_region_edgezone)}"
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="${AZURE_CONTROL_PLANE_MACHINE_TYPE:-"Standard_B2s"}"
 export AZURE_NODE_MACHINE_TYPE="${AZURE_NODE_MACHINE_TYPE:-"Standard_B2s"}"
-export KIND_EXPERIMENTAL_DOCKER_NETWORK="bridge"
+CALICO_VERSION=$(make get-calico-version)
+export CALICO_VERSION
+
 
 capz::util::generate_ssh_key
 

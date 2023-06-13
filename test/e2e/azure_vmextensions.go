@@ -23,8 +23,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
-	azureautorest "github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -68,8 +68,8 @@ func AzureVMExtensionsSpec(ctx context.Context, inputGetter func() AzureVMExtens
 	By("Retrieving all machines from the machine template spec")
 	machineList := &infrav1.AzureMachineList{}
 	// list all of the requested objects within the cluster namespace with the cluster name label
-	Logf("Listing machines in namespace %s with label %s=%s", input.Namespace.Name, clusterv1.ClusterLabelName, workloadClusterProxy.GetName())
-	err := mgmtClient.List(ctx, machineList, client.InNamespace(input.Namespace.Name), client.MatchingLabels{clusterv1.ClusterLabelName: workloadClusterProxy.GetName()})
+	Logf("Listing machines in namespace %s with label %s=%s", input.Namespace.Name, clusterv1.ClusterNameLabel, workloadClusterProxy.GetName())
+	err := mgmtClient.List(ctx, machineList, client.InNamespace(input.Namespace.Name), client.MatchingLabels{clusterv1.ClusterNameLabel: workloadClusterProxy.GetName()})
 	Expect(err).NotTo(HaveOccurred())
 
 	// get subscription id
@@ -99,15 +99,15 @@ func AzureVMExtensionsSpec(ctx context.Context, inputGetter func() AzureVMExtens
 
 		// get the resource group name
 		resourceID := strings.TrimPrefix(*machineList.Items[0].Spec.ProviderID, azure.ProviderIDPrefix)
-		resource, err := azureautorest.ParseResourceID(resourceID)
+		resource, err := arm.ParseResourceID(resourceID)
 		Expect(err).NotTo(HaveOccurred())
 
-		vmListResults, err := vmClient.List(ctx, resource.ResourceGroup, "")
+		vmListResults, err := vmClient.List(ctx, resource.ResourceGroupName, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verifying specified VM extensions are created on Azure")
 		for _, machine := range vmListResults.Values() {
-			vmExtensionListResult, err := vmExtensionsClient.List(ctx, resource.ResourceGroup, *machine.Name, "")
+			vmExtensionListResult, err := vmExtensionsClient.List(ctx, resource.ResourceGroupName, *machine.Name, "")
 			Expect(err).NotTo(HaveOccurred())
 			vmExtensionList := *vmExtensionListResult.Value
 			var vmExtensionNames []string
@@ -123,8 +123,8 @@ func AzureVMExtensionsSpec(ctx context.Context, inputGetter func() AzureVMExtens
 	By("Retrieving all machine pools from the machine template spec")
 	machinePoolList := &infrav1exp.AzureMachinePoolList{}
 	// list all of the requested objects within the cluster namespace with the cluster name label
-	Logf("Listing machine pools in namespace %s with label %s=%s", input.Namespace.Name, clusterv1.ClusterLabelName, workloadClusterProxy.GetName())
-	err = mgmtClient.List(ctx, machinePoolList, client.InNamespace(input.Namespace.Name), client.MatchingLabels{clusterv1.ClusterLabelName: workloadClusterProxy.GetName()})
+	Logf("Listing machine pools in namespace %s with label %s=%s", input.Namespace.Name, clusterv1.ClusterNameLabel, workloadClusterProxy.GetName())
+	err = mgmtClient.List(ctx, machinePoolList, client.InNamespace(input.Namespace.Name), client.MatchingLabels{clusterv1.ClusterNameLabel: workloadClusterProxy.GetName()})
 	Expect(err).NotTo(HaveOccurred())
 
 	if len(machinePoolList.Items) > 0 {
@@ -147,15 +147,15 @@ func AzureVMExtensionsSpec(ctx context.Context, inputGetter func() AzureVMExtens
 
 		// get the resource group name
 		resourceID := strings.TrimPrefix(machinePoolList.Items[0].Spec.ProviderID, azure.ProviderIDPrefix)
-		resource, err := azureautorest.ParseResourceID(resourceID)
+		resource, err := arm.ParseResourceID(resourceID)
 		Expect(err).NotTo(HaveOccurred())
 
-		vmssListResults, err := vmssClient.List(ctx, resource.ResourceGroup)
+		vmssListResults, err := vmssClient.List(ctx, resource.ResourceGroupName)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verifying VMSS extensions are created on Azure")
 		for _, machinePool := range vmssListResults.Values() {
-			vmssExtensionListResult, err := vmssExtensionsClient.List(ctx, resource.ResourceGroup, *machinePool.Name)
+			vmssExtensionListResult, err := vmssExtensionsClient.List(ctx, resource.ResourceGroupName, *machinePool.Name)
 			Expect(err).NotTo(HaveOccurred())
 			vmssExtensionList := vmssExtensionListResult.Values()
 			var vmssExtensionNames []string

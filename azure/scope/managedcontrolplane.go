@@ -30,6 +30,7 @@ import (
 	"k8s.io/utils/pointer"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
+	"sigs.k8s.io/cluster-api-provider-azure/azure/services/asogroups"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/groups"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/managedclusters"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/privateendpoints"
@@ -73,7 +74,7 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 	}
 
 	if params.ControlPlane.Spec.IdentityRef == nil {
-		if err := params.AzureClients.setCredentials(params.ControlPlane.Spec.SubscriptionID, ""); err != nil {
+		if err := params.AzureClients.setCredentials(params.ControlPlane.Spec.SubscriptionID, params.ControlPlane.Spec.AzureEnvironment); err != nil {
 			return nil, errors.Wrap(err, "failed to create Azure session")
 		}
 	} else {
@@ -82,7 +83,7 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 			return nil, errors.Wrap(err, "failed to init credentials provider")
 		}
 
-		if err := params.AzureClients.setCredentialsWithProvider(ctx, params.ControlPlane.Spec.SubscriptionID, "", credentialsProvider); err != nil {
+		if err := params.AzureClients.setCredentialsWithProvider(ctx, params.ControlPlane.Spec.SubscriptionID, params.ControlPlane.Spec.AzureEnvironment, credentialsProvider); err != nil {
 			return nil, errors.Wrap(err, "failed to configure azure settings and credentials for Identity")
 		}
 	}
@@ -123,6 +124,11 @@ type ManagedControlPlaneScope struct {
 // ManagedControlPlaneCache stores ManagedControlPlane data locally so we don't have to hit the API multiple times within the same reconcile loop.
 type ManagedControlPlaneCache struct {
 	isVnetManaged *bool
+}
+
+// GetClient returns the controller-runtime client.
+func (s *ManagedControlPlaneScope) GetClient() client.Client {
+	return s.Client
 }
 
 // ResourceGroup returns the managed control plane's resource group.
@@ -245,6 +251,18 @@ func (s *ManagedControlPlaneScope) GroupSpec() azure.ResourceSpecGetter {
 		Location:       s.Location(),
 		ClusterName:    s.ClusterName(),
 		AdditionalTags: s.AdditionalTags(),
+	}
+}
+
+// ASOGroupSpec returns the resource group spec.
+func (s *ManagedControlPlaneScope) ASOGroupSpec() azure.ASOResourceSpecGetter {
+	return &asogroups.GroupSpec{
+		Name:           s.ResourceGroup(),
+		Namespace:      s.Cluster.Namespace,
+		Location:       s.Location(),
+		ClusterName:    s.ClusterName(),
+		AdditionalTags: s.AdditionalTags(),
+		Owner:          *metav1.NewControllerRef(s.ControlPlane, infrav1.GroupVersion.WithKind("AzureManagedControlPlane")),
 	}
 }
 
@@ -578,12 +596,8 @@ func (s *ManagedControlPlaneScope) GetAllAgentPoolSpecs() ([]azure.ResourceSpecG
 
 // SetControlPlaneEndpoint sets a control plane endpoint.
 func (s *ManagedControlPlaneScope) SetControlPlaneEndpoint(endpoint clusterv1.APIEndpoint) {
-	if s.ControlPlane.Spec.ControlPlaneEndpoint.Host == "" {
-		s.ControlPlane.Spec.ControlPlaneEndpoint.Host = endpoint.Host
-	}
-	if s.ControlPlane.Spec.ControlPlaneEndpoint.Port == 0 {
-		s.ControlPlane.Spec.ControlPlaneEndpoint.Port = endpoint.Port
-	}
+	s.ControlPlane.Spec.ControlPlaneEndpoint.Host = endpoint.Host
+	s.ControlPlane.Spec.ControlPlaneEndpoint.Port = endpoint.Port
 }
 
 // MakeEmptyKubeConfigSecret creates an empty secret object that is used for storing kubeconfig secret data.

@@ -81,9 +81,9 @@ The Windows HostProcess Container feature is Alpha for Kubernetes v1.22 and Beta
 
 Current requirements:
 
-- Kubernetes 1.22+
+- Kubernetes 1.23+
 - containerd 1.6+
-- `WindowsHostProcessContainers` feature-gate (Alpha for v1.22) turned on for kube-apiserver and kubelet if using Kubernetes 1.22
+- `WindowsHostProcessContainers` feature-gate (Beta / on-by-default for v1.23) turned on for kube-apiserver and kubelet
 
 These requirements are satisfied by the Windows Containerd Template and Azure Marketplace reference image `cncf-upstream:capi-windows:k8s-1dot22dot1-windows-2019-containerd:2021.10.15`
 
@@ -107,7 +107,7 @@ It's required to specify the SSH key using the `users` property in the Kubeadm c
 
 For example like this:
 ```yaml
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfigTemplate
 metadata:
   name: test1-md-0

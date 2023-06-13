@@ -46,7 +46,7 @@
 ### Base requirements
 
 1. Install [go][go]
-   - Get the latest patch version for go v1.19.
+   - Get the latest patch version for go v1.20.
 2. Install [jq][jq]
    - `brew install jq` on macOS.
    - `sudo apt install jq` on Windows + WSL2
@@ -56,7 +56,7 @@
    - `sudo apt install gettext` on Windows + WSL2.
    - `sudo apt install gettext` on Ubuntu Linux.
 4. Install [KIND][kind]
-   - `GO111MODULE="on" go get sigs.k8s.io/kind@v0.17.0`.
+   - `GO111MODULE="on" go get sigs.k8s.io/kind@v0.18.0`.
 5. Install [Kustomize][kustomize]
    - `brew install kustomize` on macOS.
    - [install instructions](https://kubectl.docs.kubernetes.io/installation/kustomize/) on Windows + WSL2.
@@ -369,7 +369,7 @@ export CONTROL_PLANE_MACHINE_COUNT=3
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="Standard_B2s"
 export AZURE_NODE_MACHINE_TYPE="Standard_B2s"
 export WORKER_MACHINE_COUNT=2
-export KUBERNETES_VERSION="v1.24.6"
+export KUBERNETES_VERSION="v1.25.6"
 
 # Identity secret.
 export AZURE_CLUSTER_IDENTITY_SECRET_NAME="cluster-identity-secret"
@@ -530,7 +530,7 @@ With the following environment variables defined, you can build a CAPZ cluster f
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `E2E_ARGS`                | `-kubetest.use-ci-artifacts`                                                                                                                                                                             |
 | `KUBERNETES_VERSION`      | `latest` - extract Kubernetes version from https://dl.k8s.io/ci/latest.txt (main's HEAD)<br>`latest-1.25` - extract Kubernetes version from https://dl.k8s.io/ci/latest-1.25.txt (release branch's HEAD) |
-| `WINDOWS_FLAVOR`          | Optional, can be `containerd` or `containerd-2022`, when not specified dockershim is used                                                                                                                |
+| `WINDOWS_SERVER_VERSION`  | Optional, can be `windows-2019` (default) or `windows-2022`                                                                                                                                              |
 | `KUBETEST_WINDOWS_CONFIG` | Optional, can be `upstream-windows-serial-slow.yaml`, when not specified `upstream-windows.yaml` is used                                                                                                 |
 | `WINDOWS_CONTAINERD_URL`  | Optional, can be any url to a `tar.gz` file containing binaries for containerd in the same format as upstream package                                                                                    |
 
