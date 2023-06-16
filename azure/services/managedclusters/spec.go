@@ -95,6 +95,17 @@ type ManagedClusterSpec struct {
 
 	// Headers is the list of headers to add to the HTTP requests to update this resource.
 	Headers map[string]string
+
+	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
+	UserAssignedIdentities []UserAssignedIdentity
+}
+
+// UserAssignedIdentity defines the user-assigned identities provided
+// by the user to be assigned to Azure resources.
+type UserAssignedIdentity struct {
+	// ProviderID is the identification ID of the user-assigned Identity, the format of an identity is:
+	// 'azure:///subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}'
+	ProviderID string `json:"providerID"`
 }
 
 // AADProfile is Azure Active Directory configuration to integrate with AKS, for aad authentication.
@@ -303,6 +314,22 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 		}
 	}
 
+	if s.UserAssignedIdentities == nil {
+		// system assigned assumed if no user assigned input
+		managedCluster.Identity = &containerservice.ManagedClusterIdentity{
+			Type: containerservice.ResourceIdentityType(infrav1.VMIdentitySystemAssigned),
+		}
+	} else {
+		uaIDs := make(map[string]*containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue)
+		uaIDs[s.UserAssignedIdentities[0].ProviderID] = &containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue{
+			// intentionally empty
+		}
+		managedCluster.Identity = &containerservice.ManagedClusterIdentity{
+			Type:                   containerservice.ResourceIdentityType(infrav1.VMIdentityUserAssigned),
+			UserAssignedIdentities: uaIDs,
+		}
+	}
+
 	if existing != nil {
 		existingMC, ok := existing.(containerservice.ManagedCluster)
 		if !ok {
@@ -311,6 +338,22 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 		ps := *existingMC.ManagedClusterProperties.ProvisioningState
 		if ps != string(infrav1.Canceled) && ps != string(infrav1.Failed) && ps != string(infrav1.Succeeded) {
 			return nil, azure.WithTransientError(errors.Errorf("Unable to update existing managed cluster in non-terminal state. Managed cluster must be in one of the following provisioning states: Canceled, Failed, or Succeeded. Actual state: %s", ps), 20*time.Second)
+		}
+
+		if managedCluster.AddonProfiles == nil && existingMC.AddonProfiles != nil {
+			managedCluster.AddonProfiles = map[string]*containerservice.ManagedClusterAddonProfile{}
+		}
+		for key, item := range existingMC.AddonProfiles {
+			if _, ok := managedCluster.AddonProfiles[key]; !ok {
+				addonProfile := &containerservice.ManagedClusterAddonProfile{
+					Enabled: to.BoolPtr(false),
+				}
+				if item.Config != nil {
+					addonProfile.Config = item.Config
+				}
+				managedCluster.AddonProfiles[key] = addonProfile
+			}
+			existingMC.AddonProfiles[key].Identity = nil
 		}
 
 		// Normalize the LoadBalancerProfile so the diff below doesn't get thrown off by AKS added properties.
@@ -428,6 +471,30 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 	}
 	if existingMC.Sku != nil {
 		existingMCClusterNormalized.Sku = existingMC.Sku
+	}
+
+	if managedCluster.Identity != nil {
+		uaIDs := make(map[string]*containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue)
+		for key := range managedCluster.Identity.UserAssignedIdentities {
+			uaIDs[key] = &containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue{
+				// intentionally empty
+			}
+		}
+		clusterNormalized.Identity = &containerservice.ManagedClusterIdentity{
+			UserAssignedIdentities: uaIDs,
+		}
+	}
+
+	if existingMC.Identity != nil {
+		uaIDs := make(map[string]*containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue)
+		for key := range existingMC.Identity.UserAssignedIdentities {
+			uaIDs[key] = &containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue{
+				// intentionally empty
+			}
+		}
+		existingMCClusterNormalized.Identity = &containerservice.ManagedClusterIdentity{
+			UserAssignedIdentities: uaIDs,
+		}
 	}
 
 	diff := cmp.Diff(clusterNormalized, existingMCClusterNormalized)

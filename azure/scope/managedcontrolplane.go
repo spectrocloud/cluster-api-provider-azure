@@ -496,6 +496,14 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec(ctx context.Context) azure
 		}
 	}
 
+	if s.ControlPlane.Spec.UserAssignedIdentities != nil {
+		managedClusterSpec.UserAssignedIdentities = []managedclusters.UserAssignedIdentity{
+			{
+				ProviderID: s.ControlPlane.Spec.UserAssignedIdentities[0].ProviderID,
+			},
+		}
+	}
+
 	return &managedClusterSpec
 }
 
