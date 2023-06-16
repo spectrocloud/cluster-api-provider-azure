@@ -617,6 +617,10 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 		}
 	}
 
+	if s.OutboundType != nil {
+		managedCluster.NetworkProfile.OutboundType = containerservice.OutboundType(*s.OutboundType)
+	}
+
 	if len(s.UserAssignedIdentities) == 0 {
 		// system assigned assumed if no user assigned input
 		managedCluster.Spec.Identity = &asocontainerservicev1hub.ManagedClusterIdentity{

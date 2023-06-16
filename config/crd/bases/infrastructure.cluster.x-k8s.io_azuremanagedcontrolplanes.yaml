@@ -903,6 +903,14 @@ spec:
                 - userAssignedNATGateway
                 - userDefinedRouting
                 type: string
+              outboundType:
+                description: Outbound configuration used by Nodes.
+                enum:
+                  - loadBalancer
+                  - managedNATGateway
+                  - userAssignedNATGateway
+                  - userDefinedRouting
+                type: string
               resourceGroupName:
                 description: |-
                   ResourceGroupName is the name of the Azure resource group for this AKS Cluster.
