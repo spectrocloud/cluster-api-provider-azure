@@ -23,6 +23,7 @@ import (
 	"net"
 	"sort"
 
+	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-05-01/containerservice"
 	asocontainerservicev1 "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20231001"
 	asocontainerservicev1hub "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20231001/storage"
 	asocontainerservicev1preview "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20231102preview"
@@ -117,6 +118,12 @@ type ManagedClusterSpec struct {
 	// APIServerAccessProfile is the access profile for AKS API server.
 	APIServerAccessProfile *APIServerAccessProfile
 
+	// Headers is the list of headers to add to the HTTP requests to update this resource.
+	Headers map[string]string
+
+	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
+	UserAssignedIdentities []UserAssignedIdentity
+
 	// AutoScalerProfile is the parameters to be applied to the cluster-autoscaler when enabled.
 	AutoScalerProfile *AutoScalerProfile
 
@@ -170,6 +177,14 @@ type HTTPProxyConfig struct {
 
 	// TrustedCA is the Alternative CA cert to use for connecting to proxy servers.
 	TrustedCA *string `json:"trustedCa,omitempty"`
+}
+
+// UserAssignedIdentity defines the user-assigned identities provided
+// by the user to be assigned to Azure resources.
+type UserAssignedIdentity struct {
+	// ProviderID is the identification ID of the user-assigned Identity, the format of an identity is:
+	// 'azure:///subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}'
+	ProviderID string `json:"providerID"`
 }
 
 // AADProfile is Azure Active Directory configuration to integrate with AKS, for aad authentication.
@@ -599,6 +614,24 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 					ARMID: s.KubeletUserAssignedIdentity,
 				},
 			},
+		}
+	}
+
+	if len(s.UserAssignedIdentities) == 0 {
+		// system assigned assumed if no user assigned input
+		managedCluster.Spec.Identity = &asocontainerservicev1hub.ManagedClusterIdentity{
+			Type: containerservice.ResourceIdentityType(infrav1.VMIdentitySystemAssigned),
+		}
+	} else {
+		uaIDs := make(map[string]*containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue, len(s.UserAssignedIdentities))
+		for _, id := range s.UserAssignedIdentities {
+			uaIDs[id.ProviderID] = &containerservice.ManagedClusterIdentityUserAssignedIdentitiesValue{
+				// intentionally empty
+			}
+		}
+		managedCluster.Spec.Identity = &asocontainerservicev1hub.ManagedClusterIdentity{
+			Type:                   containerservice.ResourceIdentityType(infrav1.VMIdentityUserAssigned),
+			UserAssignedIdentities: uaIDs,
 		}
 	}
 

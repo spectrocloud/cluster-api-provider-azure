@@ -252,6 +252,10 @@ type AzureManagedControlPlaneClassSpec struct {
 	// +kubebuilder:default:=false
 	// +optional
 	EnablePreviewFeatures *bool `json:"enablePreviewFeatures,omitempty"`
+
+	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
+	// +optional
+	UserAssignedIdentities []UserAssignedIdentity `json:"userAssignedIdentities,omitempty"`
 }
 
 // ManagedClusterAutoUpgradeProfile defines the auto upgrade profile for a managed cluster.

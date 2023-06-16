@@ -684,6 +684,15 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		managedClusterSpec.SecurityProfile = s.getManagedClusterSecurityProfile()
 	}
 
+	if len(s.ControlPlane.Spec.UserAssignedIdentities) > 0 {
+		var userAssignedIdentities []managedclusters.UserAssignedIdentity
+		for _, i := range s.ControlPlane.Spec.UserAssignedIdentities {
+			userAssignedIdentities = append(userAssignedIdentities, managedclusters.UserAssignedIdentity{
+				ProviderID: i.ProviderID,
+			})
+		}
+	}
+
 	return &managedClusterSpec
 }
 
