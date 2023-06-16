@@ -240,6 +240,25 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
+	if old.Spec.OutboundType != nil {
+		// Prevent NetworkPolicy modification if it was already set to some value
+		if m.Spec.OutboundType == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "OutboundType"),
+					m.Spec.OutboundType,
+					"field is immutable, unsetting is not allowed"))
+		} else if *m.Spec.OutboundType != *old.Spec.OutboundType {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "OutboundType"),
+					*m.Spec.OutboundType,
+					"field is immutable"))
+		}
+	}
+
 	if errs := m.validateAPIServerAccessProfileUpdate(old); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
