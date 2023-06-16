@@ -29,6 +29,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
 )
 
 // ManagedClusterSpec contains properties to create a managed cluster.
@@ -62,6 +63,9 @@ type ManagedClusterSpec struct {
 
 	// NetworkPolicy used for building Kubernetes network. Possible values include: 'calico', 'azure'. Defaults to azure.
 	NetworkPolicy string
+
+	// OutboundType used for building Kubernetes network. Possible values include: 'loadBalancer', 'managedNATGateway', 'userAssignedNATGateway', 'userDefinedRouting'.
+	OutboundType *expinfrav1.ManagedControlPlaneOutboundType
 
 	// SSHPublicKey is a string literal containing an ssh public key. Will autogenerate and discard if not provided.
 	SSHPublicKey string
@@ -312,6 +316,10 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			PrivateDNSZone:                 s.APIServerAccessProfile.PrivateDNSZone,
 			EnablePrivateClusterPublicFQDN: s.APIServerAccessProfile.EnablePrivateClusterPublicFQDN,
 		}
+	}
+
+	if s.OutboundType != nil {
+		managedCluster.NetworkProfile.OutboundType = containerservice.OutboundType(*s.OutboundType)
 	}
 
 	if len(s.UserAssignedIdentities) == 0 {
