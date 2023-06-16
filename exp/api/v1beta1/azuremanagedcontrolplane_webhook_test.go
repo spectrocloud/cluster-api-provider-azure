@@ -777,6 +777,26 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "OutboundType update",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					OutboundType: (*ManagedControlPlaneOutboundType)(to.StringPtr(string(ManagedControlPlaneOutboundTypeUserDefinedRouting))),
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					OutboundType: (*ManagedControlPlaneOutboundType)(to.StringPtr(string(ManagedControlPlaneOutboundTypeLoadBalancer))),
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
