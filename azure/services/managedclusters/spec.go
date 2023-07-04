@@ -451,6 +451,10 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		}
 	}
 
+	if managedCluster.AddonProfiles != nil {
+		propertiesNormalized.AddonProfiles = managedCluster.AddonProfiles
+	}
+
 	clusterNormalized := &containerservice.ManagedCluster{
 		ManagedClusterProperties: propertiesNormalized,
 		Tags:                     managedCluster.Tags,
@@ -458,6 +462,10 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 	existingMCClusterNormalized := &containerservice.ManagedCluster{
 		ManagedClusterProperties: existingMCPropertiesNormalized,
 		Tags:                     existingMC.Tags,
+	}
+
+	if existingMC.AddonProfiles != nil {
+		existingMCClusterNormalized.AddonProfiles = existingMC.AddonProfiles
 	}
 
 	if managedCluster.Sku != nil {
