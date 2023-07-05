@@ -86,7 +86,7 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		} else {
 			loadBalancer, ok := lb.(network.LoadBalancer)
 			if !ok {
-				// Return out of loop since this would be an unexepcted fatal error
+				// Return out of loop since this would be an unexpected fatal error
 				result = errors.Errorf("created resource %T is not a network.LoadBalancer", lb)
 				break
 			}
