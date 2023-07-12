@@ -636,6 +636,14 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		}
 	}
 
+	if s.ControlPlane.Spec.UserAssignedIdentities != nil {
+		managedClusterSpec.UserAssignedIdentities = []managedclusters.UserAssignedIdentity{
+			{
+				ProviderID: s.ControlPlane.Spec.UserAssignedIdentities[0].ProviderID,
+			},
+		}
+	}
+
 	if s.ControlPlane.Spec.AutoScalerProfile != nil {
 		managedClusterSpec.AutoScalerProfile = &managedclusters.AutoScalerProfile{
 			BalanceSimilarNodeGroups:      (*string)(s.ControlPlane.Spec.AutoScalerProfile.BalanceSimilarNodeGroups),
