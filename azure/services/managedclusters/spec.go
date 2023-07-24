@@ -255,6 +255,7 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			dnsIP := ip.String()
 			managedCluster.NetworkProfile.DNSServiceIP = &dnsIP
 		} else {
+			managedCluster.NetworkProfile.ServiceCidr = &s.ServiceCIDR
 			managedCluster.NetworkProfile.DNSServiceIP = s.DNSServiceIP
 		}
 	}
