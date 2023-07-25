@@ -241,8 +241,8 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 	}
 
 	if s.ServiceCIDR != "" {
+		managedCluster.NetworkProfile.ServiceCidr = &s.ServiceCIDR
 		if s.DNSServiceIP == nil {
-			managedCluster.NetworkProfile.ServiceCidr = &s.ServiceCIDR
 			ip, _, err := net.ParseCIDR(s.ServiceCIDR)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse service cidr: %w", err)
@@ -255,7 +255,6 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			dnsIP := ip.String()
 			managedCluster.NetworkProfile.DNSServiceIP = &dnsIP
 		} else {
-			managedCluster.NetworkProfile.ServiceCidr = &s.ServiceCIDR
 			managedCluster.NetworkProfile.DNSServiceIP = s.DNSServiceIP
 		}
 	}
