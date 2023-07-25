@@ -441,10 +441,12 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 
 	if managedCluster.NetworkProfile != nil {
 		propertiesNormalized.NetworkProfile.LoadBalancerProfile = managedCluster.NetworkProfile.LoadBalancerProfile
+		propertiesNormalized.NetworkProfile.ServiceCidr = managedCluster.NetworkProfile.ServiceCidr
 	}
 
 	if existingMC.NetworkProfile != nil {
 		existingMCPropertiesNormalized.NetworkProfile.LoadBalancerProfile = existingMC.NetworkProfile.LoadBalancerProfile
+		existingMCPropertiesNormalized.NetworkProfile.ServiceCidr = existingMC.NetworkProfile.ServiceCidr
 	}
 
 	if managedCluster.APIServerAccessProfile != nil {
