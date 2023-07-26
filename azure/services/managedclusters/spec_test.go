@@ -75,6 +75,8 @@ func TestParameters(t *testing.T) {
 				OIDCIssuerProfile: &OIDCIssuerProfile{
 					Enabled: ptr.To(true),
 				},
+				ServiceCIDR:  "test-service-cidr",
+				DNSServiceIP: ptr.To("test-dns-service-ip"),
 				GetAllAgentPools: func() ([]azure.ResourceSpecGetter, error) {
 					return []azure.ResourceSpecGetter{
 						&agentpools.AgentPoolSpec{
@@ -634,6 +636,8 @@ func getSampleManagedCluster() armcontainerservice.ManagedCluster {
 			NetworkProfile: &armcontainerservice.NetworkProfile{
 				LoadBalancerSKU:   ptr.To(armcontainerservice.LoadBalancerSKUStandard),
 				NetworkPluginMode: ptr.To(armcontainerservice.NetworkPluginModeOverlay),
+				ServiceCidr:       ptr.To("test-service-cidr"),
+				DNSServiceIP:      ptr.To("test-dns-service-ip"),
 			},
 			OidcIssuerProfile: &armcontainerservice.ManagedClusterOIDCIssuerProfile{
 				Enabled: ptr.To(true),
