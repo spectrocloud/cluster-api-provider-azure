@@ -758,6 +758,10 @@ func autoConvert_v1beta1_AzureManagedControlPlaneSpec_To_v1alpha3_AzureManagedCo
 	out.AdditionalTags = *(*clusterapiproviderazureapiv1alpha3.Tags)(unsafe.Pointer(&in.AdditionalTags))
 	out.NetworkPlugin = (*string)(unsafe.Pointer(in.NetworkPlugin))
 	out.NetworkPolicy = (*string)(unsafe.Pointer(in.NetworkPolicy))
+	// WARNING: in.OutboundType requires manual conversion: does not exist in peer-type
+	// WARNING: in.DockerBridgeCidr requires manual conversion: does not exist in peer-type
+	// WARNING: in.DNSPrefix requires manual conversion: does not exist in peer-type
+	// WARNING: in.FqdnSubdomain requires manual conversion: does not exist in peer-type
 	out.SSHPublicKey = in.SSHPublicKey
 	out.DNSServiceIP = (*string)(unsafe.Pointer(in.DNSServiceIP))
 	out.LoadBalancerSKU = (*string)(unsafe.Pointer(in.LoadBalancerSKU))

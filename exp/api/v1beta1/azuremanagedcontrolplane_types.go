@@ -95,6 +95,18 @@ type AzureManagedControlPlaneSpec struct {
 	// +optional
 	OutboundType *ManagedControlPlaneOutboundType `json:"outboundType,omitempty"`
 
+	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
+	// +optional
+	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+
+	// DNSPrefix - DNS prefix specified when creating the managed cluster.
+	// +optional
+	DNSPrefix *string `json:"dnsPrefix,omitempty"`
+
+	// FqdnSubdomain - FQDN subdomain specified when creating private cluster with custom private dns zone.
+	// +optional
+	FqdnSubdomain *string `json:"fqdnSubdomain,omitempty"`
+
 	// SSHPublicKey is a string literal containing an ssh public key base64 encoded.
 	SSHPublicKey string `json:"sshPublicKey"`
 
@@ -214,7 +226,6 @@ type APIServerAccessProfile struct {
 	// +optional
 	EnablePrivateCluster *bool `json:"enablePrivateCluster,omitempty"`
 	// PrivateDNSZone - Private dns zone mode for private cluster.
-	// +kubebuilder:validation:Enum=System;None
 	// +optional
 	PrivateDNSZone *string `json:"privateDNSZone,omitempty"`
 	// EnablePrivateClusterPublicFQDN - Whether to create additional public FQDN for private cluster or not.

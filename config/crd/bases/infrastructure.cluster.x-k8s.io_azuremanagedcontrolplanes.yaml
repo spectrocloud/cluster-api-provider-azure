@@ -575,9 +575,6 @@ spec:
                   privateDNSZone:
                     description: PrivateDNSZone - Private dns zone mode for private
                       cluster.
-                    enum:
-                    - System
-                    - None
                     type: string
                 type: object
               controlPlaneEndpoint:
@@ -595,10 +592,23 @@ spec:
                 - host
                 - port
                 type: object
+              dnsPrefix:
+                description: DNSPrefix - DNS prefix specified when creating the managed
+                  cluster.
+                type: string
               dnsServiceIP:
                 description: DNSServiceIP is an IP address assigned to the Kubernetes
                   DNS service. It must be within the Kubernetes service address range
                   specified in serviceCidr.
+                type: string
+              dockerBridgeCidr:
+                description: DockerBridgeCidr - A CIDR notation IP range assigned
+                  to the Docker bridge network. It must not overlap with any Subnet
+                  IP ranges or the Kubernetes service address range.
+                type: string
+              fqdnSubdomain:
+                description: FqdnSubdomain - FQDN subdomain specified when creating
+                  private cluster with custom private dns zone.
                 type: string
               identityRef:
                 description: IdentityRef is a reference to a AzureClusterIdentity
@@ -703,10 +713,10 @@ spec:
               outboundType:
                 description: Outbound configuration used by Nodes.
                 enum:
-                  - loadBalancer
-                  - managedNATGateway
-                  - userAssignedNATGateway
-                  - userDefinedRouting
+                - loadBalancer
+                - managedNATGateway
+                - userAssignedNATGateway
+                - userDefinedRouting
                 type: string
               resourceGroupName:
                 description: ResourceGroupName is the name of the Azure resource group
