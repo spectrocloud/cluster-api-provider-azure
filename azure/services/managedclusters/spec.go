@@ -79,8 +79,17 @@ type ManagedClusterSpec struct {
 	// ServiceCIDR is the CIDR block for IP addresses distributed to services
 	ServiceCIDR string
 
+	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
+	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+
 	// DNSServiceIP is an IP address assigned to the Kubernetes DNS service
 	DNSServiceIP *string
+
+	// DNSPrefix - DNS prefix specified when creating the managed cluster.
+	DNSPrefix *string
+
+	// FqdnSubdomain - FQDN subdomain specified when creating private cluster with custom private dns zone.
+	FqdnSubdomain *string
 
 	// AddonProfiles are the profiles of managed cluster add-on.
 	AddonProfiles []AddonProfile
@@ -208,7 +217,7 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 		ManagedClusterProperties: &containerservice.ManagedClusterProperties{
 			NodeResourceGroup: &s.NodeResourceGroup,
 			EnableRBAC:        to.BoolPtr(true),
-			DNSPrefix:         &s.Name,
+			DNSPrefix:         s.DNSPrefix,
 			KubernetesVersion: &s.Version,
 			LinuxProfile: &containerservice.LinuxProfile{
 				AdminUsername: to.StringPtr(azure.DefaultAKSUserName),
@@ -230,6 +239,10 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 				NetworkPolicy:   containerservice.NetworkPolicy(s.NetworkPolicy),
 			},
 		},
+	}
+
+	if s.FqdnSubdomain != nil {
+		managedCluster.FqdnSubdomain = s.FqdnSubdomain
 	}
 
 	if tags := *to.StringMapPtr(s.Tags); len(tags) != 0 {
@@ -257,6 +270,10 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 		} else {
 			managedCluster.NetworkProfile.DNSServiceIP = s.DNSServiceIP
 		}
+	}
+
+	if s.DockerBridgeCidr != nil {
+		managedCluster.NetworkProfile.DockerBridgeCidr = s.DockerBridgeCidr
 	}
 
 	if s.AADProfile != nil {
@@ -454,6 +471,9 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		if managedCluster.APIServerAccessProfile.AuthorizedIPRanges == nil || len(*managedCluster.APIServerAccessProfile.AuthorizedIPRanges) == 0 {
 			propertiesNormalized.APIServerAccessProfile.AuthorizedIPRanges = nil
 		}
+		if managedCluster.APIServerAccessProfile.PrivateDNSZone != nil {
+			propertiesNormalized.APIServerAccessProfile.PrivateDNSZone = managedCluster.APIServerAccessProfile.PrivateDNSZone
+		}
 	}
 
 	if existingMC.APIServerAccessProfile != nil {
@@ -462,6 +482,9 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		}
 		if existingMC.APIServerAccessProfile.AuthorizedIPRanges == nil || len(*existingMC.APIServerAccessProfile.AuthorizedIPRanges) == 0 {
 			propertiesNormalized.APIServerAccessProfile.AuthorizedIPRanges = nil
+		}
+		if existingMC.APIServerAccessProfile.PrivateDNSZone != nil {
+			existingMCPropertiesNormalized.APIServerAccessProfile.PrivateDNSZone = existingMC.APIServerAccessProfile.PrivateDNSZone
 		}
 	}
 
