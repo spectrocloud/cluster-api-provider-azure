@@ -649,6 +649,21 @@ func (in *AzureManagedControlPlaneSpec) DeepCopyInto(out *AzureManagedControlPla
 		*out = new(ManagedControlPlaneOutboundType)
 		**out = **in
 	}
+	if in.DockerBridgeCidr != nil {
+		in, out := &in.DockerBridgeCidr, &out.DockerBridgeCidr
+		*out = new(string)
+		**out = **in
+	}
+	if in.DNSPrefix != nil {
+		in, out := &in.DNSPrefix, &out.DNSPrefix
+		*out = new(string)
+		**out = **in
+	}
+	if in.FqdnSubdomain != nil {
+		in, out := &in.FqdnSubdomain, &out.FqdnSubdomain
+		*out = new(string)
+		**out = **in
+	}
 	if in.DNSServiceIP != nil {
 		in, out := &in.DNSServiceIP, &out.DNSServiceIP
 		*out = new(string)
