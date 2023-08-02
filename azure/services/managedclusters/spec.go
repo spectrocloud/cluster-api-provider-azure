@@ -135,6 +135,10 @@ type ManagedClusterSpec struct {
 	// DNSPrefix allows the user to customize dns prefix.
 	DNSPrefix *string
 
+	// FqdnSubdomain - FQDN subdomain specified when creating a private cluster with a custom private DNS zone.
+	// Spectro fork (15ec55de / PCP-1595).
+	FqdnSubdomain *string
+
 	// DisableLocalAccounts disables getting static credentials for this cluster when set. Expected to only be used for AAD clusters.
 	DisableLocalAccounts *bool
 
@@ -495,6 +499,10 @@ func (s *ManagedClusterSpec) configureBasicProperties(managedCluster *asocontain
 	managedCluster.Spec.NodeResourceGroup = &s.NodeResourceGroup
 	managedCluster.Spec.EnableRBAC = ptr.To(true)
 	managedCluster.Spec.DnsPrefix = s.DNSPrefix
+	// Spectro fork (15ec55de / PCP-1595): FqdnSubdomain for private clusters with a custom private DNS zone.
+	if s.FqdnSubdomain != nil {
+		managedCluster.Spec.FqdnSubdomain = s.FqdnSubdomain
+	}
 
 	if kubernetesVersion := s.getManagedClusterVersion(existing); kubernetesVersion != "" {
 		managedCluster.Spec.KubernetesVersion = &kubernetesVersion

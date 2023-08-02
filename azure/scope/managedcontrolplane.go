@@ -565,6 +565,15 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		Preview:                     ptr.Deref(s.ControlPlane.Spec.EnablePreviewFeatures, false),
 	}
 
+	// Spectro fork (15ec55de / PCP-1595): FqdnSubdomain pass-through for private
+	// AKS clusters with a custom private DNS zone. OutboundType and DNSPrefix are
+	// upstreamed (set in the managedClusterSpec literal above; DNSPrefix defaulting
+	// to the cluster name is handled by the upstream AMCP webhook). DockerBridgeCidr
+	// dropped (dead — AKS/ASO no longer support it).
+	if s.ControlPlane.Spec.FqdnSubdomain != nil {
+		managedClusterSpec.FqdnSubdomain = s.ControlPlane.Spec.FqdnSubdomain
+	}
+
 	if s.ControlPlane.Spec.SSHPublicKey != nil {
 		managedClusterSpec.SSHPublicKey = *s.ControlPlane.Spec.SSHPublicKey
 	}

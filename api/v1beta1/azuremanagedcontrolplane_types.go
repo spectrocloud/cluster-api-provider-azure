@@ -175,6 +175,10 @@ type AzureManagedControlPlaneSpec struct {
 	// [AKS doc]: https://learn.microsoft.com/en-us/azure/templates/microsoft.containerservice/2023-03-15-preview/fleets/members
 	// +optional
 	FleetsMember *FleetsMember `json:"fleetsMember,omitempty"`
+
+	// FqdnSubdomain - FQDN subdomain specified when creating private cluster with custom private dns zone.
+	// +optional
+	FqdnSubdomain *string `json:"fqdnSubdomain,omitempty"`
 }
 
 // ManagedClusterSecurityProfile defines the security profile for the cluster.
