@@ -168,6 +168,14 @@ type AzureManagedControlPlaneSpec struct {
 	// [AKS doc]: https://learn.microsoft.com/en-us/azure/templates/microsoft.containerservice/2023-03-15-preview/fleets/members
 	// +optional
 	FleetsMember *FleetsMember `json:"fleetsMember,omitempty"`
+
+	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
+	// +optional
+	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+
+	// FqdnSubdomain - FQDN subdomain specified when creating private cluster with custom private dns zone.
+	// +optional
+	FqdnSubdomain *string `json:"fqdnSubdomain,omitempty"`
 }
 
 // ManagedClusterSecurityProfile defines the security profile for the cluster.

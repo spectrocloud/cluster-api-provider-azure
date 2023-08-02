@@ -564,6 +564,24 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		Preview:                     ptr.Deref(s.ControlPlane.Spec.EnablePreviewFeatures, false),
 	}
 
+	if s.ControlPlane.Spec.OutboundType != nil {
+		managedClusterSpec.OutboundType = s.ControlPlane.Spec.OutboundType
+	}
+
+	if s.ControlPlane.Spec.DNSPrefix != nil {
+		managedClusterSpec.DNSPrefix = s.ControlPlane.Spec.DNSPrefix
+	} else {
+		managedClusterSpec.DNSPrefix = &s.ControlPlane.Name
+	}
+
+	if s.ControlPlane.Spec.FqdnSubdomain != nil {
+		managedClusterSpec.FqdnSubdomain = s.ControlPlane.Spec.FqdnSubdomain
+	}
+
+	if s.ControlPlane.Spec.DockerBridgeCidr != nil {
+		managedClusterSpec.DockerBridgeCidr = s.ControlPlane.Spec.DockerBridgeCidr
+	}
+
 	if s.ControlPlane.Spec.SSHPublicKey != nil {
 		managedClusterSpec.SSHPublicKey = *s.ControlPlane.Spec.SSHPublicKey
 	}

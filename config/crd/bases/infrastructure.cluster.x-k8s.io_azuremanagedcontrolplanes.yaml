@@ -749,12 +749,47 @@ spec:
                     enum:
                     - SystemAssigned
                     - UserAssigned
+                  authorizedIPRanges:
+                    description: AuthorizedIPRanges - Authorized IP Ranges to kubernetes
+                      API server.
+                    items:
+                      type: string
+                    type: array
+                  enablePrivateCluster:
+                    description: EnablePrivateCluster - Whether to create the cluster
+                      as a private cluster or not.
+                    type: boolean
+                  enablePrivateClusterPublicFQDN:
+                    description: EnablePrivateClusterPublicFQDN - Whether to create
+                      additional public FQDN for private cluster or not.
+                    type: boolean
+                  privateDNSZone:
+                    description: PrivateDNSZone - Private dns zone mode for private
+                      cluster.
                     type: string
                   userAssignedIdentityResourceID:
                     description: UserAssignedIdentityResourceID - Identity ARM resource
                       ID when using user-assigned identity.
                     type: string
                 type: object
+              dnsPrefix:
+                description: DNSPrefix - DNS prefix specified when creating the managed
+                  cluster.
+                type: string
+              dnsServiceIP:
+                description: DNSServiceIP is an IP address assigned to the Kubernetes
+                  DNS service. It must be within the Kubernetes service address range
+                  specified in serviceCidr.
+                type: string
+              dockerBridgeCidr:
+                description: DockerBridgeCidr - A CIDR notation IP range assigned
+                  to the Docker bridge network. It must not overlap with any Subnet
+                  IP ranges or the Kubernetes service address range.
+                type: string
+              fqdnSubdomain:
+                description: FqdnSubdomain - FQDN subdomain specified when creating
+                  private cluster with custom private dns zone.
+                type: string
               identityRef:
                 description: IdentityRef is a reference to a AzureClusterIdentity
                   to be used when reconciling this cluster
@@ -906,10 +941,10 @@ spec:
               outboundType:
                 description: Outbound configuration used by Nodes.
                 enum:
-                  - loadBalancer
-                  - managedNATGateway
-                  - userAssignedNATGateway
-                  - userDefinedRouting
+                - loadBalancer
+                - managedNATGateway
+                - userAssignedNATGateway
+                - userDefinedRouting
                 type: string
               resourceGroupName:
                 description: |-

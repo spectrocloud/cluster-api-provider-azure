@@ -101,8 +101,17 @@ type ManagedClusterSpec struct {
 	// ServiceCIDR is the CIDR block for IP addresses distributed to services
 	ServiceCIDR string
 
+	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
+	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+
 	// DNSServiceIP is an IP address assigned to the Kubernetes DNS service
 	DNSServiceIP *string
+
+	// DNSPrefix - DNS prefix specified when creating the managed cluster.
+	DNSPrefix *string
+
+	// FqdnSubdomain - FQDN subdomain specified when creating private cluster with custom private dns zone.
+	FqdnSubdomain *string
 
 	// AddonProfiles are the profiles of managed cluster add-on.
 	AddonProfiles []AddonProfile
@@ -484,6 +493,28 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 			return nil, errors.Wrap(err, "failed to decode SSHPublicKey")
 		}
 	}
+	managedCluster := containerservice.ManagedCluster{
+		Identity: &containerservice.ManagedClusterIdentity{
+			Type: containerservice.ResourceIdentityTypeSystemAssigned,
+		},
+		Location: &s.Location,
+		ManagedClusterProperties: &containerservice.ManagedClusterProperties{
+			NodeResourceGroup: &s.NodeResourceGroup,
+			EnableRBAC:        to.BoolPtr(true),
+			DNSPrefix:         s.DNSPrefix,
+			KubernetesVersion: &s.Version,
+			LinuxProfile: &containerservice.LinuxProfile{
+				AdminUsername: to.StringPtr(azure.DefaultAKSUserName),
+				SSH: &containerservice.SSHConfiguration{
+					PublicKeys: &[]containerservice.SSHPublicKey{
+						{
+							KeyData: to.StringPtr(string(decodedSSHPublicKey)),
+						},
+					},
+				},
+			},
+		},
+	}
 
 	if decodedSSHPublicKey != nil {
 		managedCluster.Spec.LinuxProfile = &asocontainerservicev1hub.ContainerServiceLinuxProfile{
@@ -495,7 +526,11 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 					},
 				},
 			},
-		}
+		},
+	}
+
+	if tags := *to.StringMapPtr(s.Tags); len(tags) != 0 {
+		managedCluster.Tags = tags
 	}
 
 	if s.NetworkPluginMode != nil {
@@ -504,6 +539,10 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 
 	if s.PodCIDR != "" {
 		managedCluster.Spec.NetworkProfile.PodCidr = &s.PodCIDR
+	}
+
+	if s.FqdnSubdomain != nil {
+		managedCluster.Spec.FqdnSubdomain = s.FqdnSubdomain
 	}
 
 	if s.ServiceCIDR != "" {
@@ -533,6 +572,10 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 				Key:  secret.KubeconfigDataName,
 			},
 		},
+	}
+
+	if s.DockerBridgeCidr != nil {
+		managedCluster.NetworkProfile.DockerBridgeCidr = s.DockerBridgeCidr
 	}
 
 	if s.AADProfile != nil {
@@ -983,6 +1026,9 @@ func computeDiffOfNormalizedClusters(managedCluster *asocontainerservicev1hub.Ma
 		if managedCluster.APIServerAccessProfile.AuthorizedIPRanges == nil || len(*managedCluster.APIServerAccessProfile.AuthorizedIPRanges) == 0 {
 			propertiesNormalized.APIServerAccessProfile.AuthorizedIPRanges = nil
 		}
+		if managedCluster.APIServerAccessProfile.PrivateDNSZone != nil {
+			propertiesNormalized.APIServerAccessProfile.PrivateDNSZone = managedCluster.APIServerAccessProfile.PrivateDNSZone
+		}
 	}
 
 	if existingMC.APIServerAccessProfile != nil {
@@ -991,6 +1037,9 @@ func computeDiffOfNormalizedClusters(managedCluster *asocontainerservicev1hub.Ma
 		}
 		if existingMC.APIServerAccessProfile.AuthorizedIPRanges == nil || len(*existingMC.APIServerAccessProfile.AuthorizedIPRanges) == 0 {
 			propertiesNormalized.APIServerAccessProfile.AuthorizedIPRanges = nil
+		}
+		if existingMC.APIServerAccessProfile.PrivateDNSZone != nil {
+			existingMCPropertiesNormalized.APIServerAccessProfile.PrivateDNSZone = existingMC.APIServerAccessProfile.PrivateDNSZone
 		}
 	}
 
