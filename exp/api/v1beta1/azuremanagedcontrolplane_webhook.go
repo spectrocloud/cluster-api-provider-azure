@@ -18,17 +18,19 @@ package v1beta1
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"reflect"
 	"regexp"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/pointer"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -241,7 +243,7 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 	}
 
 	if old.Spec.OutboundType != nil {
-		// Prevent NetworkPolicy modification if it was already set to some value
+		// Prevent OutboundType modification if it was already set to some value
 		if m.Spec.OutboundType == nil {
 			// unsetting the field is not allowed
 			allErrs = append(allErrs,
@@ -257,6 +259,30 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 					*m.Spec.OutboundType,
 					"field is immutable"))
 		}
+	}
+
+	if pointer.StringDeref(m.Spec.DNSPrefix, "") != pointer.StringDeref(old.Spec.DNSPrefix, "") {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec.DNSPrefix"),
+				m.Spec.DNSPrefix,
+				"field is immutable"))
+	}
+
+	if pointer.StringDeref(m.Spec.DockerBridgeCidr, "") != pointer.StringDeref(old.Spec.DockerBridgeCidr, "") {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec.DockerBridgeCidr"),
+				m.Spec.DockerBridgeCidr,
+				"field is immutable"))
+	}
+
+	if pointer.StringDeref(m.Spec.FqdnSubdomain, "") != pointer.StringDeref(old.Spec.FqdnSubdomain, "") {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec.FqdnSubdomain"),
+				m.Spec.FqdnSubdomain,
+				"field is immutable"))
 	}
 
 	if errs := m.validateAPIServerAccessProfileUpdate(old); len(errs) > 0 {
@@ -284,6 +310,7 @@ func (m *AzureManagedControlPlane) Validate(cli client.Client) error {
 		m.validateSSHKey,
 		m.validateLoadBalancerProfile,
 		m.validateAPIServerAccessProfile,
+		m.validateDNSPrefix,
 		//m.validateManagedClusterNetwork,
 	}
 
@@ -296,6 +323,43 @@ func (m *AzureManagedControlPlane) Validate(cli client.Client) error {
 
 	return kerrors.NewAggregate(errs)
 }
+
+func (m *AzureManagedControlPlane) validateDNSPrefix(_ client.Client) error {
+
+	if m.Spec.DNSPrefix == nil {
+		return nil
+	}
+
+	// Regex pattern for DNS prefix validation
+	// 1. Between 1 and 54 characters long: {1,54}
+	// 2. Alphanumerics and hyphens: [a-zA-Z0-9-]
+	// 3. Start and end with alphanumeric: ^[a-zA-Z0-9].*[a-zA-Z0-9]$
+	regex := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{0,52}[a-zA-Z0-9]$`)
+	if regex.MatchString(pointer.StringDeref(m.Spec.DNSPrefix, "")) {
+		return nil
+	}
+	return errors.New("DNSPrefix is invalid")
+}
+
+// func (m *AzureManagedControlPlane) validateFqdnSubdomain(_ client.Client) error {
+
+// 	if m.Spec.FqdnSubdomain == nil {
+// 		return nil
+// 	}
+
+// 	// Regex pattern for FQDN subdomain validation
+// 	// 1. Between 1 and 63 characters long: {1,63}
+// 	// 2. Alphanumerics and hyphens.
+// 	// 3. Start and end with alphanumeric.
+// 	// 4. Parts separated by dots (.)
+// 	pattern := `^(?i)[a-z0-9]([a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(?:\.aks\.example)$`
+
+// 	regex := regexp.MustCompile(pattern)
+// 	if regex.MatchString(pointer.StringDeref(m.Spec.FqdnSubdomain, "")) {
+// 		return nil
+// 	}
+// 	return errors.Errorf("FqdnSubdomain is invalid %s", pointer.StringDeref(m.Spec.FqdnSubdomain, ""))
+// }
 
 // validateDNSServiceIP validates the DNSServiceIP.
 func (m *AzureManagedControlPlane) validateDNSServiceIP(_ client.Client) error {
@@ -480,14 +544,12 @@ func (m *AzureManagedControlPlane) validateAPIServerAccessProfileUpdate(old *Azu
 	if m.Spec.APIServerAccessProfile != nil {
 		newAPIServerAccessProfileNormalized = &APIServerAccessProfile{
 			EnablePrivateCluster:           m.Spec.APIServerAccessProfile.EnablePrivateCluster,
-			PrivateDNSZone:                 m.Spec.APIServerAccessProfile.PrivateDNSZone,
 			EnablePrivateClusterPublicFQDN: m.Spec.APIServerAccessProfile.EnablePrivateClusterPublicFQDN,
 		}
 	}
 	if old.Spec.APIServerAccessProfile != nil {
 		oldAPIServerAccessProfileNormalized = &APIServerAccessProfile{
 			EnablePrivateCluster:           old.Spec.APIServerAccessProfile.EnablePrivateCluster,
-			PrivateDNSZone:                 old.Spec.APIServerAccessProfile.PrivateDNSZone,
 			EnablePrivateClusterPublicFQDN: old.Spec.APIServerAccessProfile.EnablePrivateClusterPublicFQDN,
 		}
 	}
@@ -495,7 +557,46 @@ func (m *AzureManagedControlPlane) validateAPIServerAccessProfileUpdate(old *Azu
 	if !reflect.DeepEqual(newAPIServerAccessProfileNormalized, oldAPIServerAccessProfileNormalized) {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("Spec", "APIServerAccessProfile"),
-				m.Spec.APIServerAccessProfile, "fields (except for AuthorizedIPRanges) are immutable"),
+				m.Spec.APIServerAccessProfile, "fields EnablePrivateCluster and EnablePrivateClusterPublicFQDN are immutable"),
+		)
+	}
+
+	if errs := m.validateAPIServerAccessProfileDNSZoneUpdate(old); len(errs) > 0 {
+		allErrs = append(allErrs, errs...)
+	}
+
+	return allErrs
+}
+
+func (m *AzureManagedControlPlane) validateAPIServerAccessProfileDNSZoneUpdate(old *AzureManagedControlPlane) field.ErrorList {
+	var allErrs field.ErrorList
+
+	// You can only update from byo or system to none. No other combination of update values is supported.
+	if m.Spec.APIServerAccessProfile != nil && old.Spec.APIServerAccessProfile != nil &&
+		pointer.BoolDeref(m.Spec.APIServerAccessProfile.EnablePrivateCluster, false) &&
+		pointer.BoolDeref(old.Spec.APIServerAccessProfile.EnablePrivateCluster, false) &&
+		m.Spec.APIServerAccessProfile.PrivateDNSZone != old.Spec.APIServerAccessProfile.PrivateDNSZone &&
+		pointer.StringDeref(m.Spec.APIServerAccessProfile.PrivateDNSZone, "") == "None" {
+		return nil
+	}
+
+	newAPIServerAccessProfileNormalized := &APIServerAccessProfile{}
+	oldAPIServerAccessProfileNormalized := &APIServerAccessProfile{}
+	if m.Spec.APIServerAccessProfile != nil {
+		newAPIServerAccessProfileNormalized = &APIServerAccessProfile{
+			PrivateDNSZone: m.Spec.APIServerAccessProfile.PrivateDNSZone,
+		}
+	}
+	if old.Spec.APIServerAccessProfile != nil {
+		oldAPIServerAccessProfileNormalized = &APIServerAccessProfile{
+			PrivateDNSZone: old.Spec.APIServerAccessProfile.PrivateDNSZone,
+		}
+	}
+
+	if !reflect.DeepEqual(newAPIServerAccessProfileNormalized, oldAPIServerAccessProfileNormalized) {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("Spec", "APIServerAccessProfile"),
+				m.Spec.APIServerAccessProfile, "invalid update operation performed on PrivateDNSZone. You can only update from byo or system to none. No other combination of update values is supported."),
 		)
 	}
 

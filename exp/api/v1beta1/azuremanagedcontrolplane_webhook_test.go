@@ -83,6 +83,56 @@ func TestValidatingWebhook(t *testing.T) {
 		expectErr bool
 	}{
 		{
+			name: "Testing inValid DNSPrefix for starting with invalid charecters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("-thisi$"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: true,
+		},
+		{
+			name: "Testing inValid DNSPrefix with more then 54 characters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("thisisaverylong$^clusternameconsistingofmorethan54characterswhichshouldbeinvalid"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: true,
+		},
+		{
+			name: "Testing inValid DNSPrefix with underscore",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("no_underscore"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: true,
+		},
+		{
+			name: "Testing inValid DNSPrefix with special characters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("no-dollar$@%"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: true,
+		},
+		{
+			name: "Testing valid DNSPrefix ",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("thisisavlerylongclu7l0sternam3leconsistingofmorethan54"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: false,
+		},
+		{
 			name: "Testing valid DNSServiceIP",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
@@ -728,6 +778,202 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 					Version:      "v1.18.0",
 					APIServerAccessProfile: &APIServerAccessProfile{
 						EnablePrivateCluster: to.BoolPtr(true),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane DockerBridgeCidr is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DockerBridgeCidr: to.StringPtr("192.168.0.0"),
+					Version:          "v1.18.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane DockerBridgeCidr is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DockerBridgeCidr: to.StringPtr("192.168.0.0"),
+					Version:          "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DockerBridgeCidr: to.StringPtr("192.168.0.0"),
+					Version:          "v1.18.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "AzureManagedControlPlane DockerBridgeCidr is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DockerBridgeCidr: to.StringPtr("192.168.0.0"),
+					Version:          "v1.18.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane DNSPrefix is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("capz-aks-1"),
+					Version:   "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("capz-aks"),
+					Version:   "v1.18.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane DNSPrefix is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("capz-aks"),
+					Version:   "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("capz-aks"),
+					Version:   "v1.18.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "AzureManagedControlPlane FqdnSubdomain is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+					Version:       "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version:       "v1.18.0",
+					FqdnSubdomain: pointer.StringPtr("capzaks.com"),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane FqdnSubdomain is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+					Version:       "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version:       "v1.18.0",
+					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid AzureManagedControlPlane PrivateDNSZone update",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+					},
+					Version: "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+						PrivateDNSZone:       pointer.StringPtr("None"),
+					},
+					Version: "v1.18.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid AzureManagedControlPlane PrivateDNSZone update",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+						PrivateDNSZone:       pointer.StringPtr("example-resource-id"),
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+						PrivateDNSZone:       pointer.StringPtr("None"),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Invalid AzureManagedControlPlane PrivateDNSZone update",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+						PrivateDNSZone:       pointer.StringPtr("example-resource-id"),
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Invalid AzureManagedControlPlane PrivateDNSZone update",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+						PrivateDNSZone:       pointer.StringPtr("example-resource-id"),
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					APIServerAccessProfile: &APIServerAccessProfile{
+						EnablePrivateCluster: pointer.Bool(true),
+						PrivateDNSZone:       pointer.StringPtr("example-resource-id-1"),
 					},
 				},
 			},
