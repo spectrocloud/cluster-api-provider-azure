@@ -799,6 +799,37 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "AzureManagedControlPlane DockerBridgeCidr is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DockerBridgeCidr: to.StringPtr("192.168.0.0"),
+					Version:          "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DockerBridgeCidr: to.StringPtr("192.168.0.0"),
+					Version:          "v1.18.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "AzureManagedControlPlane DockerBridgeCidr is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DockerBridgeCidr: to.StringPtr("192.168.0.0"),
+					Version:          "v1.18.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "AzureManagedControlPlane DNSPrefix is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
@@ -815,6 +846,22 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "AzureManagedControlPlane DNSPrefix is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("capz-aks"),
+					Version:   "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("capz-aks"),
+					Version:   "v1.18.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "AzureManagedControlPlane FqdnSubdomain is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
@@ -829,6 +876,22 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				},
 			},
 			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane FqdnSubdomain is immutable",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+					Version:       "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version:       "v1.18.0",
+					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name: "Valid AzureManagedControlPlane PrivateDNSZone update",

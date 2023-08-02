@@ -261,7 +261,7 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
-	if m.Spec.DNSPrefix != old.Spec.DNSPrefix {
+	if pointer.StringDeref(m.Spec.DNSPrefix, "") != pointer.StringDeref(old.Spec.DNSPrefix, "") {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("Spec.DNSPrefix"),
@@ -269,7 +269,7 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 				"field is immutable"))
 	}
 
-	if m.Spec.DockerBridgeCidr != old.Spec.DockerBridgeCidr {
+	if pointer.StringDeref(m.Spec.DockerBridgeCidr, "") != pointer.StringDeref(old.Spec.DockerBridgeCidr, "") {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("Spec.DockerBridgeCidr"),
@@ -277,7 +277,7 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 				"field is immutable"))
 	}
 
-	if m.Spec.FqdnSubdomain != old.Spec.FqdnSubdomain {
+	if pointer.StringDeref(m.Spec.FqdnSubdomain, "") != pointer.StringDeref(old.Spec.FqdnSubdomain, "") {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("Spec.FqdnSubdomain"),
