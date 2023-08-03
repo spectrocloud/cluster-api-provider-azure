@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"crypto/tls"
+	"strings"
 
 	// +kubebuilder:scaffold:imports
 	asocontainerservicev1api20210501 "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20210501"
@@ -68,11 +70,27 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/pkg/ot"
 	"sigs.k8s.io/cluster-api-provider-azure/util/reconciler"
 	"sigs.k8s.io/cluster-api-provider-azure/version"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha4"
+	clusterv1beta1exp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	capifeature "sigs.k8s.io/cluster-api/feature"
+	"sigs.k8s.io/cluster-api/util/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	cliflag "k8s.io/component-base/cli/flag"
 )
+
+type TLSOptions struct {
+	TLSMinVersion   string
+	TLSCipherSuites []string
+}
 
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+	tlsOptions = TLSOptions{}
 )
 
 func init() {
@@ -266,6 +284,8 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	flags.AddManagerOptions(fs, &managerOptions)
 
+	AddTLSOptions(fs, &tlsOptions)
+
 	feature.MutableGates.AddFlag(fs)
 }
 
@@ -287,6 +307,12 @@ func main() {
 	broadcaster := cgrecord.NewBroadcasterWithCorrelatorOptions(cgrecord.CorrelatorOptions{
 		BurstSize: 100,
 	})
+
+	tlsOptionOverrides, err := GetTLSOptionOverrideFuncs(tlsOptions)
+ 	if err != nil {
+ 		setupLog.Error(err, "unable to add TLS settings to the webhook server")
+ 		os.Exit(1)
+ 	}
 
 	tlsOptions, metricsOptions, err := flags.GetManagerOptions(managerOptions)
 	if err != nil {
@@ -313,6 +339,12 @@ func main() {
 		RenewDeadline:              &leaderElectionRenewDeadline,
 		RetryPeriod:                &leaderElectionRetryPeriod,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
+		SyncPeriod:                 &syncPeriod,
+		Namespace:                  watchNamespace,
+		HealthProbeBindAddress:     healthAddr,
+		Port:                       webhookPort,
+		EventBroadcaster:           broadcaster,
+		TLSOpts: 					tlsOptionOverrides,
 		HealthProbeBindAddress:     healthAddr,
 		PprofBindAddress:           profilerAddress,
 		Metrics:                    *metricsOptions,
@@ -370,6 +402,49 @@ func main() {
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
+	}
+}
+
+// AddTLSOptions adds the webhook server TLS configuration flags
+// to the flag set.
+func AddTLSOptions(fs *pflag.FlagSet, options *TLSOptions) {
+	fs.StringVar(&options.TLSMinVersion, "tls-min-version", "VersionTLS12",
+		"The minimum TLS version in use by the webhook server.\n"+
+			fmt.Sprintf("Possible values are %s.", strings.Join(cliflag.TLSPossibleVersions(), ", ")),
+	)
+
+	tlsCipherPreferredValues := cliflag.PreferredTLSCipherNames()
+	tlsCipherInsecureValues := cliflag.InsecureTLSCipherNames()
+	fs.StringSliceVar(&options.TLSCipherSuites, "tls-cipher-suites", []string{},
+		"Comma-separated list of cipher suites for the webhook server. "+
+			"If omitted, the default Go cipher suites will be used. \n"+
+			"Preferred values: "+strings.Join(tlsCipherPreferredValues, ", ")+". \n"+
+			"Insecure values: "+strings.Join(tlsCipherInsecureValues, ", ")+".")
+}
+
+// GetTLSOptionOverrideFuncs returns a list of TLS configuration overrides to be used
+// by the webhook server.
+func GetTLSOptionOverrideFuncs(options TLSOptions) ([]func(*tls.Config), error) {
+	var tlsOptions []func(config *tls.Config)
+	tlsVersion, err := cliflag.TLSVersion(options.TLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	tlsOptions = append(tlsOptions, func(cfg *tls.Config) {
+		cfg.MinVersion = tlsVersion
+		cfg.CipherSuites = GetDefaultTLSCipherSuits()
+		cfg.MaxVersion = tlsVersion
+	})
+
+	return tlsOptions, nil
+}
+
+func GetDefaultTLSCipherSuits() []uint16 {
+	return []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	}
 }
 
