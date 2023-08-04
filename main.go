@@ -25,7 +25,6 @@ import (
 	"os"
 	"time"
 	"crypto/tls"
-	"strings"
 
 	// +kubebuilder:scaffold:imports
 	aadpodv1 "github.com/Azure/aad-pod-identity/pkg/apis/aadpodidentity/v1"
@@ -250,8 +249,6 @@ func InitFlags(fs *pflag.FlagSet) {
 		"Enable tracing to the opentelemetry-collector service in the same namespace.",
 	)
 
-	AddTLSOptions(fs, &tlsOptions)
-
 	feature.MutableGates.AddFlag(fs)
 }
 
@@ -339,23 +336,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-// AddTLSOptions adds the webhook server TLS configuration flags
-// to the flag set.
-func AddTLSOptions(fs *pflag.FlagSet, options *TLSOptions) {
-	fs.StringVar(&options.TLSMinVersion, "tls-min-version", "VersionTLS12",
-		"The minimum TLS version in use by the webhook server.\n"+
-			fmt.Sprintf("Possible values are %s.", strings.Join(cliflag.TLSPossibleVersions(), ", ")),
-	)
-
-	tlsCipherPreferredValues := cliflag.PreferredTLSCipherNames()
-	tlsCipherInsecureValues := cliflag.InsecureTLSCipherNames()
-	fs.StringSliceVar(&options.TLSCipherSuites, "tls-cipher-suites", []string{},
-		"Comma-separated list of cipher suites for the webhook server. "+
-			"If omitted, the default Go cipher suites will be used. \n"+
-			"Preferred values: "+strings.Join(tlsCipherPreferredValues, ", ")+". \n"+
-			"Insecure values: "+strings.Join(tlsCipherInsecureValues, ", ")+".")
 }
 
 // GetTLSOptionOverrideFuncs returns a list of TLS configuration overrides to be used
