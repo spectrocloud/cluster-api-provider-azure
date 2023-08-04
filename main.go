@@ -23,7 +23,6 @@ import (
 	"os"
 	"time"
 	"crypto/tls"
-	"strings"
 
 	// +kubebuilder:scaffold:imports
 	asocontainerservicev1api20210501 "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20210501"
@@ -140,6 +139,13 @@ var (
 
 // InitFlags initializes all command-line flags.
 func InitFlags(fs *pflag.FlagSet) {
+	fs.StringVar(
+		&metricsAddr,
+		"metrics-bind-addr",
+		"localhost:8080",
+		"The address the metric endpoint binds to.",
+	)
+
 	fs.BoolVar(
 		&enableLeaderElection,
 		"leader-elect",
@@ -284,8 +290,6 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	flags.AddManagerOptions(fs, &managerOptions)
 
-	AddTLSOptions(fs, &tlsOptions)
-
 	feature.MutableGates.AddFlag(fs)
 }
 
@@ -332,6 +336,7 @@ func main() {
 	restConfig.UserAgent = "cluster-api-provider-azure-manager"
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                     scheme,
+		MetricsBindAddress:         metricsAddr,
 		LeaderElection:             enableLeaderElection,
 		LeaderElectionID:           "controller-leader-election-capz",
 		LeaderElectionNamespace:    leaderElectionNamespace,
@@ -403,23 +408,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-// AddTLSOptions adds the webhook server TLS configuration flags
-// to the flag set.
-func AddTLSOptions(fs *pflag.FlagSet, options *TLSOptions) {
-	fs.StringVar(&options.TLSMinVersion, "tls-min-version", "VersionTLS12",
-		"The minimum TLS version in use by the webhook server.\n"+
-			fmt.Sprintf("Possible values are %s.", strings.Join(cliflag.TLSPossibleVersions(), ", ")),
-	)
-
-	tlsCipherPreferredValues := cliflag.PreferredTLSCipherNames()
-	tlsCipherInsecureValues := cliflag.InsecureTLSCipherNames()
-	fs.StringSliceVar(&options.TLSCipherSuites, "tls-cipher-suites", []string{},
-		"Comma-separated list of cipher suites for the webhook server. "+
-			"If omitted, the default Go cipher suites will be used. \n"+
-			"Preferred values: "+strings.Join(tlsCipherPreferredValues, ", ")+". \n"+
-			"Insecure values: "+strings.Join(tlsCipherInsecureValues, ", ")+".")
 }
 
 // GetTLSOptionOverrideFuncs returns a list of TLS configuration overrides to be used
