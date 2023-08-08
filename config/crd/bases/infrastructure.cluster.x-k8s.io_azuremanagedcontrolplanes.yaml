@@ -577,6 +577,22 @@ spec:
                       cluster.
                     type: string
                 type: object
+              autoUpgradeProfile:
+                description: AutoUpgradeProfile - Profile of auto upgrade configuration.
+                properties:
+                  upgradeChannel:
+                    description: 'UpgradeChannel - upgrade channel for auto upgrade.
+                      Possible values include: "node-image","none","patch","rapid","stable"'
+                    enum:
+                    - node-image
+                    - none
+                    - patch
+                    - rapid
+                    - stable
+                    type: string
+                required:
+                - upgradeChannel
+                type: object
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.
@@ -592,6 +608,11 @@ spec:
                 - host
                 - port
                 type: object
+              disableLocalAccounts:
+                description: DisableLocalAccounts - If set to true, getting static
+                  credential will be disabled for this cluster. Expected to only be
+                  used for AAD clusters.
+                type: boolean
               dnsPrefix:
                 description: DNSPrefix - DNS prefix specified when creating the managed
                   cluster.
@@ -710,6 +731,16 @@ spec:
                   containing cluster IaaS resources. Will be populated to default
                   in webhook.
                 type: string
+              oidcIssuerProfile:
+                description: OidcIssuerProfile - The OIDC issuer profile of the Managed
+                  Cluster.
+                properties:
+                  enabled:
+                    description: Enabled - Whether the OIDC issuer is enabled.
+                    type: boolean
+                required:
+                - enabled
+                type: object
               outboundType:
                 description: Outbound configuration used by Nodes.
                 enum:
@@ -722,6 +753,46 @@ spec:
                 description: ResourceGroupName is the name of the Azure resource group
                   for this AKS Cluster.
                 type: string
+              securityProfile:
+                description: SecurityProfile - Security profile for the managed cluster.
+                properties:
+                  defender:
+                    description: Defender - Microsoft Defender settings for the security
+                      profile.
+                    properties:
+                      logAnalyticsWorkspaceResourceId:
+                        description: LogAnalyticsWorkspaceResourceID - Resource ID
+                          of the Log Analytics workspace to be associated with Microsoft
+                          Defender. When Microsoft Defender is enabled, this field
+                          is required and must be a valid workspace resource ID. When
+                          Microsoft Defender is disabled, leave the field empty.
+                        type: string
+                      securityMonitoring:
+                        description: SecurityMonitoring - Microsoft Defender threat
+                          detection for Cloud settings for the security profile.
+                        properties:
+                          enabled:
+                            description: Enabled - Whether to enable Defender threat
+                              detection
+                            type: boolean
+                        required:
+                        - enabled
+                        type: object
+                    required:
+                    - logAnalyticsWorkspaceResourceId
+                    - securityMonitoring
+                    type: object
+                  workloadIdentity:
+                    description: WorkloadIdentity - [Workload Identity](https://azure.github.io/azure-workload-identity/docs/)
+                      settings for the security profile.
+                    properties:
+                      enabled:
+                        description: Enabled - Whether to enable Workload Identity
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                type: object
               sku:
                 description: SKU is the SKU of the AKS to be provisioned.
                 properties:

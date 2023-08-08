@@ -123,6 +123,26 @@ func TestValidatingWebhook(t *testing.T) {
 			expectErr: true,
 		},
 		{
+			name: "Testing Valid DNSPrefix with hypen characters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("hypen-allowed"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "Testing Valid DNSPrefix with hypen characters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: pointer.StringPtr("palette-test07"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: false,
+		},
+		{
 			name: "Testing valid DNSPrefix ",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
@@ -283,6 +303,30 @@ func TestValidatingWebhook(t *testing.T) {
 				},
 			},
 			expectErr: true,
+		},
+		{
+			name: "DisableLocalAccounts cannot be set for non AAD clusters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version:              "v1.21.2",
+					DisableLocalAccounts: pointer.BoolPtr(true),
+				},
+			},
+			expectErr: true,
+		},
+		{
+			name: "DisableLocalAccounts can be set for AAD clusters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.21.2",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+					DisableLocalAccounts: pointer.BoolPtr(true),
+				},
+			},
+			expectErr: false,
 		},
 	}
 
@@ -1019,6 +1063,56 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 					APIServerAccessProfile: &APIServerAccessProfile{
 						AuthorizedIPRanges: []string{"192.168.0.1/32"},
 					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "DisableLocalAccounts can be set only for AAD enabled clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version:              "v1.18.0",
+					DisableLocalAccounts: pointer.BoolPtr(true),
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "DisableLocalAccounts cannot be set only for non AAD clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version:              "v1.18.0",
+					DisableLocalAccounts: pointer.BoolPtr(true),
 				},
 			},
 			wantErr: true,

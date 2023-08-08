@@ -45,6 +45,32 @@ const (
 	ManagedControlPlaneOutboundTypeUserDefinedRouting ManagedControlPlaneOutboundType = "userDefinedRouting"
 )
 
+// UpgradeChannel enumerates the values for upgrade channel.
+type UpgradeChannel string
+
+const (
+	// UpgradeChannelNodeImage ...
+	UpgradeChannelNodeImage UpgradeChannel = "node-image"
+	// UpgradeChannelNone ...
+	UpgradeChannelNone UpgradeChannel = "none"
+	// UpgradeChannelPatch ...
+	UpgradeChannelPatch UpgradeChannel = "patch"
+	// UpgradeChannelRapid ...
+	UpgradeChannelRapid UpgradeChannel = "rapid"
+	// UpgradeChannelStable ...
+	UpgradeChannelStable UpgradeChannel = "stable"
+)
+
+// KeyVaultNetworkAccessTypes enumerates the values for key vault network access types.
+type KeyVaultNetworkAccessTypes string
+
+const (
+	// Private ...
+	Private KeyVaultNetworkAccessTypes = "Private"
+	// Public ...
+	Public KeyVaultNetworkAccessTypes = "Public"
+)
+
 // AzureManagedControlPlaneSpec defines the desired state of AzureManagedControlPlane.
 type AzureManagedControlPlaneSpec struct {
 	// Version defines the desired Kubernetes version.
@@ -147,6 +173,72 @@ type AzureManagedControlPlaneSpec struct {
 	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
 	// +optional
 	UserAssignedIdentities []infrav1.UserAssignedIdentity `json:"userAssignedIdentities,omitempty"`
+
+	// AutoUpgradeProfile - Profile of auto upgrade configuration.
+	// +optional
+	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile `json:"autoUpgradeProfile,omitempty"`
+
+	// SecurityProfile - Security profile for the managed cluster.
+	// +optional
+	SecurityProfile *ManagedClusterSecurityProfile `json:"securityProfile,omitempty"`
+
+	// OidcIssuerProfile - The OIDC issuer profile of the Managed Cluster.
+	// +optional
+	OidcIssuerProfile *ManagedClusterOIDCIssuerProfile `json:"oidcIssuerProfile,omitempty"`
+
+	// DisableLocalAccounts - If set to true, getting static credential will be disabled for this cluster. Expected to only be used for AAD clusters.
+	// +optional
+	DisableLocalAccounts *bool `json:"disableLocalAccounts,omitempty"`
+}
+
+// ManagedClusterOIDCIssuerProfile the OIDC issuer profile of the Managed Cluster.
+type ManagedClusterOIDCIssuerProfile struct {
+	// Enabled - Whether the OIDC issuer is enabled.
+	// +kubebuilder:validation:Required
+	Enabled bool `json:"enabled"`
+}
+
+// ManagedClusterSecurityProfile security profile for the container service cluster.
+type ManagedClusterSecurityProfile struct {
+	// Defender - Microsoft Defender settings for the security profile.
+	// +optional
+	Defender *ManagedClusterSecurityProfileDefender `json:"defender,omitempty"`
+	// WorkloadIdentity - [Workload Identity](https://azure.github.io/azure-workload-identity/docs/) settings for the security profile.
+	// +optional
+	WorkloadIdentity *ManagedClusterSecurityProfileWorkloadIdentity `json:"workloadIdentity,omitempty"`
+}
+
+// ManagedClusterSecurityProfileWorkloadIdentity workload Identity settings for the security profile.
+type ManagedClusterSecurityProfileWorkloadIdentity struct {
+	// Enabled - Whether to enable Workload Identity
+	// +kubebuilder:validation:Required
+	Enabled bool `json:"enabled"`
+}
+
+// ManagedClusterSecurityProfileDefender microsoft Defender settings for the security profile.
+type ManagedClusterSecurityProfileDefender struct {
+	// LogAnalyticsWorkspaceResourceID - Resource ID of the Log Analytics workspace to be associated with Microsoft Defender. When Microsoft Defender is enabled, this field is required and must be a valid workspace resource ID. When Microsoft Defender is disabled, leave the field empty.
+	// +kubebuilder:validation:Required
+	LogAnalyticsWorkspaceResourceID string `json:"logAnalyticsWorkspaceResourceId"`
+	// SecurityMonitoring - Microsoft Defender threat detection for Cloud settings for the security profile.
+	// +kubebuilder:validation:Required
+	SecurityMonitoring *ManagedClusterSecurityProfileDefenderSecurityMonitoring `json:"securityMonitoring"`
+}
+
+// ManagedClusterSecurityProfileDefenderSecurityMonitoring microsoft Defender settings for the security
+// profile threat detection.
+type ManagedClusterSecurityProfileDefenderSecurityMonitoring struct {
+	// Enabled - Whether to enable Defender threat detection
+	// +kubebuilder:validation:Required
+	Enabled bool `json:"enabled"`
+}
+
+// ManagedClusterAutoUpgradeProfile auto upgrade profile for a managed cluster.
+type ManagedClusterAutoUpgradeProfile struct {
+	// UpgradeChannel - upgrade channel for auto upgrade. Possible values include: "node-image","none","patch","rapid","stable"
+	// +kubebuilder:validation:Enum=node-image;none;patch;rapid;stable
+	// +kubebuilder:validation:Required
+	UpgradeChannel UpgradeChannel `json:"upgradeChannel"`
 }
 
 // AADProfile - AAD integration managed by AKS.

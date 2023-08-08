@@ -80,7 +80,7 @@ type ManagedClusterSpec struct {
 	ServiceCIDR string
 
 	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
-	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+	DockerBridgeCidr *string
 
 	// DNSServiceIP is an IP address assigned to the Kubernetes DNS service
 	DNSServiceIP *string
@@ -111,6 +111,59 @@ type ManagedClusterSpec struct {
 
 	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
 	UserAssignedIdentities []UserAssignedIdentity
+
+	// AutoUpgradeProfile - Profile of auto upgrade configuration.
+	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile
+
+	// DisableLocalAccounts - If set to true, getting static credential will be disabled for this cluster. Expected to only be used for AAD clusters.
+	DisableLocalAccounts *bool
+
+	// SecurityProfile - Security profile for the managed cluster.
+	SecurityProfile *ManagedClusterSecurityProfile
+
+	// OidcIssuerProfile - The OIDC issuer profile of the Managed Cluster.
+	OidcIssuerProfile *ManagedClusterOIDCIssuerProfile
+}
+
+// ManagedClusterOIDCIssuerProfile the OIDC issuer profile of the Managed Cluster.
+type ManagedClusterOIDCIssuerProfile struct {
+	// Enabled - Whether the OIDC issuer is enabled.
+	Enabled *bool
+}
+
+// ManagedClusterSecurityProfile security profile for the container service cluster.
+type ManagedClusterSecurityProfile struct {
+	// Defender - Microsoft Defender settings for the security profile.
+	Defender *ManagedClusterSecurityProfileDefender
+	// WorkloadIdentity - [Workload Identity](https://azure.github.io/azure-workload-identity/docs/) settings for the security profile.
+	WorkloadIdentity *ManagedClusterSecurityProfileWorkloadIdentity
+}
+
+// ManagedClusterSecurityProfileWorkloadIdentity workload Identity settings for the security profile.
+type ManagedClusterSecurityProfileWorkloadIdentity struct {
+	// Enabled - Whether to enable Workload Identity
+	Enabled *bool
+}
+
+// ManagedClusterSecurityProfileDefender microsoft Defender settings for the security profile.
+type ManagedClusterSecurityProfileDefender struct {
+	// LogAnalyticsWorkspaceResourceID - Resource ID of the Log Analytics workspace to be associated with Microsoft Defender. When Microsoft Defender is enabled, this field is required and must be a valid workspace resource ID. When Microsoft Defender is disabled, leave the field empty.
+	LogAnalyticsWorkspaceResourceID *string
+	// SecurityMonitoring - Microsoft Defender threat detection for Cloud settings for the security profile.
+	SecurityMonitoring *ManagedClusterSecurityProfileDefenderSecurityMonitoring
+}
+
+// ManagedClusterSecurityProfileDefenderSecurityMonitoring microsoft Defender settings for the security
+// profile threat detection.
+type ManagedClusterSecurityProfileDefenderSecurityMonitoring struct {
+	// Enabled - Whether to enable Defender threat detection
+	Enabled *bool
+}
+
+// ManagedClusterAutoUpgradeProfile auto upgrade profile for a managed cluster.
+type ManagedClusterAutoUpgradeProfile struct {
+	// UpgradeChannel - upgrade channel for auto upgrade. Possible values include: 'UpgradeChannelRapid', 'UpgradeChannelStable', 'UpgradeChannelPatch', 'UpgradeChannelNodeImage', 'UpgradeChannelNone'
+	UpgradeChannel expinfrav1.UpgradeChannel
 }
 
 // UserAssignedIdentity defines the user-assigned identities provided
@@ -118,7 +171,7 @@ type ManagedClusterSpec struct {
 type UserAssignedIdentity struct {
 	// ProviderID is the identification ID of the user-assigned Identity, the format of an identity is:
 	// 'azure:///subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}'
-	ProviderID string `json:"providerID"`
+	ProviderID string
 }
 
 // AADProfile is Azure Active Directory configuration to integrate with AKS, for aad authentication.
@@ -282,6 +335,9 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			EnableAzureRBAC:     &s.AADProfile.EnableAzureRBAC,
 			AdminGroupObjectIDs: &s.AADProfile.AdminGroupObjectIDs,
 		}
+		if s.DisableLocalAccounts != nil {
+			managedCluster.DisableLocalAccounts = s.DisableLocalAccounts
+		}
 	}
 
 	for i := range s.AddonProfiles {
@@ -352,6 +408,33 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 		managedCluster.Identity = &containerservice.ManagedClusterIdentity{
 			Type:                   containerservice.ResourceIdentityType(infrav1.VMIdentityUserAssigned),
 			UserAssignedIdentities: uaIDs,
+		}
+	}
+
+	// if s.SecurityProfile != nil {
+	// 	managedCluster.SecurityProfile = &containerservice.ManagedClusterSecurityProfile{}
+	// 	if s.SecurityProfile.Defender != nil {
+	// 		managedCluster.SecurityProfile.AzureDefender = &containerservice.ManagedClusterSecurityProfileAzureDefender{
+	// 			LogAnalyticsWorkspaceResourceID: s.SecurityProfile.Defender.LogAnalyticsWorkspaceResourceID,
+	// 			Enabled:                         s.SecurityProfile.Defender.SecurityMonitoring.Enabled,
+	// 		}
+	// 	}
+	// 	if s.SecurityProfile.WorkloadIdentity != nil {
+	// 		managedCluster.SecurityProfile.WorkloadIdentity = &containerservice.ManagedClusterSecurityProfileWorkloadIdentity{
+	// 			Enabled: s.SecurityProfile.WorkloadIdentity.Enabled,
+	// 		}
+	// 	}
+	// }
+
+	// if s.OidcIssuerProfile != nil {
+	// 	managedCluster.OidcIssuerProfile = &containerservice.ManagedClusterOIDCIssuerProfile{
+	// 		Enabled: s.OidcIssuerProfile.Enabled,
+	// 	}
+	// }
+
+	if s.AutoUpgradeProfile != nil {
+		managedCluster.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: containerservice.UpgradeChannel(s.AutoUpgradeProfile.UpgradeChannel),
 		}
 	}
 
@@ -533,6 +616,70 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		}
 		existingMCClusterNormalized.Identity = &containerservice.ManagedClusterIdentity{
 			UserAssignedIdentities: uaIDs,
+		}
+	}
+
+	if managedCluster.DisableLocalAccounts != nil {
+		clusterNormalized.DisableLocalAccounts = managedCluster.DisableLocalAccounts
+	}
+
+	if existingMC.DisableLocalAccounts != nil {
+		existingMCClusterNormalized.DisableLocalAccounts = existingMC.DisableLocalAccounts
+	}
+
+	// if managedCluster.SecurityProfile != nil {
+	// 	clusterNormalized.SecurityProfile = &containerservice.ManagedClusterSecurityProfile{}
+	// 	if managedCluster.SecurityProfile.AzureDefender != nil {
+	// 		clusterNormalized.SecurityProfile.AzureDefender = &containerservice.ManagedClusterSecurityProfileAzureDefender{
+	// 			Enabled:                         managedCluster.SecurityProfile.AzureDefender.Enabled,
+	// 			LogAnalyticsWorkspaceResourceID: managedCluster.SecurityProfile.AzureDefender.LogAnalyticsWorkspaceResourceID,
+	// 		}
+	// 	}
+	// 	if managedCluster.SecurityProfile.WorkloadIdentity != nil {
+	// 		clusterNormalized.SecurityProfile.WorkloadIdentity = &containerservice.ManagedClusterSecurityProfileWorkloadIdentity{
+	// 			Enabled: managedCluster.SecurityProfile.WorkloadIdentity.Enabled,
+	// 		}
+	// 	}
+	// }
+
+	// if existingMC.SecurityProfile != nil {
+	// 	existingMCClusterNormalized.SecurityProfile = &containerservice.ManagedClusterSecurityProfile{}
+	// 	if existingMC.SecurityProfile.AzureDefender != nil {
+	// 		existingMCClusterNormalized.SecurityProfile.AzureDefender = &containerservice.ManagedClusterSecurityProfileAzureDefender{
+	// 			Enabled:                         existingMC.SecurityProfile.AzureDefender.Enabled,
+	// 			LogAnalyticsWorkspaceResourceID: existingMC.SecurityProfile.AzureDefender.LogAnalyticsWorkspaceResourceID,
+	// 		}
+	// 	}
+	// 	if existingMC.SecurityProfile.WorkloadIdentity != nil {
+	// 		existingMCClusterNormalized.SecurityProfile.WorkloadIdentity = &containerservice.ManagedClusterSecurityProfileWorkloadIdentity{
+	// 			Enabled: existingMC.SecurityProfile.WorkloadIdentity.Enabled,
+	// 		}
+	// 	}
+	// }
+
+	// if managedCluster.OidcIssuerProfile != nil {
+	// 	clusterNormalized.OidcIssuerProfile = &containerservice.ManagedClusterOIDCIssuerProfile{
+	// 		IssuerURL: managedCluster.OidcIssuerProfile.IssuerURL,
+	// 		Enabled:   managedCluster.OidcIssuerProfile.Enabled,
+	// 	}
+	// }
+
+	// if existingMC.OidcIssuerProfile != nil {
+	// 	existingMCClusterNormalized.OidcIssuerProfile = &containerservice.ManagedClusterOIDCIssuerProfile{
+	// 		IssuerURL: existingMC.OidcIssuerProfile.IssuerURL,
+	// 		Enabled:   existingMC.OidcIssuerProfile.Enabled,
+	// 	}
+	// }
+
+	if managedCluster.AutoUpgradeProfile != nil {
+		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: managedCluster.AutoUpgradeProfile.UpgradeChannel,
+		}
+	}
+
+	if existingMC.AutoUpgradeProfile != nil {
+		existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
 		}
 	}
 
