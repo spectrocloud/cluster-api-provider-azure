@@ -608,6 +608,11 @@ spec:
                 - host
                 - port
                 type: object
+              disableLocalAccounts:
+                description: DisableLocalAccounts - If set to true, getting static
+                  credential will be disabled for this cluster. Expected to only be
+                  used for AAD clusters.
+                type: boolean
               dnsPrefix:
                 description: DNSPrefix - DNS prefix specified when creating the managed
                   cluster.
