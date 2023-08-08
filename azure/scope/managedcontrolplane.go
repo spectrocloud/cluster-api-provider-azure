@@ -522,6 +522,12 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec(ctx context.Context) azure
 		}
 	}
 
+	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
+		managedClusterSpec.AutoUpgradeProfile = &managedclusters.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel,
+		}
+	}
+
 	return &managedClusterSpec
 }
 

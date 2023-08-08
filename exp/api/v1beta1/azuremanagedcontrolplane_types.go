@@ -45,6 +45,22 @@ const (
 	ManagedControlPlaneOutboundTypeUserDefinedRouting ManagedControlPlaneOutboundType = "userDefinedRouting"
 )
 
+// UpgradeChannel enumerates the values for upgrade channel.
+type UpgradeChannel string
+
+const (
+	// UpgradeChannelNodeImage ...
+	UpgradeChannelNodeImage UpgradeChannel = "node-image"
+	// UpgradeChannelNone ...
+	UpgradeChannelNone UpgradeChannel = "none"
+	// UpgradeChannelPatch ...
+	UpgradeChannelPatch UpgradeChannel = "patch"
+	// UpgradeChannelRapid ...
+	UpgradeChannelRapid UpgradeChannel = "rapid"
+	// UpgradeChannelStable ...
+	UpgradeChannelStable UpgradeChannel = "stable"
+)
+
 // AzureManagedControlPlaneSpec defines the desired state of AzureManagedControlPlane.
 type AzureManagedControlPlaneSpec struct {
 	// Version defines the desired Kubernetes version.
@@ -147,6 +163,18 @@ type AzureManagedControlPlaneSpec struct {
 	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
 	// +optional
 	UserAssignedIdentities []infrav1.UserAssignedIdentity `json:"userAssignedIdentities,omitempty"`
+
+	// AutoUpgradeProfile - Profile of auto upgrade configuration.
+	// +optional
+	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile `json:"autoUpgradeProfile,omitempty"`
+}
+
+// ManagedClusterAutoUpgradeProfile auto upgrade profile for a managed cluster.
+type ManagedClusterAutoUpgradeProfile struct {
+	// UpgradeChannel - upgrade channel for auto upgrade. Possible values include: "node-image","none","patch","rapid","stable"
+	// +kubebuilder:validation:Enum=node-image;none;patch;rapid;stable
+	// +kubebuilder:validation:Required
+	UpgradeChannel UpgradeChannel `json:"upgradeChannel"`
 }
 
 // AADProfile - AAD integration managed by AKS.
