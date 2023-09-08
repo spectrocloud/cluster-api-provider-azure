@@ -17,8 +17,9 @@ limitations under the License.
 package v1beta1
 
 import (
-	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"testing"
+
+	"sigs.k8s.io/cluster-api-provider-azure/azure"
 
 	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-05-01/containerservice"
 	"github.com/Azure/go-autorest/autorest/to"

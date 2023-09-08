@@ -577,6 +577,22 @@ spec:
                       cluster.
                     type: string
                 type: object
+              autoUpgradeProfile:
+                description: AutoUpgradeProfile - Profile of auto upgrade configuration.
+                properties:
+                  upgradeChannel:
+                    description: 'UpgradeChannel - upgrade channel for auto upgrade.
+                      Possible values include: "node-image","none","patch","rapid","stable"'
+                    enum:
+                    - node-image
+                    - none
+                    - patch
+                    - rapid
+                    - stable
+                    type: string
+                required:
+                - upgradeChannel
+                type: object
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.

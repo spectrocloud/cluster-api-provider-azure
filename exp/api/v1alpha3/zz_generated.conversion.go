@@ -772,6 +772,7 @@ func autoConvert_v1beta1_AzureManagedControlPlaneSpec_To_v1alpha3_AzureManagedCo
 	// WARNING: in.LoadBalancerProfile requires manual conversion: does not exist in peer-type
 	// WARNING: in.APIServerAccessProfile requires manual conversion: does not exist in peer-type
 	// WARNING: in.UserAssignedIdentities requires manual conversion: does not exist in peer-type
+	// WARNING: in.AutoUpgradeProfile requires manual conversion: does not exist in peer-type
 	return nil
 }
 
