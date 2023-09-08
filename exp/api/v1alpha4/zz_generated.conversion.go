@@ -1075,6 +1075,7 @@ func autoConvert_v1beta1_AzureManagedControlPlaneSpec_To_v1alpha4_AzureManagedCo
 	out.LoadBalancerProfile = (*LoadBalancerProfile)(unsafe.Pointer(in.LoadBalancerProfile))
 	out.APIServerAccessProfile = (*APIServerAccessProfile)(unsafe.Pointer(in.APIServerAccessProfile))
 	// WARNING: in.UserAssignedIdentities requires manual conversion: does not exist in peer-type
+	// WARNING: in.AutoUpgradeProfile requires manual conversion: does not exist in peer-type
 	return nil
 }
 

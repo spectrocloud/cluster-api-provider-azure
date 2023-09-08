@@ -80,7 +80,7 @@ type ManagedClusterSpec struct {
 	ServiceCIDR string
 
 	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
-	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+	DockerBridgeCidr *string
 
 	// DNSServiceIP is an IP address assigned to the Kubernetes DNS service
 	DNSServiceIP *string
@@ -111,6 +111,15 @@ type ManagedClusterSpec struct {
 
 	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
 	UserAssignedIdentities []UserAssignedIdentity
+
+	// AutoUpgradeProfile - Profile of auto upgrade configuration.
+	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile
+}
+
+// ManagedClusterAutoUpgradeProfile auto upgrade profile for a managed cluster.
+type ManagedClusterAutoUpgradeProfile struct {
+	// UpgradeChannel - upgrade channel for auto upgrade. Possible values include: 'UpgradeChannelRapid', 'UpgradeChannelStable', 'UpgradeChannelPatch', 'UpgradeChannelNodeImage', 'UpgradeChannelNone'
+	UpgradeChannel expinfrav1.UpgradeChannel
 }
 
 // UserAssignedIdentity defines the user-assigned identities provided
@@ -118,7 +127,7 @@ type ManagedClusterSpec struct {
 type UserAssignedIdentity struct {
 	// ProviderID is the identification ID of the user-assigned Identity, the format of an identity is:
 	// 'azure:///subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}'
-	ProviderID string `json:"providerID"`
+	ProviderID string
 }
 
 // AADProfile is Azure Active Directory configuration to integrate with AKS, for aad authentication.
@@ -355,6 +364,12 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 		}
 	}
 
+	if s.AutoUpgradeProfile != nil {
+		managedCluster.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: containerservice.UpgradeChannel(s.AutoUpgradeProfile.UpgradeChannel),
+		}
+	}
+
 	if existing != nil {
 		existingMC, ok := existing.(containerservice.ManagedCluster)
 		if !ok {
@@ -533,6 +548,18 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		}
 		existingMCClusterNormalized.Identity = &containerservice.ManagedClusterIdentity{
 			UserAssignedIdentities: uaIDs,
+		}
+	}
+
+	if managedCluster.AutoUpgradeProfile != nil {
+		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: managedCluster.AutoUpgradeProfile.UpgradeChannel,
+		}
+	}
+
+	if existingMC.AutoUpgradeProfile != nil {
+		existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
 		}
 	}
 
