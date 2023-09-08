@@ -106,10 +106,11 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 
 // ManagedControlPlaneScope defines the basic context for an actuator to operate upon.
 type ManagedControlPlaneScope struct {
-	Client         client.Client
-	patchHelper    *patch.Helper
-	kubeConfigData []byte
-	cache          *ManagedControlPlaneCache
+	Client              client.Client
+	patchHelper         *patch.Helper
+	adminKubeConfigData []byte
+	userKubeConfigData  []byte
+	cache               *ManagedControlPlaneCache
 
 	AzureClients
 	Cluster             *clusterv1.Cluster
@@ -413,6 +414,22 @@ func (s *ManagedControlPlaneScope) ManagedClusterAnnotations() map[string]string
 	return s.ControlPlane.Annotations
 }
 
+func (s *ManagedControlPlaneScope) IsLocalAcountsDisabled() bool {
+	if s.IsAadEnabled() &&
+		s.ControlPlane.Spec.DisableLocalAccounts != nil &&
+		*s.ControlPlane.Spec.DisableLocalAccounts {
+		return true
+	}
+	return false
+}
+
+func (s *ManagedControlPlaneScope) IsAadEnabled() bool {
+	if s.ControlPlane.Spec.AADProfile != nil && s.ControlPlane.Spec.AADProfile.Managed {
+		return true
+	}
+	return false
+}
+
 // ManagedClusterSpec returns the managed cluster spec.
 func (s *ManagedControlPlaneScope) ManagedClusterSpec(ctx context.Context) azure.ResourceSpecGetter {
 	managedClusterSpec := managedclusters.ManagedClusterSpec{
@@ -476,6 +493,9 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec(ctx context.Context) azure
 			Managed:             s.ControlPlane.Spec.AADProfile.Managed,
 			EnableAzureRBAC:     s.ControlPlane.Spec.AADProfile.Managed,
 			AdminGroupObjectIDs: s.ControlPlane.Spec.AADProfile.AdminGroupObjectIDs,
+		}
+		if s.ControlPlane.Spec.DisableLocalAccounts != nil {
+			managedClusterSpec.DisableLocalAccounts = s.ControlPlane.Spec.DisableLocalAccounts
 		}
 	}
 
@@ -579,14 +599,24 @@ func (s *ManagedControlPlaneScope) MakeEmptyKubeConfigSecret() corev1.Secret {
 	}
 }
 
-// GetKubeConfigData returns a []byte that contains kubeconfig.
-func (s *ManagedControlPlaneScope) GetKubeConfigData() []byte {
-	return s.kubeConfigData
+// GetAdminKubeConfigData returns admin kubeconfig.
+func (s *ManagedControlPlaneScope) GetAdminKubeConfigData() []byte {
+	return s.adminKubeConfigData
 }
 
-// SetKubeConfigData sets kubeconfig data.
-func (s *ManagedControlPlaneScope) SetKubeConfigData(kubeConfigData []byte) {
-	s.kubeConfigData = kubeConfigData
+// SetAdminKubeConfigData sets adminKubeconfig data.
+func (s *ManagedControlPlaneScope) SetAdminKubeConfigData(kubeConfigData []byte) {
+	s.adminKubeConfigData = kubeConfigData
+}
+
+// GetUserKubeConfigData returns user kubeconfig, required when using AAD with AKS cluster.
+func (s *ManagedControlPlaneScope) GetUserKubeConfigData() []byte {
+	return s.userKubeConfigData
+}
+
+// SetUserKubeConfigData sets userKubeconfig data.
+func (s *ManagedControlPlaneScope) SetUserKubeConfigData(kubeConfigData []byte) {
+	s.userKubeConfigData = kubeConfigData
 }
 
 // SetLongRunningOperationState will set the future on the AzureManagedControlPlane status to allow the resource to continue

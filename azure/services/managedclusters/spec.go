@@ -112,6 +112,9 @@ type ManagedClusterSpec struct {
 	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
 	UserAssignedIdentities []UserAssignedIdentity
 
+	// DisableLocalAccounts - If set to true, getting static credential will be disabled for this cluster. Expected to only be used for AAD clusters.
+	DisableLocalAccounts *bool
+
 	// AutoUpgradeProfile - Profile of auto upgrade configuration.
 	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile
 }
@@ -290,6 +293,9 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			Managed:             &s.AADProfile.Managed,
 			EnableAzureRBAC:     &s.AADProfile.EnableAzureRBAC,
 			AdminGroupObjectIDs: &s.AADProfile.AdminGroupObjectIDs,
+		}
+		if s.DisableLocalAccounts != nil {
+			managedCluster.DisableLocalAccounts = s.DisableLocalAccounts
 		}
 	}
 
@@ -561,6 +567,13 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
 			UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
 		}
+	}
+	if managedCluster.DisableLocalAccounts != nil {
+		clusterNormalized.DisableLocalAccounts = managedCluster.DisableLocalAccounts
+	}
+
+	if existingMC.DisableLocalAccounts != nil {
+		existingMCClusterNormalized.DisableLocalAccounts = existingMC.DisableLocalAccounts
 	}
 
 	diff := cmp.Diff(clusterNormalized, existingMCClusterNormalized)

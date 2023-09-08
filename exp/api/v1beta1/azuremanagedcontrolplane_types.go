@@ -167,6 +167,10 @@ type AzureManagedControlPlaneSpec struct {
 	// AutoUpgradeProfile - Profile of auto upgrade configuration.
 	// +optional
 	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile `json:"autoUpgradeProfile,omitempty"`
+
+	// DisableLocalAccounts - If set to true, getting static credential will be disabled for this cluster. Expected to only be used for AAD clusters.
+	// +optional
+	DisableLocalAccounts *bool `json:"disableLocalAccounts,omitempty"`
 }
 
 // ManagedClusterAutoUpgradeProfile auto upgrade profile for a managed cluster.
