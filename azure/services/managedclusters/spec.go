@@ -149,9 +149,6 @@ type ManagedClusterSpec struct {
 	// OIDCIssuerProfile is the OIDC issuer profile of the Managed Cluster.
 	OIDCIssuerProfile *OIDCIssuerProfile
 
-	// DNSPrefix allows the user to customize dns prefix.
-	DNSPrefix *string
-
 	// DisableLocalAccounts disables getting static credentials for this cluster when set. Expected to only be used for AAD clusters.
 	DisableLocalAccounts *bool
 
@@ -597,6 +594,9 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 				Name: userKubeconfigSecretName(s.ClusterName),
 				Key:  secret.KubeconfigDataName,
 			}
+		}
+		if s.DisableLocalAccounts != nil {
+			managedCluster.DisableLocalAccounts = s.DisableLocalAccounts
 		}
 	}
 
@@ -1101,6 +1101,13 @@ func computeDiffOfNormalizedClusters(managedCluster *asocontainerservicev1hub.Ma
 		existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
 			UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
 		}
+	}
+	if managedCluster.DisableLocalAccounts != nil {
+		clusterNormalized.DisableLocalAccounts = managedCluster.DisableLocalAccounts
+	}
+
+	if existingMC.DisableLocalAccounts != nil {
+		existingMCClusterNormalized.DisableLocalAccounts = existingMC.DisableLocalAccounts
 	}
 
 	diff := cmp.Diff(clusterNormalized, existingMCClusterNormalized)

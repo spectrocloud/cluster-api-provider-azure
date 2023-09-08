@@ -537,6 +537,22 @@ func isManagedVersionUpgrade(managedControlPlane *infrav1.AzureManagedControlPla
 			*managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1.UpgradeChannelNodeImage)
 }
 
+func (s *ManagedControlPlaneScope) IsLocalAcountsDisabled() bool {
+	if s.IsAadEnabled() &&
+		s.ControlPlane.Spec.DisableLocalAccounts != nil &&
+		*s.ControlPlane.Spec.DisableLocalAccounts {
+		return true
+	}
+	return false
+}
+
+func (s *ManagedControlPlaneScope) IsAadEnabled() bool {
+	if s.ControlPlane.Spec.AADProfile != nil && s.ControlPlane.Spec.AADProfile.Managed {
+		return true
+	}
+	return false
+}
+
 // ManagedClusterSpec returns the managed cluster spec.
 func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGetter[genruntime.MetaObject] {
 	managedClusterSpec := managedclusters.ManagedClusterSpec{
@@ -850,6 +866,26 @@ func (s *ManagedControlPlaneScope) MakeClusterCA() *corev1.Secret {
 			},
 		},
 	}
+}
+
+// GetAdminKubeConfigData returns admin kubeconfig.
+func (s *ManagedControlPlaneScope) GetAdminKubeConfigData() []byte {
+	return s.adminKubeConfigData
+}
+
+// SetAdminKubeConfigData sets adminKubeconfig data.
+func (s *ManagedControlPlaneScope) SetAdminKubeConfigData(kubeConfigData []byte) {
+	s.adminKubeConfigData = kubeConfigData
+}
+
+// GetUserKubeConfigData returns user kubeconfig, required when using AAD with AKS cluster.
+func (s *ManagedControlPlaneScope) GetUserKubeConfigData() []byte {
+	return s.userKubeConfigData
+}
+
+// SetUserKubeConfigData sets userKubeconfig data.
+func (s *ManagedControlPlaneScope) SetUserKubeConfigData(kubeConfigData []byte) {
+	s.userKubeConfigData = kubeConfigData
 }
 
 // StoreClusterInfo stores the discovery cluster-info configmap in the kube-public namespace on the AKS cluster so kubeadm can access it to join nodes.
