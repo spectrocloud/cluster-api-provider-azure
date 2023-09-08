@@ -102,7 +102,7 @@ type ManagedClusterSpec struct {
 	ServiceCIDR string
 
 	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
-	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+	DockerBridgeCidr *string
 
 	// DNSServiceIP is an IP address assigned to the Kubernetes DNS service
 	DNSServiceIP *string
@@ -194,7 +194,7 @@ type HTTPProxyConfig struct {
 type UserAssignedIdentity struct {
 	// ProviderID is the identification ID of the user-assigned Identity, the format of an identity is:
 	// 'azure:///subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}'
-	ProviderID string `json:"providerID"`
+	ProviderID string
 }
 
 // AADProfile is Azure Active Directory configuration to integrate with AKS, for aad authentication.
@@ -1088,6 +1088,18 @@ func computeDiffOfNormalizedClusters(managedCluster *asocontainerservicev1hub.Ma
 		}
 		existingMCClusterNormalized.Identity = &containerservice.ManagedClusterIdentity{
 			UserAssignedIdentities: uaIDs,
+		}
+	}
+
+	if managedCluster.AutoUpgradeProfile != nil {
+		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: managedCluster.AutoUpgradeProfile.UpgradeChannel,
+		}
+	}
+
+	if existingMC.AutoUpgradeProfile != nil {
+		existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
 		}
 	}
 

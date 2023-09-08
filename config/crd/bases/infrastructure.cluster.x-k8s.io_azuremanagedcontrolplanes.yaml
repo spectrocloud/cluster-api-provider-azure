@@ -770,6 +770,29 @@ spec:
                   userAssignedIdentityResourceID:
                     description: UserAssignedIdentityResourceID - Identity ARM resource
                       ID when using user-assigned identity.
+                type: object
+              autoUpgradeProfile:
+                description: AutoUpgradeProfile - Profile of auto upgrade configuration.
+                properties:
+                  upgradeChannel:
+                    description: 'UpgradeChannel - upgrade channel for auto upgrade.
+                      Possible values include: "node-image","none","patch","rapid","stable"'
+                    enum:
+                    - node-image
+                    - none
+                    - patch
+                    - rapid
+                    - stable
+                    type: string
+                required:
+                - upgradeChannel
+                type: object
+              controlPlaneEndpoint:
+                description: ControlPlaneEndpoint represents the endpoint used to
+                  communicate with the control plane.
+                properties:
+                  host:
+                    description: The hostname on which the API server is serving.
                     type: string
                 type: object
               dnsPrefix:

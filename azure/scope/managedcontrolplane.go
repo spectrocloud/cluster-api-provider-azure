@@ -662,6 +662,12 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		}
 	}
 
+	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
+		managedClusterSpec.AutoUpgradeProfile = &managedclusters.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel,
+		}
+	}
+
 	if s.ControlPlane.Spec.AutoScalerProfile != nil {
 		managedClusterSpec.AutoScalerProfile = &managedclusters.AutoScalerProfile{
 			BalanceSimilarNodeGroups:      (*string)(s.ControlPlane.Spec.AutoScalerProfile.BalanceSimilarNodeGroups),
