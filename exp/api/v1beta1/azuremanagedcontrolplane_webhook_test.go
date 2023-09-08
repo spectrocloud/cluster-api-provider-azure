@@ -83,7 +83,7 @@ func TestValidatingWebhook(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name: "Testing inValid DNSPrefix for starting with invalid charecters",
+			name: "Testing inValid DNSPrefix for starting with invalid characters",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
 					DNSPrefix: pointer.StringPtr("-thisi$"),
@@ -123,17 +123,17 @@ func TestValidatingWebhook(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name: "Testing Valid DNSPrefix with hypen characters",
+			name: "Testing Valid DNSPrefix with hyphen characters",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("hypen-allowed"),
+					DNSPrefix: pointer.StringPtr("hyphen-allowed"),
 					Version:   "v1.17.8",
 				},
 			},
 			expectErr: false,
 		},
 		{
-			name: "Testing Valid DNSPrefix with hypen characters",
+			name: "Testing Valid DNSPrefix with hyphen characters",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
 					DNSPrefix: pointer.StringPtr("palette-test07"),
