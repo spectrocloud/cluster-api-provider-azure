@@ -242,6 +242,16 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
+	if old.Spec.DisableLocalAccounts == nil &&
+		m.Spec.DisableLocalAccounts != nil &&
+		m.Spec.AADProfile == nil {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "DisableLocalAccounts"),
+				m.Spec.DisableLocalAccounts,
+				"DisableLocalAccounts can be set only for AAD enabled clusters"))
+	}
+
 	if old.Spec.OutboundType != nil {
 		// Prevent OutboundType modification if it was already set to some value
 		if m.Spec.OutboundType == nil {
@@ -311,6 +321,7 @@ func (m *AzureManagedControlPlane) Validate(cli client.Client) error {
 		m.validateLoadBalancerProfile,
 		m.validateAPIServerAccessProfile,
 		m.validateDNSPrefix,
+		m.validateDisableLocalAccounts,
 		//m.validateManagedClusterNetwork,
 	}
 
@@ -322,6 +333,15 @@ func (m *AzureManagedControlPlane) Validate(cli client.Client) error {
 	}
 
 	return kerrors.NewAggregate(errs)
+}
+
+func (m *AzureManagedControlPlane) validateDisableLocalAccounts(_ client.Client) error {
+
+	if m.Spec.DisableLocalAccounts != nil && m.Spec.AADProfile == nil {
+		return errors.New("DisableLocalAccounts should be set only for AAD enabled clusters")
+	}
+
+	return nil
 }
 
 func (m *AzureManagedControlPlane) validateDNSPrefix(_ client.Client) error {
