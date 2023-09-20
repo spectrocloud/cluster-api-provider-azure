@@ -37,7 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var kubeSemver = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([-0-9a-zA-Z_\.+]*)?$`)
+const pattern = `^v\d+\.\d+(\.\d+)?$`
+
+var kubeSemver = regexp.MustCompile(pattern)
 
 // SetupWebhookWithManager sets up and registers the webhook with the manager.
 func (m *AzureManagedControlPlane) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -409,7 +411,6 @@ func (m *AzureManagedControlPlane) validateVersion(_ client.Client) error {
 	if !kubeSemver.MatchString(m.Spec.Version) {
 		return errors.New("must be a valid semantic version")
 	}
-
 	return nil
 }
 
