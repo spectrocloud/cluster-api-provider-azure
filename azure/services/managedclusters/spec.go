@@ -26,10 +26,12 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 )
 
 // ManagedClusterSpec contains properties to create a managed cluster.
@@ -215,6 +217,28 @@ func (s *ManagedClusterSpec) CustomHeaders() map[string]string {
 	return s.Headers
 }
 
+// GetManagedClusterVersion gets the desired managed k8s version.
+// If autoupgrade channels is set to patch, stable or rapid, clusters can be upgraded to higher version by AKS.
+// If autoupgrade is triggered, existing kubernetes version will be higher than the user desired kubernetes version.
+// CAPZ should honour the upgrade and it should not downgrade to the lower desired version.
+func (s *ManagedClusterSpec) GetManagedClusterVersion(existing interface{}) (string, error) {
+	version := s.Version
+	if existing != nil && version != "" {
+		existingMC, ok := existing.(containerservice.ManagedCluster)
+		if !ok {
+			return version, fmt.Errorf("%T is not a containerservice.ManagedCluster", existing)
+		}
+		if v, err := versions.GetHigherK8sVersion(
+			version,
+			ptr.Deref(existingMC.KubernetesVersion, version)); err != nil {
+			return "", err
+		} else {
+			version = v
+		}
+	}
+	return version, nil
+}
+
 // Parameters returns the parameters for the managed clusters.
 func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{}, err error) {
 	decodedSSHPublicKey, err := base64.StdEncoding.DecodeString(s.SSHPublicKey)
@@ -230,7 +254,6 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			NodeResourceGroup: &s.NodeResourceGroup,
 			EnableRBAC:        to.BoolPtr(true),
 			DNSPrefix:         s.DNSPrefix,
-			KubernetesVersion: &s.Version,
 			LinuxProfile: &containerservice.LinuxProfile{
 				AdminUsername: to.StringPtr(azure.DefaultAKSUserName),
 				SSH: &containerservice.SSHConfiguration{
@@ -251,6 +274,12 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 				NetworkPolicy:   containerservice.NetworkPolicy(s.NetworkPolicy),
 			},
 		},
+	}
+
+	if kubernetesVersion, err := s.GetManagedClusterVersion(existing); err != nil {
+		return nil, err
+	} else {
+		managedCluster.KubernetesVersion = &kubernetesVersion
 	}
 
 	if s.FqdnSubdomain != nil {
@@ -561,6 +590,8 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
 			UpgradeChannel: managedCluster.AutoUpgradeProfile.UpgradeChannel,
 		}
+	} else {
+		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{}
 	}
 
 	if existingMC.AutoUpgradeProfile != nil {

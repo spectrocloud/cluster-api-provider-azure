@@ -18,6 +18,7 @@ package managedclusters
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2021-05-01/containerservice"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -51,6 +52,8 @@ type ManagedClusterScope interface {
 	SetUserKubeConfigData([]byte)
 	IsAadEnabled() bool
 	IsLocalAcountsDisabled() bool
+	SetAutoUpgradeVersionStatus(version string)
+	IsManagedVersionUpgrade() bool
 }
 
 // Service provides operations on azure resources.
@@ -106,6 +109,11 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		adminKubeConfigData, userKubeConfigData, err := s.ReconcileKubeconfig(ctx, managedClusterSpec)
 		if err != nil {
 			return errors.Wrap(err, "error while reconciling adminKubeConfigData")
+		}
+
+		if s.Scope.IsManagedVersionUpgrade() && managedCluster.KubernetesVersion != nil {
+			kubernetesVersion := fmt.Sprintf("v%s", *managedCluster.KubernetesVersion)
+			s.Scope.SetAutoUpgradeVersionStatus(kubernetesVersion)
 		}
 
 		s.Scope.SetAdminKubeConfigData(adminKubeConfigData)

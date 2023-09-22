@@ -283,6 +283,12 @@ type ManagedControlPlaneSubnet struct {
 
 // AzureManagedControlPlaneStatus defines the observed state of AzureManagedControlPlane.
 type AzureManagedControlPlaneStatus struct {
+
+	// AutoUpgradeVersion is the Kubernetes version populated after autoupgrade based on the upgrade channel.
+	// +kubebuilder:validation:MinLength:=2
+	// +optional
+	AutoUpgradeVersion string `json:"autoUpgradeVersion,omitempty"`
+
 	// Ready is true when the provider resource is ready.
 	// +optional
 	Ready bool `json:"ready,omitempty"`
