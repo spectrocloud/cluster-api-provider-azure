@@ -472,6 +472,117 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.17.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "v1.18.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.1",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.6",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane no version change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "AzureManagedControlPlane valid version upgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.19.5",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "AzureManagedControlPlane valid version change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.19.3",
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "AzureManagedControlPlane SubscriptionID is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
@@ -1113,6 +1224,35 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				Spec: AzureManagedControlPlaneSpec{
 					Version:              "v1.18.0",
 					DisableLocalAccounts: pointer.BoolPtr(true),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "DisableLocalAccounts cannot be disabled AAD clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+					DisableLocalAccounts: pointer.BoolPtr(true),
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
 				},
 			},
 			wantErr: true,

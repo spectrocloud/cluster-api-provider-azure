@@ -414,6 +414,7 @@ func (s *ManagedControlPlaneScope) ManagedClusterAnnotations() map[string]string
 	return s.ControlPlane.Annotations
 }
 
+// IsLocalAcountsDisabled checks if local accounts have been disabled.
 func (s *ManagedControlPlaneScope) IsLocalAcountsDisabled() bool {
 	if s.IsAadEnabled() &&
 		s.ControlPlane.Spec.DisableLocalAccounts != nil &&
@@ -423,9 +424,50 @@ func (s *ManagedControlPlaneScope) IsLocalAcountsDisabled() bool {
 	return false
 }
 
+// IsAadEnabled checks if aad is enabled.
 func (s *ManagedControlPlaneScope) IsAadEnabled() bool {
 	if s.ControlPlane.Spec.AADProfile != nil && s.ControlPlane.Spec.AADProfile.Managed {
 		return true
+	}
+	return false
+}
+
+// SetAutoUpgradeVersionStatus sets the auto upgrade version in status
+func (s *ManagedControlPlaneScope) SetAutoUpgradeVersionStatus(version string) {
+	s.ControlPlane.Status.AutoUpgradeVersion = version
+}
+
+// IsManagedVersionUpgrade checks if auto upgrade profile is set and if the upgradeChannel is of the type patch, stable or rapid.
+func (s *ManagedControlPlaneScope) IsManagedVersionUpgrade() bool {
+	return s.IsPatchAutoUpgrade() || s.IsStableAutoUpgrade() || s.IsRapidAutoUpgrade()
+}
+
+// IsAutoUpgradeStable checks if auto upgrade channel is stable.
+func (s *ManagedControlPlaneScope) IsStableAutoUpgrade() bool {
+	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
+		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; upgradeChannel == infrav1exp.UpgradeChannelStable {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAutoUpgradeStable checks if auto upgrade channel is rapid.
+func (s *ManagedControlPlaneScope) IsRapidAutoUpgrade() bool {
+	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
+		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; upgradeChannel == infrav1exp.UpgradeChannelRapid {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAutoUpgradeStable checks if auto upgrade channel is patch.
+func (s *ManagedControlPlaneScope) IsPatchAutoUpgrade() bool {
+	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
+		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; upgradeChannel == infrav1exp.UpgradeChannelPatch {
+			return true
+		}
 	}
 	return false
 }

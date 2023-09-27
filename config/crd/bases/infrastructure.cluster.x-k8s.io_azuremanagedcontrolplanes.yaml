@@ -820,6 +820,11 @@ spec:
             description: AzureManagedControlPlaneStatus defines the observed state
               of AzureManagedControlPlane.
             properties:
+              autoUpgradeVersion:
+                description: AutoUpgradeVersion is the Kubernetes version populated
+                  after autoupgrade based on the upgrade channel.
+                minLength: 2
+                type: string
               conditions:
                 description: Conditions defines current service state of the AzureManagedControlPlane.
                 items:
