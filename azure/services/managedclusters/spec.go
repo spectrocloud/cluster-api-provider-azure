@@ -43,6 +43,8 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/aso"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 )
 
 // ManagedClusterSpec contains properties to create a managed cluster.
@@ -421,6 +423,28 @@ func (s *ManagedClusterSpec) ResourceRef() genruntime.MetaObject {
 	}
 }
 
+// GetManagedClusterVersion gets the desired managed k8s version.
+// If autoupgrade channels is set to patch, stable or rapid, clusters can be upgraded to higher version by AKS.
+// If autoupgrade is triggered, existing kubernetes version will be higher than the user desired kubernetes version.
+// CAPZ should honour the upgrade and it should not downgrade to the lower desired version.
+func (s *ManagedClusterSpec) GetManagedClusterVersion(existing interface{}) (string, error) {
+	version := s.Version
+	if existing != nil && version != "" {
+		existingMC, ok := existing.(containerservice.ManagedCluster)
+		if !ok {
+			return version, fmt.Errorf("%T is not a containerservice.ManagedCluster", existing)
+		}
+		if v, err := versions.GetHigherK8sVersion(
+			version,
+			ptr.Deref(existingMC.KubernetesVersion, version)); err != nil {
+			return "", err
+		} else {
+			version = v
+		}
+	}
+	return version, nil
+}
+
 // Parameters returns the parameters for the managed clusters.
 //
 //nolint:gocyclo // Function requires a lot of nil checks that raise complexity.
@@ -499,7 +523,6 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 			NodeResourceGroup: &s.NodeResourceGroup,
 			EnableRBAC:        to.BoolPtr(true),
 			DNSPrefix:         s.DNSPrefix,
-			KubernetesVersion: &s.Version,
 			LinuxProfile: &containerservice.LinuxProfile{
 				AdminUsername: to.StringPtr(azure.DefaultAKSUserName),
 				SSH: &containerservice.SSHConfiguration{
@@ -513,6 +536,20 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 		},
 	}
 
+	if kubernetesVersion, err := s.GetManagedClusterVersion(existing); err != nil {
+		return nil, err
+	} else {
+		managedCluster.Spec.KubernetesVersion = &kubernetesVersion
+	}
+
+	if s.FqdnSubdomain != nil {
+		managedCluster.Spec.FqdnSubdomain = s.FqdnSubdomain
+	}
+
+	if tags := *to.StringMapPtr(s.Tags); len(tags) != 0 {
+		managedCluster.Tags = tags
+	}
+
 	if decodedSSHPublicKey != nil {
 		managedCluster.Spec.LinuxProfile = &asocontainerservicev1hub.ContainerServiceLinuxProfile{
 			AdminUsername: ptr.To(azure.DefaultAKSUserName),
@@ -524,10 +561,6 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 				},
 			},
 		},
-	}
-
-	if tags := *to.StringMapPtr(s.Tags); len(tags) != 0 {
-		managedCluster.Tags = tags
 	}
 
 	if s.NetworkPluginMode != nil {
@@ -1095,6 +1128,8 @@ func computeDiffOfNormalizedClusters(managedCluster *asocontainerservicev1hub.Ma
 		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
 			UpgradeChannel: managedCluster.AutoUpgradeProfile.UpgradeChannel,
 		}
+	} else {
+		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{}
 	}
 
 	if existingMC.AutoUpgradeProfile != nil {

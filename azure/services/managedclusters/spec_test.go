@@ -377,6 +377,29 @@ func TestParameters(t *testing.T) {
 				DnsPrefix:               ptr.To("set by the user"),
 				EnablePodSecurityPolicy: ptr.To(true), // set by the user
 
+func getSampleManagedCluster() containerservice.ManagedCluster {
+	return containerservice.ManagedCluster{
+		ManagedClusterProperties: &containerservice.ManagedClusterProperties{
+			KubernetesVersion: to.StringPtr("v1.22.0"),
+			AgentPoolProfiles: &[]containerservice.ManagedClusterAgentPoolProfile{
+				converters.AgentPoolToManagedClusterAgentPoolProfile(azure.AgentPoolSpec{
+					Name:          "test-agentpool-0",
+					Mode:          string(infrav1exp.NodePoolModeSystem),
+					ResourceGroup: "test-rg",
+					Replicas:      int32(2),
+				}),
+				converters.AgentPoolToManagedClusterAgentPoolProfile(azure.AgentPoolSpec{
+					Name:              "test-agentpool-1",
+					Mode:              string(infrav1exp.NodePoolModeUser),
+					ResourceGroup:     "test-rg",
+					Replicas:          int32(4),
+					Cluster:           "test-managedcluster",
+					SKU:               "test_SKU",
+					Version:           to.StringPtr("v1.22.0"),
+					VnetSubnetID:      "fake/subnet/id",
+					MaxPods:           to.Int32Ptr(int32(32)),
+					AvailabilityZones: []string{"1", "2"},
+				}),
 			},
 			Status: asocontainerservicev1.ManagedCluster_STATUS{
 				AgentPoolProfiles: []asocontainerservicev1.ManagedClusterAgentPoolProfile_STATUS{},
