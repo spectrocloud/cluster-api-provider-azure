@@ -243,14 +243,21 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
-	if old.Spec.DisableLocalAccounts == nil &&
-		m.Spec.DisableLocalAccounts != nil &&
+	if m.Spec.DisableLocalAccounts != nil &&
 		m.Spec.AADProfile == nil {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("Spec", "DisableLocalAccounts"),
 				m.Spec.DisableLocalAccounts,
 				"DisableLocalAccounts can be set only for AAD enabled clusters"))
+	}
+
+	if old.Spec.DisableLocalAccounts != nil && m.Spec.DisableLocalAccounts == nil {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "DisableLocalAccounts"),
+				m.Spec.DisableLocalAccounts,
+				"field cannot be disabled"))
 	}
 
 	if old.Spec.OutboundType != nil {

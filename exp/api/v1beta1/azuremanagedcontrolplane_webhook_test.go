@@ -1229,6 +1229,35 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "DisableLocalAccounts cannot be disabled AAD clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+					DisableLocalAccounts: pointer.BoolPtr(true),
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "OutboundType update",
 			oldAMCP: &AzureManagedControlPlane{
 				ObjectMeta: metav1.ObjectMeta{
