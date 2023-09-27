@@ -85,6 +85,34 @@ func TestReconcile(t *testing.T) {
 				m.GetCredentials(gomockinternal.AContext(), "my-rg", "my-managedcluster").Return([]byte("credentials"), nil)
 				s.SetAdminKubeConfigData([]byte("credentials"))
 				s.SetUserKubeConfigData(userKubeConfigData)
+				s.IsManagedVersionUpgrade().Return(false)
+				s.UpdatePutStatus(infrav1.ManagedClusterRunningCondition, serviceName, nil)
+			},
+		},
+		{
+			name:          "create managed cluster succeeds, update autoupgrade status",
+			expectedError: "",
+			expect: func(m *mock_managedclusters.MockCredentialGetterMockRecorder, s *mock_managedclusters.MockManagedClusterScopeMockRecorder, r *mock_async.MockReconcilerMockRecorder) {
+				var userKubeConfigData []byte
+				s.ManagedClusterSpec(gomockinternal.AContext()).Return(fakeManagedClusterSpec)
+				r.CreateResource(gomockinternal.AContext(), fakeManagedClusterSpec, serviceName).Return(containerservice.ManagedCluster{
+					ManagedClusterProperties: &containerservice.ManagedClusterProperties{
+						Fqdn:              pointer.String("my-managedcluster-fqdn"),
+						ProvisioningState: pointer.String("Succeeded"),
+						KubernetesVersion: pointer.String("1.27.3"),
+					},
+				}, nil)
+				s.SetControlPlaneEndpoint(clusterv1.APIEndpoint{
+					Host: "my-managedcluster-fqdn",
+					Port: 443,
+				})
+				s.IsAadEnabled().Return(false)
+				s.IsLocalAcountsDisabled().Return(false)
+				m.GetCredentials(gomockinternal.AContext(), "my-rg", "my-managedcluster").Return([]byte("credentials"), nil)
+				s.SetAdminKubeConfigData([]byte("credentials"))
+				s.SetUserKubeConfigData(userKubeConfigData)
+				s.IsManagedVersionUpgrade().Return(true)
+				s.SetAutoUpgradeVersionStatus("v1.27.3")
 				s.UpdatePutStatus(infrav1.ManagedClusterRunningCondition, serviceName, nil)
 			},
 		},
@@ -113,6 +141,7 @@ func TestReconcile(t *testing.T) {
 				m.GetUserCredentials(gomockinternal.AContext(), "my-rg", "my-managedcluster").Return([]byte("credentials-user"), nil)
 				s.SetAdminKubeConfigData([]byte("credentials"))
 				s.SetUserKubeConfigData([]byte("credentials-user"))
+				s.IsManagedVersionUpgrade().Return(false)
 				s.UpdatePutStatus(infrav1.ManagedClusterRunningCondition, serviceName, nil)
 			},
 		},

@@ -1093,6 +1093,7 @@ func Convert_v1alpha4_AzureManagedControlPlaneStatus_To_v1beta1_AzureManagedCont
 }
 
 func autoConvert_v1beta1_AzureManagedControlPlaneStatus_To_v1alpha4_AzureManagedControlPlaneStatus(in *v1beta1.AzureManagedControlPlaneStatus, out *AzureManagedControlPlaneStatus, s conversion.Scope) error {
+	// WARNING: in.AutoUpgradeVersion requires manual conversion: does not exist in peer-type
 	out.Ready = in.Ready
 	out.Initialized = in.Initialized
 	// WARNING: in.Conditions requires manual conversion: does not exist in peer-type
