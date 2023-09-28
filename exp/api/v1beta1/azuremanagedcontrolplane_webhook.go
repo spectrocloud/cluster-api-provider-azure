@@ -161,6 +161,16 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
+	if old.Spec.AutoUpgradeProfile != nil && m.Spec.AutoUpgradeProfile == nil {
+		// Prevent AutoUpgradeProfile to be set to nil.
+		// unsetting the field is not allowed
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "AutoUpgradeProfile"),
+				m.Spec.AutoUpgradeProfile,
+				"field is cannot be set to nil, to disable auto upgrades set the channel to none."))
+	}
+
 	if old.Spec.NetworkPlugin != nil {
 		// Prevent NetworkPlugin modification if it was already set to some value
 		if m.Spec.NetworkPlugin == nil {
@@ -252,12 +262,23 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 				"DisableLocalAccounts can be set only for AAD enabled clusters"))
 	}
 
-	if old.Spec.DisableLocalAccounts != nil && m.Spec.DisableLocalAccounts == nil {
-		allErrs = append(allErrs,
-			field.Invalid(
-				field.NewPath("Spec", "DisableLocalAccounts"),
-				m.Spec.DisableLocalAccounts,
-				"field cannot be disabled"))
+	if old.Spec.DisableLocalAccounts != nil {
+		// Prevent DisableLocalAccounts modification if it was already set to some value
+		if m.Spec.DisableLocalAccounts == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "DisableLocalAccounts"),
+					m.Spec.DisableLocalAccounts,
+					"field is immutable, unsetting is not allowed"))
+		} else if *m.Spec.DisableLocalAccounts != *old.Spec.DisableLocalAccounts {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "DisableLocalAccounts"),
+					*m.Spec.DisableLocalAccounts,
+					"field is immutable"))
+		}
 	}
 
 	if old.Spec.OutboundType != nil {

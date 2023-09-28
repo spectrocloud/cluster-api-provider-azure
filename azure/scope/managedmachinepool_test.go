@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -66,7 +67,7 @@ func TestManagedMachinePoolScope_Autoscaling(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
-
+				OSType:       ptr.To("Linux"),
 				Name:         "pool0",
 				SKU:          "Standard_D2s_v3",
 				Replicas:     1,
@@ -108,6 +109,7 @@ func TestManagedMachinePoolScope_Autoscaling(t *testing.T) {
 				MinCount:          to.Int32Ptr(2),
 				MaxCount:          to.Int32Ptr(10),
 				VnetSubnetID:      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups//providers/Microsoft.Network/virtualNetworks//subnets/",
+				OSType:            ptr.To("Linux"),
 			},
 		},
 	}
@@ -160,7 +162,7 @@ func TestManagedMachinePoolScope_NodeLabels(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
-
+				OSType:       ptr.To("Linux"),
 				Name:         "pool0",
 				SKU:          "Standard_D2s_v3",
 				Replicas:     1,
@@ -195,6 +197,7 @@ func TestManagedMachinePoolScope_NodeLabels(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
+				OSType:   ptr.To("Linux"),
 				Name:     "pool1",
 				SKU:      "Standard_D2s_v3",
 				Mode:     "System",
@@ -256,6 +259,7 @@ func TestManagedMachinePoolScope_MaxPods(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
+				OSType:       ptr.To("Linux"),
 				Name:         "pool0",
 				SKU:          "Standard_D2s_v3",
 				Replicas:     1,
@@ -288,6 +292,7 @@ func TestManagedMachinePoolScope_MaxPods(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
+				OSType:       ptr.To("Linux"),
 				Name:         "pool1",
 				SKU:          "Standard_D2s_v3",
 				Mode:         "System",
@@ -347,7 +352,7 @@ func TestManagedMachinePoolScope_Taints(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
-
+				OSType:       ptr.To("Linux"),
 				Name:         "pool0",
 				SKU:          "Standard_D2s_v3",
 				Replicas:     1,
@@ -386,6 +391,7 @@ func TestManagedMachinePoolScope_Taints(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
+				OSType:       ptr.To("Linux"),
 				Name:         "pool1",
 				SKU:          "Standard_D2s_v3",
 				Mode:         "User",
@@ -445,6 +451,7 @@ func TestManagedMachinePoolScope_OSDiskType(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
+				OSType:       ptr.To("Linux"),
 				Name:         "pool0",
 				SKU:          "Standard_D2s_v3",
 				Replicas:     1,
@@ -477,6 +484,7 @@ func TestManagedMachinePoolScope_OSDiskType(t *testing.T) {
 				},
 			},
 			Expected: azure.AgentPoolSpec{
+				OSType:       ptr.To("Linux"),
 				Name:         "pool1",
 				SKU:          "Standard_D2s_v3",
 				Mode:         "User",
@@ -498,6 +506,122 @@ func TestManagedMachinePoolScope_OSDiskType(t *testing.T) {
 			g.Expect(err).To(Succeed())
 			agentPool := s.AgentPoolSpec()
 			g.Expect(agentPool).To(Equal(c.Expected))
+		})
+	}
+}
+
+func Test_getManagedMachinePoolVersion(t *testing.T) {
+	cases := []struct {
+		Name                string
+		managedControlPlane *infrav1.AzureManagedControlPlane
+		machinePool         *capiv1exp.MachinePool
+		Expected            *string
+	}{
+		{
+			Name:                "Empty configs",
+			managedControlPlane: nil,
+			machinePool:         nil,
+			Expected:            nil,
+		},
+		{
+			Name:                "Empty mp",
+			managedControlPlane: &infrav1.AzureManagedControlPlane{},
+			machinePool:         nil,
+			Expected:            nil,
+		},
+		{
+			Name:                "Only machine pool is available",
+			managedControlPlane: nil,
+			machinePool: &capiv1exp.MachinePool{
+				Spec: capiv1exp.MachinePoolSpec{
+					Template: clusterv1.MachineTemplateSpec{
+						Spec: clusterv1.MachineSpec{
+							Version: ptr.To("v1.15.0"),
+						},
+					},
+				},
+			},
+			Expected: ptr.To("1.15.0"),
+		},
+		{
+			Name:                "Only machine pool is available and cp is nil",
+			managedControlPlane: nil,
+			machinePool: &capiv1exp.MachinePool{
+				Spec: capiv1exp.MachinePoolSpec{
+					Template: clusterv1.MachineTemplateSpec{
+						Spec: clusterv1.MachineSpec{
+							Version: ptr.To("v1.15.0"),
+						},
+					},
+				},
+			},
+			Expected: ptr.To("1.15.0"),
+		},
+		{
+			Name: "mcp.status.autoUpgradeVersion > mp.spec.template.spec.version",
+			managedControlPlane: &infrav1.AzureManagedControlPlane{
+				Status: infrav1.AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.20.3",
+				},
+			},
+			machinePool: &capiv1exp.MachinePool{
+				Spec: capiv1exp.MachinePoolSpec{
+					Template: clusterv1.MachineTemplateSpec{
+						Spec: clusterv1.MachineSpec{
+							Version: ptr.To("v1.15.0"),
+						},
+					},
+				},
+			},
+			Expected: ptr.To("1.20.3"),
+		},
+		{
+			Name: "suffix + mcp.status.autoUpgradeVersion > mp.spec.template.spec.version",
+			managedControlPlane: &infrav1.AzureManagedControlPlane{
+				Status: infrav1.AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "v1.20.3",
+				},
+			},
+			machinePool: &capiv1exp.MachinePool{
+				Spec: capiv1exp.MachinePoolSpec{
+					Template: clusterv1.MachineTemplateSpec{
+						Spec: clusterv1.MachineSpec{
+							Version: ptr.To("v1.15.0"),
+						},
+					},
+				},
+			},
+			Expected: ptr.To("1.20.3"),
+		},
+		{
+			Name: "mcp.status.autoUpgradeVersion < mp.spec.template.spec.version",
+			managedControlPlane: &infrav1.AzureManagedControlPlane{
+				Status: infrav1.AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "v1.20.3",
+				},
+			},
+			machinePool: &capiv1exp.MachinePool{
+				Spec: capiv1exp.MachinePoolSpec{
+					Template: clusterv1.MachineTemplateSpec{
+						Spec: clusterv1.MachineSpec{
+							Version: ptr.To("v1.21.0"),
+						},
+					},
+				},
+			},
+			Expected: ptr.To("1.21.0"),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			g := NewWithT(t)
+			v := getManagedMachinePoolVersion(c.managedControlPlane, c.machinePool)
+			if c.Expected != nil {
+				g.Expect(*v).To(Equal(*c.Expected))
+			} else {
+				g.Expect(v).To(Equal(c.Expected))
+			}
 		})
 	}
 }

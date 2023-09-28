@@ -437,37 +437,16 @@ func (s *ManagedControlPlaneScope) SetAutoUpgradeVersionStatus(version string) {
 	s.ControlPlane.Status.AutoUpgradeVersion = version
 }
 
-// IsManagedVersionUpgrade checks if auto upgrade profile is set and if the upgradeChannel is of the type patch, stable or rapid.
+// IsManagedVersionUpgrade checks if version is auto managed by AKS.
 func (s *ManagedControlPlaneScope) IsManagedVersionUpgrade() bool {
-	return s.IsPatchAutoUpgrade() || s.IsStableAutoUpgrade() || s.IsRapidAutoUpgrade()
+	return isManagedVersionUpgrade(s.ControlPlane)
 }
 
-// IsAutoUpgradeStable checks if auto upgrade channel is stable.
-func (s *ManagedControlPlaneScope) IsStableAutoUpgrade() bool {
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; upgradeChannel == infrav1exp.UpgradeChannelStable {
-			return true
-		}
-	}
-	return false
-}
-
-// IsAutoUpgradeStable checks if auto upgrade channel is rapid.
-func (s *ManagedControlPlaneScope) IsRapidAutoUpgrade() bool {
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; upgradeChannel == infrav1exp.UpgradeChannelRapid {
-			return true
-		}
-	}
-	return false
-}
-
-// IsAutoUpgradeStable checks if auto upgrade channel is patch.
-func (s *ManagedControlPlaneScope) IsPatchAutoUpgrade() bool {
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; upgradeChannel == infrav1exp.UpgradeChannelPatch {
-			return true
-		}
+func isManagedVersionUpgrade(managedControlPlane *infrav1exp.AzureManagedControlPlane) bool {
+	if managedControlPlane.Spec.AutoUpgradeProfile != nil &&
+		(managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1exp.UpgradeChannelNone &&
+			managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1exp.UpgradeChannelNodeImage) {
+		return true
 	}
 	return false
 }

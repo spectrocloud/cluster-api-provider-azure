@@ -21,11 +21,10 @@ import (
 	"testing"
 
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/to"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	pointer "k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/managedclusters"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
@@ -81,6 +80,7 @@ func TestManagedControlPlaneScope_PoolVersion(t *testing.T) {
 					Mode:         "System",
 					Cluster:      "cluster1",
 					VnetSubnetID: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups//providers/Microsoft.Network/virtualNetworks//subnets/",
+					OSType:       pointer.To("Linux"),
 				},
 			},
 		},
@@ -119,9 +119,10 @@ func TestManagedControlPlaneScope_PoolVersion(t *testing.T) {
 					SKU:          "Standard_D2s_v3",
 					Mode:         "System",
 					Replicas:     1,
-					Version:      to.StringPtr("1.21.1"),
+					Version:      pointer.To("1.21.1"),
 					Cluster:      "cluster1",
 					VnetSubnetID: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups//providers/Microsoft.Network/virtualNetworks//subnets/",
+					OSType:       pointer.To("Linux"),
 				},
 			},
 		},
@@ -515,7 +516,7 @@ func TestManagedControlPlaneScope_DisableLocalAccounts(t *testing.T) {
 					},
 					Spec: infrav1.AzureManagedControlPlaneSpec{
 						SubscriptionID:       "00000000-0000-0000-0000-000000000000",
-						DisableLocalAccounts: pointer.BoolPtr(true),
+						DisableLocalAccounts: pointer.To(true),
 					},
 				},
 				ManagedMachinePools: []ManagedMachinePool{
@@ -550,7 +551,7 @@ func TestManagedControlPlaneScope_DisableLocalAccounts(t *testing.T) {
 							Managed:             true,
 							AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
 						},
-						DisableLocalAccounts: pointer.BoolPtr(true),
+						DisableLocalAccounts: pointer.To(true),
 					},
 				},
 				ManagedMachinePools: []ManagedMachinePool{
@@ -560,7 +561,7 @@ func TestManagedControlPlaneScope_DisableLocalAccounts(t *testing.T) {
 					},
 				},
 			},
-			Expected: pointer.BoolPtr(true),
+			Expected: pointer.To(true),
 		},
 	}
 	for _, c := range cases {
@@ -642,7 +643,7 @@ func TestIsAaDEnabled(t *testing.T) {
 							Managed:             true,
 							AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
 						},
-						DisableLocalAccounts: pointer.BoolPtr(true),
+						DisableLocalAccounts: pointer.To(true),
 					},
 				},
 				ManagedMachinePools: []ManagedMachinePool{
@@ -766,7 +767,7 @@ func TestIsLocalAcountsDisabled(t *testing.T) {
 							Managed:             true,
 							AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
 						},
-						DisableLocalAccounts: pointer.BoolPtr(true),
+						DisableLocalAccounts: pointer.To(true),
 					},
 				},
 				ManagedMachinePools: []ManagedMachinePool{
