@@ -23,11 +23,13 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -135,11 +137,7 @@ func (s *ManagedMachinePoolScope) AgentPoolSpec() azure.AgentPoolSpec {
 func buildAgentPoolSpec(managedControlPlane *infrav1exp.AzureManagedControlPlane,
 	machinePool *clusterv1exp.MachinePool,
 	managedMachinePool *infrav1exp.AzureManagedMachinePool) azure.AgentPoolSpec {
-	var normalizedVersion *string
-	if machinePool.Spec.Template.Spec.Version != nil {
-		v := strings.TrimPrefix(*machinePool.Spec.Template.Spec.Version, "v")
-		normalizedVersion = &v
-	}
+	normalizedVersion := getManagedMachinePoolVersion(managedControlPlane, machinePool)
 
 	replicas := int32(1)
 	if machinePool.Spec.Replicas != nil {
@@ -299,4 +297,25 @@ func (s *ManagedMachinePoolScope) UpdateCAPIMachinePoolAnnotations(ctx context.C
 // GetCAPIMachinePoolAnnotations gets the associated MachinePool annotation.
 func (s *ManagedMachinePoolScope) GetCAPIMachinePoolAnnotation(ctx context.Context, key string) string {
 	return s.MachinePool.Annotations[key]
+}
+
+// IsManagedVersionUpgrade checks if version is auto managed by AKS.
+func (s *ManagedMachinePoolScope) IsManagedAutoUpgrade() bool {
+	return isManagedVersionUpgrade(s.ControlPlane)
+}
+
+func getManagedMachinePoolVersion(managedControlPlane *infrav1exp.AzureManagedControlPlane,
+	machinePool *clusterv1exp.MachinePool) *string {
+	var v, av string
+	if machinePool != nil {
+		v = ptr.Deref(machinePool.Spec.Template.Spec.Version, "")
+	}
+	if managedControlPlane != nil {
+		av = managedControlPlane.Status.AutoUpgradeVersion
+	}
+	higherVersion, err := versions.GetHigherK8sVersion(v, av)
+	if err != nil {
+		return nil
+	}
+	return ptr.To(strings.TrimPrefix(higherVersion, "v"))
 }
