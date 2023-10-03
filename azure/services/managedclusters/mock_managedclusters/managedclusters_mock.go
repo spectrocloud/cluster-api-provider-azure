@@ -137,18 +137,18 @@ func (mr *MockManagedClusterScopeMockRecorder) DeleteLongRunningOperationState(a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLongRunningOperationState", reflect.TypeOf((*MockManagedClusterScope)(nil).DeleteLongRunningOperationState), arg0, arg1)
 }
 
-// GetKubeConfigData mocks base method.
-func (m *MockManagedClusterScope) GetKubeConfigData() []byte {
+// GetAdminKubeConfigData mocks base method.
+func (m *MockManagedClusterScope) GetAdminKubeConfigData() []byte {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetKubeConfigData")
+	ret := m.ctrl.Call(m, "GetAdminKubeConfigData")
 	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
-// GetKubeConfigData indicates an expected call of GetKubeConfigData.
-func (mr *MockManagedClusterScopeMockRecorder) GetKubeConfigData() *gomock.Call {
+// GetAdminKubeConfigData indicates an expected call of GetAdminKubeConfigData.
+func (mr *MockManagedClusterScopeMockRecorder) GetAdminKubeConfigData() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).GetKubeConfigData))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAdminKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).GetAdminKubeConfigData))
 }
 
 // GetLongRunningOperationState mocks base method.
@@ -165,6 +165,20 @@ func (mr *MockManagedClusterScopeMockRecorder) GetLongRunningOperationState(arg0
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLongRunningOperationState", reflect.TypeOf((*MockManagedClusterScope)(nil).GetLongRunningOperationState), arg0, arg1)
 }
 
+// GetUserKubeConfigData mocks base method.
+func (m *MockManagedClusterScope) GetUserKubeConfigData() []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserKubeConfigData")
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// GetUserKubeConfigData indicates an expected call of GetUserKubeConfigData.
+func (mr *MockManagedClusterScopeMockRecorder) GetUserKubeConfigData() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).GetUserKubeConfigData))
+}
+
 // HashKey mocks base method.
 func (m *MockManagedClusterScope) HashKey() string {
 	m.ctrl.T.Helper()
@@ -177,6 +191,48 @@ func (m *MockManagedClusterScope) HashKey() string {
 func (mr *MockManagedClusterScopeMockRecorder) HashKey() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HashKey", reflect.TypeOf((*MockManagedClusterScope)(nil).HashKey))
+}
+
+// IsAadEnabled mocks base method.
+func (m *MockManagedClusterScope) IsAadEnabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsAadEnabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsAadEnabled indicates an expected call of IsAadEnabled.
+func (mr *MockManagedClusterScopeMockRecorder) IsAadEnabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAadEnabled", reflect.TypeOf((*MockManagedClusterScope)(nil).IsAadEnabled))
+}
+
+// IsLocalAcountsDisabled mocks base method.
+func (m *MockManagedClusterScope) IsLocalAcountsDisabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsLocalAcountsDisabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsLocalAcountsDisabled indicates an expected call of IsLocalAcountsDisabled.
+func (mr *MockManagedClusterScopeMockRecorder) IsLocalAcountsDisabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLocalAcountsDisabled", reflect.TypeOf((*MockManagedClusterScope)(nil).IsLocalAcountsDisabled))
+}
+
+// IsManagedVersionUpgrade mocks base method.
+func (m *MockManagedClusterScope) IsManagedVersionUpgrade() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsManagedVersionUpgrade")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsManagedVersionUpgrade indicates an expected call of IsManagedVersionUpgrade.
+func (mr *MockManagedClusterScopeMockRecorder) IsManagedVersionUpgrade() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsManagedVersionUpgrade", reflect.TypeOf((*MockManagedClusterScope)(nil).IsManagedVersionUpgrade))
 }
 
 // MakeEmptyKubeConfigSecret mocks base method.
@@ -207,6 +263,30 @@ func (mr *MockManagedClusterScopeMockRecorder) ManagedClusterSpec(arg0 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ManagedClusterSpec", reflect.TypeOf((*MockManagedClusterScope)(nil).ManagedClusterSpec), arg0)
 }
 
+// SetAdminKubeConfigData mocks base method.
+func (m *MockManagedClusterScope) SetAdminKubeConfigData(arg0 []byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetAdminKubeConfigData", arg0)
+}
+
+// SetAdminKubeConfigData indicates an expected call of SetAdminKubeConfigData.
+func (mr *MockManagedClusterScopeMockRecorder) SetAdminKubeConfigData(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAdminKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).SetAdminKubeConfigData), arg0)
+}
+
+// SetAutoUpgradeVersionStatus mocks base method.
+func (m *MockManagedClusterScope) SetAutoUpgradeVersionStatus(version string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetAutoUpgradeVersionStatus", version)
+}
+
+// SetAutoUpgradeVersionStatus indicates an expected call of SetAutoUpgradeVersionStatus.
+func (mr *MockManagedClusterScopeMockRecorder) SetAutoUpgradeVersionStatus(version interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAutoUpgradeVersionStatus", reflect.TypeOf((*MockManagedClusterScope)(nil).SetAutoUpgradeVersionStatus), version)
+}
+
 // SetControlPlaneEndpoint mocks base method.
 func (m *MockManagedClusterScope) SetControlPlaneEndpoint(arg0 v1beta10.APIEndpoint) {
 	m.ctrl.T.Helper()
@@ -219,18 +299,6 @@ func (mr *MockManagedClusterScopeMockRecorder) SetControlPlaneEndpoint(arg0 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneEndpoint", reflect.TypeOf((*MockManagedClusterScope)(nil).SetControlPlaneEndpoint), arg0)
 }
 
-// SetKubeConfigData mocks base method.
-func (m *MockManagedClusterScope) SetKubeConfigData(arg0 []byte) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetKubeConfigData", arg0)
-}
-
-// SetKubeConfigData indicates an expected call of SetKubeConfigData.
-func (mr *MockManagedClusterScopeMockRecorder) SetKubeConfigData(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).SetKubeConfigData), arg0)
-}
-
 // SetLongRunningOperationState mocks base method.
 func (m *MockManagedClusterScope) SetLongRunningOperationState(arg0 *v1beta1.Future) {
 	m.ctrl.T.Helper()
@@ -241,6 +309,18 @@ func (m *MockManagedClusterScope) SetLongRunningOperationState(arg0 *v1beta1.Fut
 func (mr *MockManagedClusterScopeMockRecorder) SetLongRunningOperationState(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLongRunningOperationState", reflect.TypeOf((*MockManagedClusterScope)(nil).SetLongRunningOperationState), arg0)
+}
+
+// SetUserKubeConfigData mocks base method.
+func (m *MockManagedClusterScope) SetUserKubeConfigData(arg0 []byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetUserKubeConfigData", arg0)
+}
+
+// SetUserKubeConfigData indicates an expected call of SetUserKubeConfigData.
+func (mr *MockManagedClusterScopeMockRecorder) SetUserKubeConfigData(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).SetUserKubeConfigData), arg0)
 }
 
 // SubscriptionID mocks base method.

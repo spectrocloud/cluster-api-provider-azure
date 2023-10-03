@@ -25,11 +25,13 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
 	"sigs.k8s.io/cluster-api-provider-azure/util/maps"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 )
 
 const serviceName = "agentpools"
@@ -47,6 +49,7 @@ type ManagedMachinePoolScope interface {
 	UpdateCAPIMachinePoolReplicas(ctx context.Context, replicas *int32)
 	UpdateCAPIMachinePoolAnnotations(ctx context.Context, key, value string)
 	GetCAPIMachinePoolAnnotation(ctx context.Context, key string) string
+	IsManagedAutoUpgrade() bool
 }
 
 // Service provides operations on Azure resources.
@@ -78,7 +81,6 @@ func (s *Service) Reconcile(ctx context.Context) error {
 
 	agentPoolSpec := s.scope.AgentPoolSpec()
 	profile := converters.AgentPoolToContainerServiceAgentPool(agentPoolSpec)
-
 	existingPool, err := s.Client.Get(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name)
 	if err != nil && !azure.ResourceNotFound(err) {
 		return errors.Wrap(err, "failed to get existing agent pool")
@@ -91,6 +93,9 @@ func (s *Service) Reconcile(ctx context.Context) error {
 
 	customHeaders := maps.FilterByKeyPrefix(s.scope.AgentPoolAnnotations(), azure.CustomHeaderPrefix)
 	if isCreate := azure.ResourceNotFound(err); isCreate {
+		if s.scope.IsManagedAutoUpgrade() {
+			profile.OrchestratorVersion = nil
+		}
 		err = s.Client.CreateOrUpdate(ctx, agentPoolSpec.ResourceGroup, agentPoolSpec.Cluster, agentPoolSpec.Name,
 			profile, customHeaders)
 		if err != nil && azure.ResourceNotFound(err) {
@@ -104,6 +109,14 @@ func (s *Service) Reconcile(ctx context.Context) error {
 			msg := fmt.Sprintf("Unable to update existing agent pool in non terminal state. Agent pool must be in one of the following provisioning states: canceled, failed, or succeeded. Actual state: %s", ps)
 			log.V(2).Info(msg)
 			return azure.WithTransientError(errors.New(msg), 20*time.Second)
+		}
+		// Get the higher version out of the existing and new version
+		profileOrchestratorVersion, err := versions.GetHigherK8sVersion(
+			ptr.Deref(existingPool.OrchestratorVersion, ""),
+			ptr.Deref(profile.OrchestratorVersion, ""))
+
+		if err != nil {
+			return errors.Wrap(err, "error while calculating k8s version")
 		}
 
 		// Normalize individual agent pools to diff in case we need to update
@@ -122,7 +135,7 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		normalizedProfile := containerservice.AgentPool{
 			ManagedClusterAgentPoolProfileProperties: &containerservice.ManagedClusterAgentPoolProfileProperties{
 				Count:               profile.Count,
-				OrchestratorVersion: profile.OrchestratorVersion,
+				OrchestratorVersion: ptr.To(profileOrchestratorVersion),
 				Mode:                profile.Mode,
 				EnableAutoScaling:   profile.EnableAutoScaling,
 				MinCount:            profile.MinCount,

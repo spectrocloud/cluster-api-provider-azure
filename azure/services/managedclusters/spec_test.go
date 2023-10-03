@@ -111,6 +111,23 @@ func TestParameters(t *testing.T) {
 			},
 		},
 		{
+			name:     "managedcluster exists, no update needed",
+			existing: getExistingCluster(),
+			spec: &ManagedClusterSpec{
+				Name:          "test-managedcluster",
+				ResourceGroup: "test-rg",
+				Location:      "test-location",
+				Tags: map[string]string{
+					"test-tag": "test-value",
+				},
+				Version:         "v1.21.0",
+				LoadBalancerSKU: "Standard",
+			},
+			expect: func(g *WithT, result interface{}) {
+				g.Expect(result).To(BeNil())
+			},
+		},
+		{
 			name:     "managedcluster exists and an update is needed",
 			existing: getExistingCluster(),
 			spec: &ManagedClusterSpec{
@@ -158,7 +175,6 @@ func getSampleManagedCluster() containerservice.ManagedCluster {
 	return containerservice.ManagedCluster{
 		ManagedClusterProperties: &containerservice.ManagedClusterProperties{
 			KubernetesVersion: to.StringPtr("v1.22.0"),
-			DNSPrefix:         to.StringPtr("test-managedcluster"),
 			AgentPoolProfiles: &[]containerservice.ManagedClusterAgentPoolProfile{
 				converters.AgentPoolToManagedClusterAgentPoolProfile(azure.AgentPoolSpec{
 					Name:          "test-agentpool-0",

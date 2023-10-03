@@ -30,8 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -160,6 +161,16 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
+	if old.Spec.AutoUpgradeProfile != nil && m.Spec.AutoUpgradeProfile == nil {
+		// Prevent AutoUpgradeProfile to be set to nil.
+		// unsetting the field is not allowed
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "AutoUpgradeProfile"),
+				m.Spec.AutoUpgradeProfile,
+				"field is cannot be set to nil, to disable auto upgrades set the channel to none."))
+	}
+
 	if old.Spec.NetworkPlugin != nil {
 		// Prevent NetworkPlugin modification if it was already set to some value
 		if m.Spec.NetworkPlugin == nil {
@@ -242,6 +253,34 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
+	if m.Spec.DisableLocalAccounts != nil &&
+		m.Spec.AADProfile == nil {
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "DisableLocalAccounts"),
+				m.Spec.DisableLocalAccounts,
+				"DisableLocalAccounts can be set only for AAD enabled clusters"))
+	}
+
+	if old.Spec.DisableLocalAccounts != nil {
+		// Prevent DisableLocalAccounts modification if it was already set to some value
+		if m.Spec.DisableLocalAccounts == nil {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "DisableLocalAccounts"),
+					m.Spec.DisableLocalAccounts,
+					"field is immutable, unsetting is not allowed"))
+		} else if *m.Spec.DisableLocalAccounts != *old.Spec.DisableLocalAccounts {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "DisableLocalAccounts"),
+					*m.Spec.DisableLocalAccounts,
+					"field is immutable"))
+		}
+	}
+
 	if old.Spec.OutboundType != nil {
 		// Prevent OutboundType modification if it was already set to some value
 		if m.Spec.OutboundType == nil {
@@ -261,7 +300,7 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 		}
 	}
 
-	if pointer.StringDeref(m.Spec.DNSPrefix, "") != pointer.StringDeref(old.Spec.DNSPrefix, "") {
+	if ptr.Deref[string](m.Spec.DNSPrefix, "") != ptr.Deref[string](old.Spec.DNSPrefix, "") {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("Spec.DNSPrefix"),
@@ -269,7 +308,7 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 				"field is immutable"))
 	}
 
-	if pointer.StringDeref(m.Spec.DockerBridgeCidr, "") != pointer.StringDeref(old.Spec.DockerBridgeCidr, "") {
+	if ptr.Deref[string](m.Spec.DockerBridgeCidr, "") != ptr.Deref[string](old.Spec.DockerBridgeCidr, "") {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("Spec.DockerBridgeCidr"),
@@ -277,12 +316,26 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 				"field is immutable"))
 	}
 
-	if pointer.StringDeref(m.Spec.FqdnSubdomain, "") != pointer.StringDeref(old.Spec.FqdnSubdomain, "") {
+	if ptr.Deref[string](m.Spec.FqdnSubdomain, "") != ptr.Deref[string](old.Spec.FqdnSubdomain, "") {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("Spec.FqdnSubdomain"),
 				m.Spec.FqdnSubdomain,
 				"field is immutable"))
+	}
+
+	if hv, _ := versions.GetHigherK8sVersion(m.Spec.Version, old.Spec.Version); hv != m.Spec.Version {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("Spec", "Version"),
+			m.Spec.Version, "fields version cannot be downgraded"),
+		)
+	}
+
+	if old.Status.AutoUpgradeVersion != "" && m.Spec.Version != old.Spec.Version {
+		if hv, _ := versions.GetHigherK8sVersion(m.Spec.Version, old.Status.AutoUpgradeVersion); hv != m.Spec.Version {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("Spec", "Version"),
+				m.Spec.Version, "fields version cannot be downgraded"),
+			)
+		}
 	}
 
 	if errs := m.validateAPIServerAccessProfileUpdate(old); len(errs) > 0 {
@@ -311,6 +364,7 @@ func (m *AzureManagedControlPlane) Validate(cli client.Client) error {
 		m.validateLoadBalancerProfile,
 		m.validateAPIServerAccessProfile,
 		m.validateDNSPrefix,
+		m.validateDisableLocalAccounts,
 		//m.validateManagedClusterNetwork,
 	}
 
@@ -324,8 +378,16 @@ func (m *AzureManagedControlPlane) Validate(cli client.Client) error {
 	return kerrors.NewAggregate(errs)
 }
 
-func (m *AzureManagedControlPlane) validateDNSPrefix(_ client.Client) error {
+func (m *AzureManagedControlPlane) validateDisableLocalAccounts(_ client.Client) error {
 
+	if m.Spec.DisableLocalAccounts != nil && m.Spec.AADProfile == nil {
+		return errors.New("DisableLocalAccounts should be set only for AAD enabled clusters")
+	}
+
+	return nil
+}
+
+func (m *AzureManagedControlPlane) validateDNSPrefix(_ client.Client) error {
 	if m.Spec.DNSPrefix == nil {
 		return nil
 	}
@@ -335,31 +397,11 @@ func (m *AzureManagedControlPlane) validateDNSPrefix(_ client.Client) error {
 	// 2. Alphanumerics and hyphens: [a-zA-Z0-9-]
 	// 3. Start and end with alphanumeric: ^[a-zA-Z0-9].*[a-zA-Z0-9]$
 	regex := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{0,52}[a-zA-Z0-9]$`)
-	if regex.MatchString(pointer.StringDeref(m.Spec.DNSPrefix, "")) {
+	if regex.MatchString(ptr.Deref[string](m.Spec.DNSPrefix, "")) {
 		return nil
 	}
 	return errors.New("DNSPrefix is invalid")
 }
-
-// func (m *AzureManagedControlPlane) validateFqdnSubdomain(_ client.Client) error {
-
-// 	if m.Spec.FqdnSubdomain == nil {
-// 		return nil
-// 	}
-
-// 	// Regex pattern for FQDN subdomain validation
-// 	// 1. Between 1 and 63 characters long: {1,63}
-// 	// 2. Alphanumerics and hyphens.
-// 	// 3. Start and end with alphanumeric.
-// 	// 4. Parts separated by dots (.)
-// 	pattern := `^(?i)[a-z0-9]([a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(?:\.aks\.example)$`
-
-// 	regex := regexp.MustCompile(pattern)
-// 	if regex.MatchString(pointer.StringDeref(m.Spec.FqdnSubdomain, "")) {
-// 		return nil
-// 	}
-// 	return errors.Errorf("FqdnSubdomain is invalid %s", pointer.StringDeref(m.Spec.FqdnSubdomain, ""))
-// }
 
 // validateDNSServiceIP validates the DNSServiceIP.
 func (m *AzureManagedControlPlane) validateDNSServiceIP(_ client.Client) error {
@@ -389,7 +431,6 @@ func (m *AzureManagedControlPlane) validateVersion(_ client.Client) error {
 	if !kubeSemver.MatchString(m.Spec.Version) {
 		return errors.New("must be a valid semantic version")
 	}
-
 	return nil
 }
 
@@ -573,10 +614,10 @@ func (m *AzureManagedControlPlane) validateAPIServerAccessProfileDNSZoneUpdate(o
 
 	// You can only update from byo or system to none. No other combination of update values is supported.
 	if m.Spec.APIServerAccessProfile != nil && old.Spec.APIServerAccessProfile != nil &&
-		pointer.BoolDeref(m.Spec.APIServerAccessProfile.EnablePrivateCluster, false) &&
-		pointer.BoolDeref(old.Spec.APIServerAccessProfile.EnablePrivateCluster, false) &&
+		ptr.Deref(m.Spec.APIServerAccessProfile.EnablePrivateCluster, false) &&
+		ptr.Deref(old.Spec.APIServerAccessProfile.EnablePrivateCluster, false) &&
 		m.Spec.APIServerAccessProfile.PrivateDNSZone != old.Spec.APIServerAccessProfile.PrivateDNSZone &&
-		pointer.StringDeref(m.Spec.APIServerAccessProfile.PrivateDNSZone, "") == "None" {
+		ptr.Deref[string](m.Spec.APIServerAccessProfile.PrivateDNSZone, "") == "None" {
 		return nil
 	}
 

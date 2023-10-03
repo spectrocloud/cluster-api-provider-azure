@@ -106,10 +106,11 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 
 // ManagedControlPlaneScope defines the basic context for an actuator to operate upon.
 type ManagedControlPlaneScope struct {
-	Client         client.Client
-	patchHelper    *patch.Helper
-	kubeConfigData []byte
-	cache          *ManagedControlPlaneCache
+	Client              client.Client
+	patchHelper         *patch.Helper
+	adminKubeConfigData []byte
+	userKubeConfigData  []byte
+	cache               *ManagedControlPlaneCache
 
 	AzureClients
 	Cluster             *clusterv1.Cluster
@@ -413,6 +414,43 @@ func (s *ManagedControlPlaneScope) ManagedClusterAnnotations() map[string]string
 	return s.ControlPlane.Annotations
 }
 
+// IsLocalAcountsDisabled checks if local accounts have been disabled.
+func (s *ManagedControlPlaneScope) IsLocalAcountsDisabled() bool {
+	if s.IsAadEnabled() &&
+		s.ControlPlane.Spec.DisableLocalAccounts != nil &&
+		*s.ControlPlane.Spec.DisableLocalAccounts {
+		return true
+	}
+	return false
+}
+
+// IsAadEnabled checks if aad is enabled.
+func (s *ManagedControlPlaneScope) IsAadEnabled() bool {
+	if s.ControlPlane.Spec.AADProfile != nil && s.ControlPlane.Spec.AADProfile.Managed {
+		return true
+	}
+	return false
+}
+
+// SetAutoUpgradeVersionStatus sets the auto upgrade version in status
+func (s *ManagedControlPlaneScope) SetAutoUpgradeVersionStatus(version string) {
+	s.ControlPlane.Status.AutoUpgradeVersion = version
+}
+
+// IsManagedVersionUpgrade checks if version is auto managed by AKS.
+func (s *ManagedControlPlaneScope) IsManagedVersionUpgrade() bool {
+	return isManagedVersionUpgrade(s.ControlPlane)
+}
+
+func isManagedVersionUpgrade(managedControlPlane *infrav1exp.AzureManagedControlPlane) bool {
+	if managedControlPlane.Spec.AutoUpgradeProfile != nil &&
+		(managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1exp.UpgradeChannelNone &&
+			managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1exp.UpgradeChannelNodeImage) {
+		return true
+	}
+	return false
+}
+
 // ManagedClusterSpec returns the managed cluster spec.
 func (s *ManagedControlPlaneScope) ManagedClusterSpec(ctx context.Context) azure.ResourceSpecGetter {
 	managedClusterSpec := managedclusters.ManagedClusterSpec{
@@ -477,6 +515,9 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec(ctx context.Context) azure
 			EnableAzureRBAC:     s.ControlPlane.Spec.AADProfile.Managed,
 			AdminGroupObjectIDs: s.ControlPlane.Spec.AADProfile.AdminGroupObjectIDs,
 		}
+		if s.ControlPlane.Spec.DisableLocalAccounts != nil {
+			managedClusterSpec.DisableLocalAccounts = s.ControlPlane.Spec.DisableLocalAccounts
+		}
 	}
 
 	if s.ControlPlane.Spec.AddonProfiles != nil {
@@ -519,6 +560,12 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec(ctx context.Context) azure
 			{
 				ProviderID: s.ControlPlane.Spec.UserAssignedIdentities[0].ProviderID,
 			},
+		}
+	}
+
+	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
+		managedClusterSpec.AutoUpgradeProfile = &managedclusters.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel,
 		}
 	}
 
@@ -573,14 +620,24 @@ func (s *ManagedControlPlaneScope) MakeEmptyKubeConfigSecret() corev1.Secret {
 	}
 }
 
-// GetKubeConfigData returns a []byte that contains kubeconfig.
-func (s *ManagedControlPlaneScope) GetKubeConfigData() []byte {
-	return s.kubeConfigData
+// GetAdminKubeConfigData returns admin kubeconfig.
+func (s *ManagedControlPlaneScope) GetAdminKubeConfigData() []byte {
+	return s.adminKubeConfigData
 }
 
-// SetKubeConfigData sets kubeconfig data.
-func (s *ManagedControlPlaneScope) SetKubeConfigData(kubeConfigData []byte) {
-	s.kubeConfigData = kubeConfigData
+// SetAdminKubeConfigData sets adminKubeconfig data.
+func (s *ManagedControlPlaneScope) SetAdminKubeConfigData(kubeConfigData []byte) {
+	s.adminKubeConfigData = kubeConfigData
+}
+
+// GetUserKubeConfigData returns user kubeconfig, required when using AAD with AKS cluster.
+func (s *ManagedControlPlaneScope) GetUserKubeConfigData() []byte {
+	return s.userKubeConfigData
+}
+
+// SetUserKubeConfigData sets userKubeconfig data.
+func (s *ManagedControlPlaneScope) SetUserKubeConfigData(kubeConfigData []byte) {
+	s.userKubeConfigData = kubeConfigData
 }
 
 // SetLongRunningOperationState will set the future on the AzureManagedControlPlane status to allow the resource to continue

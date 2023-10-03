@@ -1075,6 +1075,8 @@ func autoConvert_v1beta1_AzureManagedControlPlaneSpec_To_v1alpha4_AzureManagedCo
 	out.LoadBalancerProfile = (*LoadBalancerProfile)(unsafe.Pointer(in.LoadBalancerProfile))
 	out.APIServerAccessProfile = (*APIServerAccessProfile)(unsafe.Pointer(in.APIServerAccessProfile))
 	// WARNING: in.UserAssignedIdentities requires manual conversion: does not exist in peer-type
+	// WARNING: in.AutoUpgradeProfile requires manual conversion: does not exist in peer-type
+	// WARNING: in.DisableLocalAccounts requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -1091,6 +1093,7 @@ func Convert_v1alpha4_AzureManagedControlPlaneStatus_To_v1beta1_AzureManagedCont
 }
 
 func autoConvert_v1beta1_AzureManagedControlPlaneStatus_To_v1alpha4_AzureManagedControlPlaneStatus(in *v1beta1.AzureManagedControlPlaneStatus, out *AzureManagedControlPlaneStatus, s conversion.Scope) error {
+	// WARNING: in.AutoUpgradeVersion requires manual conversion: does not exist in peer-type
 	out.Ready = in.Ready
 	out.Initialized = in.Initialized
 	// WARNING: in.Conditions requires manual conversion: does not exist in peer-type

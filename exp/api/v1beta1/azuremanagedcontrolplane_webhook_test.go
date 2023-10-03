@@ -22,7 +22,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 func TestDefaultingWebhook(t *testing.T) {
@@ -83,10 +83,10 @@ func TestValidatingWebhook(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name: "Testing inValid DNSPrefix for starting with invalid charecters",
+			name: "Testing inValid DNSPrefix for starting with invalid characters",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("-thisi$"),
+					DNSPrefix: ptr.To("-thisi$"),
 					Version:   "v1.17.8",
 				},
 			},
@@ -96,7 +96,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Testing inValid DNSPrefix with more then 54 characters",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("thisisaverylong$^clusternameconsistingofmorethan54characterswhichshouldbeinvalid"),
+					DNSPrefix: ptr.To("thisisaverylong$^clusternameconsistingofmorethan54characterswhichshouldbeinvalid"),
 					Version:   "v1.17.8",
 				},
 			},
@@ -106,7 +106,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Testing inValid DNSPrefix with underscore",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("no_underscore"),
+					DNSPrefix: ptr.To("no_underscore"),
 					Version:   "v1.17.8",
 				},
 			},
@@ -116,17 +116,37 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Testing inValid DNSPrefix with special characters",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("no-dollar$@%"),
+					DNSPrefix: ptr.To("no-dollar$@%"),
 					Version:   "v1.17.8",
 				},
 			},
 			expectErr: true,
 		},
 		{
+			name: "Testing Valid DNSPrefix with hyphen characters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: ptr.To("hyphen-allowed"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "Testing Valid DNSPrefix with hyphen characters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSPrefix: ptr.To("palette-test07"),
+					Version:   "v1.17.8",
+				},
+			},
+			expectErr: false,
+		},
+		{
 			name: "Testing valid DNSPrefix ",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("thisisavlerylongclu7l0sternam3leconsistingofmorethan54"),
+					DNSPrefix: ptr.To("thisisavlerylongclu7l0sternam3leconsistingofmorethan54"),
 					Version:   "v1.17.8",
 				},
 			},
@@ -136,7 +156,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Testing valid DNSServiceIP",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSServiceIP: pointer.StringPtr("192.168.0.0"),
+					DNSServiceIP: ptr.To("192.168.0.0"),
 					Version:      "v1.17.8",
 				},
 			},
@@ -146,7 +166,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Testing invalid DNSServiceIP",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSServiceIP: pointer.StringPtr("192.168.0.0.3"),
+					DNSServiceIP: ptr.To("192.168.0.0.3"),
 					Version:      "v1.17.8",
 				},
 			},
@@ -156,7 +176,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Invalid Version",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSServiceIP: pointer.StringPtr("192.168.0.0"),
+					DNSServiceIP: ptr.To("192.168.0.0"),
 					Version:      "honk",
 				},
 			},
@@ -166,7 +186,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "not following the Kubernetes Version pattern",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSServiceIP: pointer.StringPtr("192.168.0.0"),
+					DNSServiceIP: ptr.To("192.168.0.0"),
 					Version:      "1.19.0",
 				},
 			},
@@ -176,7 +196,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Version not set",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSServiceIP: pointer.StringPtr("192.168.0.0"),
+					DNSServiceIP: ptr.To("192.168.0.0"),
 					Version:      "",
 				},
 			},
@@ -186,7 +206,7 @@ func TestValidatingWebhook(t *testing.T) {
 			name: "Valid Version",
 			amcp: AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSServiceIP: pointer.StringPtr("192.168.0.0"),
+					DNSServiceIP: ptr.To("192.168.0.0"),
 					Version:      "v1.17.8",
 				},
 			},
@@ -283,6 +303,30 @@ func TestValidatingWebhook(t *testing.T) {
 				},
 			},
 			expectErr: true,
+		},
+		{
+			name: "DisableLocalAccounts cannot be set for non AAD clusters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version:              "v1.21.2",
+					DisableLocalAccounts: ptr.To(true),
+				},
+			},
+			expectErr: true,
+		},
+		{
+			name: "DisableLocalAccounts can be set for AAD clusters",
+			amcp: AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.21.2",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+					DisableLocalAccounts: ptr.To(true),
+				},
+			},
+			expectErr: false,
 		},
 	}
 
@@ -426,6 +470,117 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			oldAMCP: createAzureManagedControlPlane("", "v1.18.0", ""),
 			amcp:    createAzureManagedControlPlane("192.168.0.0", "1.999.9", generateSSHPublicKey(true)),
 			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.17.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "v1.18.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.1",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.6",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane no version change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "AzureManagedControlPlane valid version upgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.19.5",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "AzureManagedControlPlane valid version change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "1.19.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: to.StringPtr("192.168.0.0"),
+					Version:      "v1.19.3",
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name: "AzureManagedControlPlane SubscriptionID is immutable",
@@ -833,13 +988,13 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			name: "AzureManagedControlPlane DNSPrefix is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("capz-aks-1"),
+					DNSPrefix: ptr.To("capz-aks-1"),
 					Version:   "v1.18.0",
 				},
 			},
 			amcp: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("capz-aks"),
+					DNSPrefix: ptr.To("capz-aks"),
 					Version:   "v1.18.0",
 				},
 			},
@@ -849,13 +1004,13 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			name: "AzureManagedControlPlane DNSPrefix is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("capz-aks"),
+					DNSPrefix: ptr.To("capz-aks"),
 					Version:   "v1.18.0",
 				},
 			},
 			amcp: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					DNSPrefix: pointer.StringPtr("capz-aks"),
+					DNSPrefix: ptr.To("capz-aks"),
 					Version:   "v1.18.0",
 				},
 			},
@@ -865,14 +1020,14 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			name: "AzureManagedControlPlane FqdnSubdomain is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+					FqdnSubdomain: ptr.To("capzaks.api"),
 					Version:       "v1.18.0",
 				},
 			},
 			amcp: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
 					Version:       "v1.18.0",
-					FqdnSubdomain: pointer.StringPtr("capzaks.com"),
+					FqdnSubdomain: ptr.To("capzaks.com"),
 				},
 			},
 			wantErr: true,
@@ -881,14 +1036,14 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			name: "AzureManagedControlPlane FqdnSubdomain is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
-					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+					FqdnSubdomain: ptr.To("capzaks.api"),
 					Version:       "v1.18.0",
 				},
 			},
 			amcp: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
 					Version:       "v1.18.0",
-					FqdnSubdomain: pointer.StringPtr("capzaks.api"),
+					FqdnSubdomain: ptr.To("capzaks.api"),
 				},
 			},
 			wantErr: false,
@@ -898,7 +1053,7 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
+						EnablePrivateCluster: ptr.To(true),
 					},
 					Version: "v1.18.0",
 				},
@@ -906,8 +1061,8 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			amcp: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
-						PrivateDNSZone:       pointer.StringPtr("None"),
+						EnablePrivateCluster: ptr.To(true),
+						PrivateDNSZone:       ptr.To("None"),
 					},
 					Version: "v1.18.0",
 				},
@@ -920,8 +1075,8 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				Spec: AzureManagedControlPlaneSpec{
 					Version: "v1.18.0",
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
-						PrivateDNSZone:       pointer.StringPtr("example-resource-id"),
+						EnablePrivateCluster: ptr.To(true),
+						PrivateDNSZone:       ptr.To("example-resource-id"),
 					},
 				},
 			},
@@ -929,8 +1084,8 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				Spec: AzureManagedControlPlaneSpec{
 					Version: "v1.18.0",
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
-						PrivateDNSZone:       pointer.StringPtr("None"),
+						EnablePrivateCluster: ptr.To(true),
+						PrivateDNSZone:       ptr.To("None"),
 					},
 				},
 			},
@@ -942,8 +1097,8 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				Spec: AzureManagedControlPlaneSpec{
 					Version: "v1.18.0",
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
-						PrivateDNSZone:       pointer.StringPtr("example-resource-id"),
+						EnablePrivateCluster: ptr.To(true),
+						PrivateDNSZone:       ptr.To("example-resource-id"),
 					},
 				},
 			},
@@ -951,7 +1106,7 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				Spec: AzureManagedControlPlaneSpec{
 					Version: "v1.18.0",
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
+						EnablePrivateCluster: ptr.To(true),
 					},
 				},
 			},
@@ -963,8 +1118,8 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				Spec: AzureManagedControlPlaneSpec{
 					Version: "v1.18.0",
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
-						PrivateDNSZone:       pointer.StringPtr("example-resource-id"),
+						EnablePrivateCluster: ptr.To(true),
+						PrivateDNSZone:       ptr.To("example-resource-id"),
 					},
 				},
 			},
@@ -972,8 +1127,8 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				Spec: AzureManagedControlPlaneSpec{
 					Version: "v1.18.0",
 					APIServerAccessProfile: &APIServerAccessProfile{
-						EnablePrivateCluster: pointer.Bool(true),
-						PrivateDNSZone:       pointer.StringPtr("example-resource-id-1"),
+						EnablePrivateCluster: ptr.To(true),
+						PrivateDNSZone:       ptr.To("example-resource-id-1"),
 					},
 				},
 			},
@@ -1022,6 +1177,190 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 				},
 			},
 			wantErr: true,
+		},
+		{
+			name: "DisableLocalAccounts can be set only for AAD enabled clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version:              "v1.18.0",
+					DisableLocalAccounts: ptr.To(true),
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "DisableLocalAccounts cannot be set only for non AAD clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version:              "v1.18.0",
+					DisableLocalAccounts: ptr.To(true),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "DisableLocalAccounts cannot be disabled AAD clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+					DisableLocalAccounts: ptr.To(true),
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "DisableLocalAccounts cannot change the value AAD clusters",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+					DisableLocalAccounts: ptr.To(true),
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AADProfile: &AADProfile{
+						Managed:             true,
+						AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
+					},
+					DisableLocalAccounts: ptr.To(false),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Auto upgrade profile cannot be disabled",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AutoUpgradeProfile: &ManagedClusterAutoUpgradeProfile{
+						UpgradeChannel: UpgradeChannelNone,
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Auto upgrade profile channel can be updated",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AutoUpgradeProfile: &ManagedClusterAutoUpgradeProfile{
+						UpgradeChannel: UpgradeChannelPatch,
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AutoUpgradeProfile: &ManagedClusterAutoUpgradeProfile{
+						UpgradeChannel: UpgradeChannelStable,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Auto upgrade profile channel can remain same",
+			oldAMCP: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AutoUpgradeProfile: &ManagedClusterAutoUpgradeProfile{
+						UpgradeChannel: UpgradeChannelPatch,
+					},
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: AzureManagedControlPlaneSpec{
+					Version: "v1.18.0",
+					AutoUpgradeProfile: &ManagedClusterAutoUpgradeProfile{
+						UpgradeChannel: UpgradeChannelPatch,
+					},
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name: "OutboundType update",

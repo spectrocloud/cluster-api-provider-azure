@@ -26,10 +26,12 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 )
 
 // ManagedClusterSpec contains properties to create a managed cluster.
@@ -80,7 +82,7 @@ type ManagedClusterSpec struct {
 	ServiceCIDR string
 
 	// DockerBridgeCidr - A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.
-	DockerBridgeCidr *string `json:"dockerBridgeCidr,omitempty"`
+	DockerBridgeCidr *string
 
 	// DNSServiceIP is an IP address assigned to the Kubernetes DNS service
 	DNSServiceIP *string
@@ -111,6 +113,18 @@ type ManagedClusterSpec struct {
 
 	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
 	UserAssignedIdentities []UserAssignedIdentity
+
+	// DisableLocalAccounts - If set to true, getting static credential will be disabled for this cluster. Expected to only be used for AAD clusters.
+	DisableLocalAccounts *bool
+
+	// AutoUpgradeProfile - Profile of auto upgrade configuration.
+	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile
+}
+
+// ManagedClusterAutoUpgradeProfile auto upgrade profile for a managed cluster.
+type ManagedClusterAutoUpgradeProfile struct {
+	// UpgradeChannel - upgrade channel for auto upgrade. Possible values include: 'UpgradeChannelRapid', 'UpgradeChannelStable', 'UpgradeChannelPatch', 'UpgradeChannelNodeImage', 'UpgradeChannelNone'
+	UpgradeChannel expinfrav1.UpgradeChannel
 }
 
 // UserAssignedIdentity defines the user-assigned identities provided
@@ -118,7 +132,7 @@ type ManagedClusterSpec struct {
 type UserAssignedIdentity struct {
 	// ProviderID is the identification ID of the user-assigned Identity, the format of an identity is:
 	// 'azure:///subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}'
-	ProviderID string `json:"providerID"`
+	ProviderID string
 }
 
 // AADProfile is Azure Active Directory configuration to integrate with AKS, for aad authentication.
@@ -203,6 +217,28 @@ func (s *ManagedClusterSpec) CustomHeaders() map[string]string {
 	return s.Headers
 }
 
+// GetManagedClusterVersion gets the desired managed k8s version.
+// If autoupgrade channels is set to patch, stable or rapid, clusters can be upgraded to higher version by AKS.
+// If autoupgrade is triggered, existing kubernetes version will be higher than the user desired kubernetes version.
+// CAPZ should honour the upgrade and it should not downgrade to the lower desired version.
+func (s *ManagedClusterSpec) GetManagedClusterVersion(existing interface{}) (string, error) {
+	version := s.Version
+	if existing != nil && version != "" {
+		existingMC, ok := existing.(containerservice.ManagedCluster)
+		if !ok {
+			return version, fmt.Errorf("%T is not a containerservice.ManagedCluster", existing)
+		}
+		if v, err := versions.GetHigherK8sVersion(
+			version,
+			ptr.Deref(existingMC.KubernetesVersion, version)); err != nil {
+			return "", err
+		} else {
+			version = v
+		}
+	}
+	return version, nil
+}
+
 // Parameters returns the parameters for the managed clusters.
 func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{}, err error) {
 	decodedSSHPublicKey, err := base64.StdEncoding.DecodeString(s.SSHPublicKey)
@@ -218,7 +254,6 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			NodeResourceGroup: &s.NodeResourceGroup,
 			EnableRBAC:        to.BoolPtr(true),
 			DNSPrefix:         s.DNSPrefix,
-			KubernetesVersion: &s.Version,
 			LinuxProfile: &containerservice.LinuxProfile{
 				AdminUsername: to.StringPtr(azure.DefaultAKSUserName),
 				SSH: &containerservice.SSHConfiguration{
@@ -239,6 +274,12 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 				NetworkPolicy:   containerservice.NetworkPolicy(s.NetworkPolicy),
 			},
 		},
+	}
+
+	if kubernetesVersion, err := s.GetManagedClusterVersion(existing); err != nil {
+		return nil, err
+	} else {
+		managedCluster.KubernetesVersion = &kubernetesVersion
 	}
 
 	if s.FqdnSubdomain != nil {
@@ -281,6 +322,9 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 			Managed:             &s.AADProfile.Managed,
 			EnableAzureRBAC:     &s.AADProfile.EnableAzureRBAC,
 			AdminGroupObjectIDs: &s.AADProfile.AdminGroupObjectIDs,
+		}
+		if s.DisableLocalAccounts != nil {
+			managedCluster.DisableLocalAccounts = s.DisableLocalAccounts
 		}
 	}
 
@@ -352,6 +396,12 @@ func (s *ManagedClusterSpec) Parameters(existing interface{}) (params interface{
 		managedCluster.Identity = &containerservice.ManagedClusterIdentity{
 			Type:                   containerservice.ResourceIdentityType(infrav1.VMIdentityUserAssigned),
 			UserAssignedIdentities: uaIDs,
+		}
+	}
+
+	if s.AutoUpgradeProfile != nil {
+		managedCluster.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: containerservice.UpgradeChannel(s.AutoUpgradeProfile.UpgradeChannel),
 		}
 	}
 
@@ -534,6 +584,29 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		existingMCClusterNormalized.Identity = &containerservice.ManagedClusterIdentity{
 			UserAssignedIdentities: uaIDs,
 		}
+	}
+
+	if managedCluster.AutoUpgradeProfile != nil {
+		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+			UpgradeChannel: managedCluster.AutoUpgradeProfile.UpgradeChannel,
+		}
+	}
+
+	if existingMC.AutoUpgradeProfile != nil {
+		if existingMC.AutoUpgradeProfile.UpgradeChannel == "" {
+			existingMC.AutoUpgradeProfile = nil
+		} else {
+			existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+				UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
+			}
+		}
+	}
+	if managedCluster.DisableLocalAccounts != nil {
+		clusterNormalized.DisableLocalAccounts = managedCluster.DisableLocalAccounts
+	}
+
+	if existingMC.DisableLocalAccounts != nil {
+		existingMCClusterNormalized.DisableLocalAccounts = existingMC.DisableLocalAccounts
 	}
 
 	diff := cmp.Diff(clusterNormalized, existingMCClusterNormalized)
