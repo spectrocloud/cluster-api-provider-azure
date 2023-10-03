@@ -590,13 +590,15 @@ func computeDiffOfNormalizedClusters(managedCluster containerservice.ManagedClus
 		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
 			UpgradeChannel: managedCluster.AutoUpgradeProfile.UpgradeChannel,
 		}
-	} else {
-		clusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{}
 	}
 
 	if existingMC.AutoUpgradeProfile != nil {
-		existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
-			UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
+		if existingMC.AutoUpgradeProfile.UpgradeChannel == "" {
+			existingMC.AutoUpgradeProfile = nil
+		} else {
+			existingMCClusterNormalized.AutoUpgradeProfile = &containerservice.ManagedClusterAutoUpgradeProfile{
+				UpgradeChannel: existingMC.AutoUpgradeProfile.UpgradeChannel,
+			}
 		}
 	}
 	if managedCluster.DisableLocalAccounts != nil {
