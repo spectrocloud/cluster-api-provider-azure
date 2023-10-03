@@ -15,6 +15,7 @@
 # If you update this file, please follow
 # https://suva.sh/posts/well-documented-makefiles
 
+
 # Ensure Make is run with bash shell as some syntax below is bash-specific
 SHELL:=/usr/bin/env bash
 
@@ -123,6 +124,8 @@ ETCD=$(TOOLS_BIN_DIR)/etcd
 # Define Docker related variables. Releases should modify and double check these vars.
 # Fips Flags
 FIPS_ENABLE ?= ""
+BUILDER_GOLANG_VERSION ?= 1.21
+BUILD_ARGS = --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg BUILDER_GOLANG_VERSION=${BUILDER_GOLANG_VERSION}
 
 RELEASE_LOC := release
 ifeq ($(FIPS_ENABLE),yes)
@@ -133,7 +136,7 @@ SPECTRO_VERSION ?= 4.0.0-dev
 TAG ?= v1.3.2-spectro-${SPECTRO_VERSION}
 ARCH ?= amd64
 # ALL_ARCH = amd64 arm arm64 ppc64le s390x
-ALL_ARCH = amd64 
+ALL_ARCH = amd64 arm64
 
 REGISTRY ?= gcr.io/spectro-dev-public/$(USER)/${RELEASE_LOC}
 
@@ -352,7 +355,7 @@ docker-pull-prerequisites: ## Pull prerequisites for building controller-manager
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager.
-	DOCKER_BUILDKIT=1 docker build --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker buildx build --load --platform linux/${ARCH} ${BUILD_ARGS}  --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
 	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/default/manager_image_patch.yaml"
 	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/default/manager_pull_policy.yaml"
 
