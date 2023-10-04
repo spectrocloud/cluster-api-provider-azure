@@ -41,6 +41,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Copy the sources
 COPY ./ ./
 
+# Build
+ARG package=.
+ARG ARCH
+
 # Cache the go build into the the Go’s compiler cache folder so we take benefits of compiler caching across docker build calls
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
@@ -51,9 +55,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
       GOARCH=${ARCH} go-build-static.sh . ;\
     fi
 
-# Build
-ARG package=.
-ARG ARCH
 
 # Do not force rebuild of up-to-date packages (do not use -a) and use the compiler cache folder
 RUN --mount=type=cache,target=/root/.cache/go-build \
