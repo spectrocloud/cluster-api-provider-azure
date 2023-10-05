@@ -21,7 +21,8 @@ jobs:
     # Ensure that the credentials are provided as encrypted secrets
     env:
       SPECTRO_VERSION: ${{ github.event.inputs.release_version }}
-      REGISTRY: gcr.io/spectro-images-public/release/cluster-api-azure
+      LEGACY_REGISTRY: gcr.io/spectro-images-public/release/cluster-api-azure
+      FIPS_REGISTRY: gcr.io/spectro-images-public/release-fips/cluster-api-azure
     steps:
       -
         uses: mukunku/tag-exists-action@v1.2.0
@@ -35,7 +36,13 @@ jobs:
           exit 1
       -
         if: ${{ github.event.inputs.rel_type == 'rc' }}
-        run: echo "REGISTRY=gcr.io/spectro-dev-public/release/cluster-api-azure" >> $GITHUB_ENV
+        run: | 
+          echo "LEGACY_REGISTRY=gcr.io/spectro-dev-public/release/cluster-api-azure" >> $GITHUB_ENV
+          echo "FIPS_REGISTRY=gcr.io/spectro-dev-public/release-fips/cluster-api-azure" >> $GITHUB_ENV
+      -
+        name: Set ARM Builder Host
+        run: |
+          echo "ARM_DOCKER_HOST='ssh://builder@'${{ secrets.KNOWN_HOSTS }}" >> $GITHUB_ENV
       - 
         name: Install SSH key for remote docker build
         uses: shimataro/ssh-key-action@v2
@@ -58,17 +65,21 @@ jobs:
       -
         name: Build ARM Image
         env:
-          DOCKER_HOST: 'ssh://builder@'${{ secrets.KNOWN_HOSTS }} 
+          REGISTRY: ${{ env.LEGACY_REGISTRY }}
+          DOCKER_HOST: ${{ env.ARM_DOCKER_HOST }}
         run: |
           make docker-build arm64
       -
         name: Build Image
+        env:
+          REGISTRY: ${{ env.LEGACY_REGISTRY }}
         run: |
           make docker-build amd64
           make docker-push-all
       -
         name: Build Image - FIPS Mode
         env:
+          REGISTRY: ${{ env.FIPS_REGISTRY }}
           FIPS_ENABLE: yes
           ALL_ARCH: amd64
         run: |
