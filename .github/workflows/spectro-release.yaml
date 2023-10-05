@@ -42,7 +42,7 @@ jobs:
       -
         name: Set ARM Builder Host
         run: |
-          echo "ARM_DOCKER_HOST='ssh://builder@'${{ secrets.KNOWN_HOSTS }}" >> $GITHUB_ENV
+          echo "ARM_DOCKER_HOST=ssh:\/\/builder\@${{ secrets.KNOWN_HOSTS }}" >> $GITHUB_ENV
       - 
         name: Install SSH key for remote docker build
         uses: shimataro/ssh-key-action@v2
