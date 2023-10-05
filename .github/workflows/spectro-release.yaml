@@ -36,6 +36,13 @@ jobs:
       -
         if: ${{ github.event.inputs.rel_type == 'rc' }}
         run: echo "REGISTRY=gcr.io/spectro-dev-public/release/cluster-api-azure" >> $GITHUB_ENV
+      - 
+        name: Install SSH key for remote docker build
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+          if_key_exists: fail
       -
         uses: actions/checkout@v3
       -
@@ -49,14 +56,21 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
       -
+        name: Build ARM Image
+        env:
+          DOCKER_HOST: 'ssh://builder@'${{ secrets.KNOWN_HOSTS }} 
+        run: |
+          make docker-build arm64
+      -
         name: Build Image
         run: |
-          make docker-build-all
+          make docker-build amd64
           make docker-push-all
       -
         name: Build Image - FIPS Mode
         env:
           FIPS_ENABLE: yes
+          ALL_ARCH: amd64
         run: |
           make docker-build-all
           make docker-push-all
