@@ -39,10 +39,6 @@ jobs:
         run: | 
           echo "LEGACY_REGISTRY=gcr.io/spectro-dev-public/release/cluster-api-azure" >> $GITHUB_ENV
           echo "FIPS_REGISTRY=gcr.io/spectro-dev-public/release-fips/cluster-api-azure" >> $GITHUB_ENV
-      -
-        name: Set ARM Builder Host
-        run: |
-          echo "ARM_DOCKER_HOST=ssh://builder@${{ secrets.DOCKER_HOST_ARM }}" >> $GITHUB_ENV
       - 
         name: Install SSH key for remote docker build
         uses: shimataro/ssh-key-action@v2
@@ -63,20 +59,11 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
       -
-        name: Build ARM Image
-        env:
-          REGISTRY: ${{ env.LEGACY_REGISTRY }}
-          DOCKER_HOST: ${{ env.ARM_DOCKER_HOST }}
-          ARCH: arm64
-        run: |
-          make docker-build 
-      -
         name: Build Image
         env:
           REGISTRY: ${{ env.LEGACY_REGISTRY }}
-          ARCH: amd64
         run: |
-          make docker-build 
+          make docker-build-all
           make docker-push-all
       -
         name: Build Image - FIPS Mode
