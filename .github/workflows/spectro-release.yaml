@@ -67,14 +67,16 @@ jobs:
         env:
           REGISTRY: ${{ env.LEGACY_REGISTRY }}
           DOCKER_HOST: ${{ env.ARM_DOCKER_HOST }}
+          ARCH: arm64
         run: |
-          make docker-build arm64
+          make docker-build 
       -
         name: Build Image
         env:
           REGISTRY: ${{ env.LEGACY_REGISTRY }}
+          ARCH: amd64
         run: |
-          make docker-build amd64
+          make docker-build 
           make docker-push-all
       -
         name: Build Image - FIPS Mode
