@@ -1133,6 +1133,41 @@ func TestAzureManagedControlPlane_ValidateUpdate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: ptr.To("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: ptr.To("192.168.0.0"),
+					Version:      "v1.17.0",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "AzureManagedControlPlane invalid version downgrade change",
+			oldAMCP: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: ptr.To("192.168.0.0"),
+					Version:      "v1.18.0",
+				},
+				Status: AzureManagedControlPlaneStatus{
+					AutoUpgradeVersion: "v1.18.3",
+				},
+			},
+			amcp: &AzureManagedControlPlane{
+				Spec: AzureManagedControlPlaneSpec{
+					DNSServiceIP: ptr.To("192.168.0.0"),
+					Version:      "v1.18.1",
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "AzureManagedControlPlane SubscriptionID is immutable",
 			oldAMCP: &AzureManagedControlPlane{
 				Spec: AzureManagedControlPlaneSpec{

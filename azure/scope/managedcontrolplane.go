@@ -494,6 +494,23 @@ func (s *ManagedControlPlaneScope) IsAADEnabled() bool {
 	return false
 }
 
+// SetAutoUpgradeVersionStatus sets the auto upgrade version in status.
+func (s *ManagedControlPlaneScope) SetAutoUpgradeVersionStatus(version string) {
+	s.ControlPlane.Status.AutoUpgradeVersion = version
+}
+
+// IsManagedVersionUpgrade checks if version is auto managed by AKS.
+func (s *ManagedControlPlaneScope) IsManagedVersionUpgrade() bool {
+	return isManagedVersionUpgrade(s.ControlPlane)
+}
+
+func isManagedVersionUpgrade(managedControlPlane *infrav1.AzureManagedControlPlane) bool {
+	return managedControlPlane.Spec.AutoUpgradeProfile != nil &&
+		managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != nil &&
+		(*managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1.UpgradeChannelNone &&
+			*managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1.UpgradeChannelNodeImage)
+}
+
 // ManagedClusterSpec returns the managed cluster spec.
 func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ResourceSpecGetter {
 	managedClusterSpec := managedclusters.ManagedClusterSpec{
@@ -622,6 +639,16 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ResourceSpecGetter
 	if s.ControlPlane.Spec.OIDCIssuerProfile != nil {
 		managedClusterSpec.OIDCIssuerProfile = &managedclusters.OIDCIssuerProfile{
 			Enabled: s.ControlPlane.Spec.OIDCIssuerProfile.Enabled,
+		}
+	}
+
+	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
+		managedClusterSpec.AutoUpgradeProfile = &managedclusters.ManagedClusterAutoUpgradeProfile{}
+		if s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != nil {
+			managedClusterSpec.AutoUpgradeProfile.UpgradeChannel = s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel
+		}
+		if s.ControlPlane.Spec.AutoUpgradeProfile.NodeOSUpgradeChannel != nil {
+			managedClusterSpec.AutoUpgradeProfile.NodeOSUpgradeChannel = s.ControlPlane.Spec.AutoUpgradeProfile.NodeOSUpgradeChannel
 		}
 	}
 

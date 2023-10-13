@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
 	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 )
 
 // KubeletConfig defines the set of kubelet configurations for nodes in pools.
@@ -175,6 +176,25 @@ func (s *AgentPoolSpec) CustomHeaders() map[string]string {
 	return s.Headers
 }
 
+// GetManagedMachinePoolVersion gets the desired managed k8s version.
+// If autoupgrade channels is set to patch, stable or rapid, clusters can be upgraded to higher version by AKS.
+// If autoupgrade is triggered, existing kubernetes version will be higher than the user desired kubernetes version.
+// CAPZ should honour the upgrade and it should not downgrade to the lower desired version.
+func (s *AgentPoolSpec) GetManagedMachinePoolVersion(existing interface{}) (*string, error) {
+	version := s.Version
+	if existing != nil && version != nil {
+		existingPool, ok := existing.(armcontainerservice.AgentPool)
+		if !ok {
+			return version, fmt.Errorf("%T is not a containerservice.ManagedCluster", existing)
+		}
+		v := versions.GetHigherK8sVersion(
+			*version,
+			ptr.Deref(existingPool.Properties.OrchestratorVersion, *version))
+		version = ptr.To(v)
+	}
+	return version, nil
+}
+
 // Parameters returns the parameters for the agent pool.
 func (s *AgentPoolSpec) Parameters(ctx context.Context, existing interface{}) (params interface{}, err error) {
 	_, log, done := tele.StartSpanWithLogger(ctx, "agentpools.Service.Parameters")
@@ -227,6 +247,13 @@ func (s *AgentPoolSpec) Parameters(ctx context.Context, existing interface{}) (p
 				Tags:                converters.TagsToMap(s.AdditionalTags),
 			},
 		}
+
+		if kubernetesVersion, err := s.GetManagedMachinePoolVersion(existing); err != nil {
+			return nil, err
+		} else {
+			normalizedProfile.Properties.OrchestratorVersion = kubernetesVersion
+		}
+
 		if len(normalizedProfile.Properties.NodeTaints) == 0 {
 			normalizedProfile.Properties.NodeTaints = nil
 		}

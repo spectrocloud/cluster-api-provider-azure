@@ -27,12 +27,14 @@ import (
 	"strings"
 	"time"
 
+	semverv4 "github.com/blang/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-provider-azure/feature"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 	webhookutils "sigs.k8s.io/cluster-api-provider-azure/util/webhook"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capifeature "sigs.k8s.io/cluster-api/feature"
@@ -260,6 +262,10 @@ func (mw *azureManagedControlPlaneWebhook) ValidateUpdate(ctx context.Context, o
 		allErrs = append(allErrs, errs...)
 	}
 
+	if errs := m.validateAutoUpgradeProfile(old); len(errs) > 0 {
+		allErrs = append(allErrs, errs...)
+	}
+
 	if errs := m.validateOIDCIssuerProfileUpdate(old); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
@@ -334,6 +340,10 @@ func (m *AzureManagedControlPlane) validateDisableLocalAccounts(_ client.Client)
 func (m *AzureManagedControlPlane) validateVersion(_ client.Client) error {
 	if !kubeSemver.MatchString(m.Spec.Version) {
 		return errors.New("must be a valid semantic version")
+	}
+
+	if _, err := semverv4.ParseTolerant(m.Spec.Version); err != nil {
+		return errors.Join(err, errors.New("must be a valid semantic version"))
 	}
 
 	return nil
@@ -494,6 +504,35 @@ func (m *AzureManagedControlPlane) validateManagedClusterNetwork(cli client.Clie
 		return kerrors.NewAggregate(allErrs.ToAggregate().Errors())
 	}
 	return nil
+}
+
+// validateAutoUpgradeProfile validates auto upgrade profile.
+func (m *AzureManagedControlPlane) validateAutoUpgradeProfile(old *AzureManagedControlPlane) field.ErrorList {
+	var allErrs field.ErrorList
+	if old.Spec.AutoUpgradeProfile != nil && m.Spec.AutoUpgradeProfile == nil {
+		// Prevent AutoUpgradeProfile to be set to nil.
+		// Unsetting the field is not allowed.
+		allErrs = append(allErrs,
+			field.Invalid(
+				field.NewPath("Spec", "AutoUpgradeProfile"),
+				m.Spec.AutoUpgradeProfile,
+				"field cannot be set to nil, to disable auto upgrades set the channel to none."))
+	}
+
+	if hv := versions.GetHigherK8sVersion(m.Spec.Version, old.Spec.Version); hv != m.Spec.Version {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("Spec", "Version"),
+			m.Spec.Version, "field version cannot be downgraded"),
+		)
+	}
+
+	if old.Status.AutoUpgradeVersion != "" && m.Spec.Version != old.Spec.Version {
+		if hv := versions.GetHigherK8sVersion(m.Spec.Version, old.Status.AutoUpgradeVersion); hv != m.Spec.Version {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("Spec", "Version"),
+				m.Spec.Version, "version is auto-upgraded to "+old.Status.AutoUpgradeVersion+",cannot be downgraded"),
+			)
+		}
+	}
+	return allErrs
 }
 
 // validateAPIServerAccessProfileUpdate validates update to APIServerAccessProfile.

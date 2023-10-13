@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/converters"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 )
 
 // ManagedClusterSpec contains properties to create a managed cluster.
@@ -125,8 +127,20 @@ type ManagedClusterSpec struct {
 
 	// DNSPrefix allows the user to customize dns prefix.
 	DNSPrefix *string
+
 	// DisableLocalAccounts disables getting static credentials for this cluster when set. Expected to only be used for AAD clusters.
 	DisableLocalAccounts *bool
+
+	// AutoUpgradeProfile - Profile of auto upgrade configuration.
+	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile
+}
+
+// ManagedClusterAutoUpgradeProfile auto upgrade profile for a managed cluster.
+type ManagedClusterAutoUpgradeProfile struct {
+	// NodeOSUpgradeChannel is a manner in which the OS on your nodes is updated. The default is NodeImage. Possible values include: NodeImage,Unmanaged,None
+	NodeOSUpgradeChannel *infrav1.NodeOSUpgradeChannel
+	// UpgradeChannel - upgrade channel for auto upgrade. Possible values include: 'UpgradeChannelRapid', 'UpgradeChannelStable', 'UpgradeChannelPatch', 'UpgradeChannelNodeImage', 'UpgradeChannelNone'
+	UpgradeChannel *infrav1.UpgradeChannel
 }
 
 // HTTPProxyConfig is the HTTP proxy configuration for the cluster.
@@ -301,6 +315,24 @@ func buildAutoScalerProfile(autoScalerProfile *AutoScalerProfile) *armcontainers
 	return mcAutoScalerProfile
 }
 
+// GetManagedClusterVersion gets the desired managed k8s version.
+// If autoupgrade channels is set to patch, stable or rapid, clusters can be upgraded to higher version by AKS.
+// If autoupgrade is triggered, existing kubernetes version will be higher than the user desired kubernetes version.
+// CAPZ should honour the upgrade and it should not downgrade to the lower desired version.
+func (s *ManagedClusterSpec) GetManagedClusterVersion(existing interface{}) (string, error) {
+	version := s.Version
+	if existing != nil && version != "" {
+		existingMC, ok := existing.(armcontainerservice.ManagedCluster)
+		if !ok {
+			return version, fmt.Errorf("%T is not a containerservice.ManagedCluster", existing)
+		}
+		version = versions.GetHigherK8sVersion(
+			version,
+			ptr.Deref(existingMC.Properties.KubernetesVersion, version))
+	}
+	return version, nil
+}
+
 // Parameters returns the parameters for the managed clusters.
 //
 //nolint:gocyclo // Function requires a lot of nil checks that raise complexity.
@@ -332,8 +364,6 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existing interface{
 			NodeResourceGroup: &s.NodeResourceGroup,
 			EnableRBAC:        ptr.To(true),
 			DNSPrefix:         s.DNSPrefix,
-			KubernetesVersion: &s.Version,
-
 			ServicePrincipalProfile: &armcontainerservice.ManagedClusterServicePrincipalProfile{
 				ClientID: ptr.To("msi"),
 			},
@@ -344,6 +374,12 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existing interface{
 				NetworkPolicy:   azure.AliasOrNil[armcontainerservice.NetworkPolicy](&s.NetworkPolicy),
 			},
 		},
+	}
+
+	if kubernetesVersion, err := s.GetManagedClusterVersion(existing); err != nil {
+		return nil, err
+	} else {
+		managedCluster.Properties.KubernetesVersion = &kubernetesVersion
 	}
 
 	if decodedSSHPublicKey != nil {
@@ -471,6 +507,16 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existing interface{
 	if s.OIDCIssuerProfile != nil {
 		managedCluster.Properties.OidcIssuerProfile = &armcontainerservice.ManagedClusterOIDCIssuerProfile{
 			Enabled: s.OIDCIssuerProfile.Enabled,
+		}
+	}
+
+	if s.AutoUpgradeProfile != nil {
+		managedCluster.Properties.AutoUpgradeProfile = &armcontainerservice.ManagedClusterAutoUpgradeProfile{}
+		if s.AutoUpgradeProfile.UpgradeChannel != nil {
+			managedCluster.Properties.AutoUpgradeProfile.UpgradeChannel = to.Ptr(armcontainerservice.UpgradeChannel(*s.AutoUpgradeProfile.UpgradeChannel))
+		}
+		if s.AutoUpgradeProfile.NodeOSUpgradeChannel != nil {
+			managedCluster.Properties.AutoUpgradeProfile.NodeOSUpgradeChannel = to.Ptr(armcontainerservice.NodeOSUpgradeChannel(*s.AutoUpgradeProfile.NodeOSUpgradeChannel))
 		}
 	}
 
@@ -655,47 +701,11 @@ func computeDiffOfNormalizedClusters(managedCluster armcontainerservice.ManagedC
 	}
 
 	if managedCluster.Properties.AutoScalerProfile != nil {
-		propertiesNormalized.AutoScalerProfile = &armcontainerservice.ManagedClusterPropertiesAutoScalerProfile{
-			BalanceSimilarNodeGroups:      managedCluster.Properties.AutoScalerProfile.BalanceSimilarNodeGroups,
-			Expander:                      managedCluster.Properties.AutoScalerProfile.Expander,
-			MaxEmptyBulkDelete:            managedCluster.Properties.AutoScalerProfile.MaxEmptyBulkDelete,
-			MaxGracefulTerminationSec:     managedCluster.Properties.AutoScalerProfile.MaxGracefulTerminationSec,
-			MaxNodeProvisionTime:          managedCluster.Properties.AutoScalerProfile.MaxNodeProvisionTime,
-			MaxTotalUnreadyPercentage:     managedCluster.Properties.AutoScalerProfile.MaxTotalUnreadyPercentage,
-			NewPodScaleUpDelay:            managedCluster.Properties.AutoScalerProfile.NewPodScaleUpDelay,
-			OkTotalUnreadyCount:           managedCluster.Properties.AutoScalerProfile.OkTotalUnreadyCount,
-			ScanInterval:                  managedCluster.Properties.AutoScalerProfile.ScanInterval,
-			ScaleDownDelayAfterAdd:        managedCluster.Properties.AutoScalerProfile.ScaleDownDelayAfterAdd,
-			ScaleDownDelayAfterDelete:     managedCluster.Properties.AutoScalerProfile.ScaleDownDelayAfterDelete,
-			ScaleDownDelayAfterFailure:    managedCluster.Properties.AutoScalerProfile.ScaleDownDelayAfterFailure,
-			ScaleDownUnneededTime:         managedCluster.Properties.AutoScalerProfile.ScaleDownUnneededTime,
-			ScaleDownUnreadyTime:          managedCluster.Properties.AutoScalerProfile.ScaleDownUnreadyTime,
-			ScaleDownUtilizationThreshold: managedCluster.Properties.AutoScalerProfile.ScaleDownUtilizationThreshold,
-			SkipNodesWithLocalStorage:     managedCluster.Properties.AutoScalerProfile.SkipNodesWithLocalStorage,
-			SkipNodesWithSystemPods:       managedCluster.Properties.AutoScalerProfile.SkipNodesWithSystemPods,
-		}
+		propertiesNormalized.AutoScalerProfile = managedCluster.Properties.AutoScalerProfile
 	}
 
 	if existingMC.Properties.AutoScalerProfile != nil {
-		existingMCPropertiesNormalized.AutoScalerProfile = &armcontainerservice.ManagedClusterPropertiesAutoScalerProfile{
-			BalanceSimilarNodeGroups:      existingMC.Properties.AutoScalerProfile.BalanceSimilarNodeGroups,
-			Expander:                      existingMC.Properties.AutoScalerProfile.Expander,
-			MaxEmptyBulkDelete:            existingMC.Properties.AutoScalerProfile.MaxEmptyBulkDelete,
-			MaxGracefulTerminationSec:     existingMC.Properties.AutoScalerProfile.MaxGracefulTerminationSec,
-			MaxNodeProvisionTime:          existingMC.Properties.AutoScalerProfile.MaxNodeProvisionTime,
-			MaxTotalUnreadyPercentage:     existingMC.Properties.AutoScalerProfile.MaxTotalUnreadyPercentage,
-			NewPodScaleUpDelay:            existingMC.Properties.AutoScalerProfile.NewPodScaleUpDelay,
-			OkTotalUnreadyCount:           existingMC.Properties.AutoScalerProfile.OkTotalUnreadyCount,
-			ScanInterval:                  existingMC.Properties.AutoScalerProfile.ScanInterval,
-			ScaleDownDelayAfterAdd:        existingMC.Properties.AutoScalerProfile.ScaleDownDelayAfterAdd,
-			ScaleDownDelayAfterDelete:     existingMC.Properties.AutoScalerProfile.ScaleDownDelayAfterDelete,
-			ScaleDownDelayAfterFailure:    existingMC.Properties.AutoScalerProfile.ScaleDownDelayAfterFailure,
-			ScaleDownUnneededTime:         existingMC.Properties.AutoScalerProfile.ScaleDownUnneededTime,
-			ScaleDownUnreadyTime:          existingMC.Properties.AutoScalerProfile.ScaleDownUnreadyTime,
-			ScaleDownUtilizationThreshold: existingMC.Properties.AutoScalerProfile.ScaleDownUtilizationThreshold,
-			SkipNodesWithLocalStorage:     existingMC.Properties.AutoScalerProfile.SkipNodesWithLocalStorage,
-			SkipNodesWithSystemPods:       existingMC.Properties.AutoScalerProfile.SkipNodesWithSystemPods,
-		}
+		existingMCPropertiesNormalized.AutoScalerProfile = existingMC.Properties.AutoScalerProfile
 	}
 
 	if managedCluster.Properties.IdentityProfile != nil {
@@ -774,6 +784,14 @@ func computeDiffOfNormalizedClusters(managedCluster armcontainerservice.ManagedC
 
 	if existingMC.Properties.DisableLocalAccounts != nil {
 		existingMCClusterNormalized.Properties.DisableLocalAccounts = existingMC.Properties.DisableLocalAccounts
+	}
+
+	if managedCluster.Properties.AutoUpgradeProfile != nil {
+		clusterNormalized.Properties.AutoUpgradeProfile = managedCluster.Properties.AutoUpgradeProfile
+	}
+
+	if existingMC.Properties.AutoUpgradeProfile != nil {
+		existingMCClusterNormalized.Properties.AutoUpgradeProfile = existingMC.Properties.AutoUpgradeProfile
 	}
 
 	diff := cmp.Diff(clusterNormalized, existingMCClusterNormalized)
