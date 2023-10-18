@@ -124,7 +124,7 @@ ETCD=$(TOOLS_BIN_DIR)/etcd
 # Define Docker related variables. Releases should modify and double check these vars.
 # Fips Flags
 FIPS_ENABLE ?= ""
-BUILDER_GOLANG_VERSION ?= 1.21
+BUILDER_GOLANG_VERSION ?= 1.21.3
 BUILD_ARGS = --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg BUILDER_GOLANG_VERSION=${BUILDER_GOLANG_VERSION}
 
 RELEASE_LOC := release
