@@ -124,7 +124,7 @@ ETCD=$(TOOLS_BIN_DIR)/etcd
 # Define Docker related variables. Releases should modify and double check these vars.
 # Fips Flags
 FIPS_ENABLE ?= ""
-BUILDER_GOLANG_VERSION ?= 1.21.3
+BUILDER_GOLANG_VERSION ?= 1.21
 BUILD_ARGS = --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg BUILDER_GOLANG_VERSION=${BUILDER_GOLANG_VERSION}
 
 RELEASE_LOC := release
@@ -350,7 +350,7 @@ delete-workload-cluster: ## Deletes the example workload Kubernetes cluster.
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites: ## Pull prerequisites for building controller-manager.
 	docker pull docker/dockerfile:1.4
-	docker pull docker.io/library/golang:1.17
+	docker pull docker.io/library/golang:1.21.3
 	docker pull gcr.io/distroless/static:latest
 
 .PHONY: docker-build
