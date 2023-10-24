@@ -596,6 +596,7 @@ func TestAPIServerLBClassDefaults(t *testing.T) {
 									SKU:                  SKUStandard,
 									Type:                 Public,
 									IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
+									IPAllocationMethod:   Dynamic,
 								},
 							},
 						},
@@ -604,7 +605,7 @@ func TestAPIServerLBClassDefaults(t *testing.T) {
 			},
 		},
 		{
-			name: "internal lb",
+			name: "internal lb with static ip",
 			clusterTemplate: &AzureClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cluster-template",
@@ -614,7 +615,8 @@ func TestAPIServerLBClassDefaults(t *testing.T) {
 						Spec: AzureClusterTemplateResourceSpec{
 							NetworkSpec: NetworkTemplateSpec{
 								APIServerLB: LoadBalancerClassSpec{
-									Type: Internal,
+									Type:               Internal,
+									IPAllocationMethod: Static,
 								},
 							},
 						},
@@ -633,6 +635,7 @@ func TestAPIServerLBClassDefaults(t *testing.T) {
 									SKU:                  SKUStandard,
 									Type:                 Internal,
 									IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
+									IPAllocationMethod:   Static,
 								},
 							},
 						},

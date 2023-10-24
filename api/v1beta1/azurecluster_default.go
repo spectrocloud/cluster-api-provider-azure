@@ -355,6 +355,9 @@ func (lb *LoadBalancerClassSpec) setAPIServerLBDefaults() {
 	if lb.SKU == "" {
 		lb.SKU = SKUStandard
 	}
+	if lb.IPAllocationMethod == "" {
+		lb.IPAllocationMethod = Dynamic
+	}
 	if lb.IdleTimeoutInMinutes == nil {
 		lb.IdleTimeoutInMinutes = ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes)
 	}

@@ -257,6 +257,7 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			SKU:                  s.APIServerLB().SKU,
 			Role:                 infrav1.APIServerRole,
 			BackendPoolName:      s.APIServerLB().BackendPool.Name,
+			IPAllocationMethod:   s.APIServerLB().IPAllocationMethod,
 			IdleTimeoutInMinutes: s.APIServerLB().IdleTimeoutInMinutes,
 			AdditionalTags:       s.AdditionalTags(),
 		},

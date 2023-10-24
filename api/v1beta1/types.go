@@ -360,6 +360,16 @@ const (
 	Public = LBType("Public")
 )
 
+// IPAllocationMethod defines wheather the ip is allocated dynamically or statically.
+type IPAllocationMethod string
+
+const (
+	// Dynamic is the value for allocating dynamic ip.
+	Dynamic = IPAllocationMethod("Dynamic")
+	// Static is the value for allocating static ip.
+	Static = IPAllocationMethod("Static")
+)
+
 // FrontendIP defines a load balancer frontend IP configuration.
 type FrontendIP struct {
 	// +kubebuilder:validation:MinLength=1

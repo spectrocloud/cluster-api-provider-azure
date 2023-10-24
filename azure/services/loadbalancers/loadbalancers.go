@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
+	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/async"
@@ -68,7 +69,7 @@ func (s *Service) Name() string {
 
 // Reconcile idempotently creates or updates a load balancer.
 func (s *Service) Reconcile(ctx context.Context) error {
-	ctx, _, done := tele.StartSpanWithLogger(ctx, "loadbalancers.Service.Reconcile")
+	ctx, log, done := tele.StartSpanWithLogger(ctx, "loadbalancers.Service.Reconcile")
 	defer done()
 
 	ctx, cancel := context.WithTimeout(ctx, reconciler.DefaultAzureServiceReconcileTimeout)
@@ -84,9 +85,25 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	//  Order of precedence (highest -> lowest) is: error that is not an operationNotDoneError (i.e. error creating) -> operationNotDoneError (i.e. creating in progress) -> no error (i.e. created)
 	var result error
 	for _, lbSpec := range specs {
-		if _, err := s.CreateOrUpdateResource(ctx, lbSpec, serviceName); err != nil {
+		if lb, err := s.CreateOrUpdateResource(ctx, lbSpec, serviceName); err != nil {
 			if !azure.IsOperationNotDoneError(err) || result == nil {
 				result = err
+			}
+		} else {
+			loadBalancer, ok := lb.(armnetwork.LoadBalancer)
+			if !ok {
+				// Return out of loop since this would be an unexepcted fatal error
+				log.V(1).Info("created resource %T is not a network.LoadBalancer", "lb", lb)
+				continue
+			}
+			if lbSpec.ResourceName() == s.Scope.APIServerLB().Name {
+				lbIPConfig := loadBalancer.Properties.FrontendIPConfigurations
+				if frontEndPrivateIP := getFrontEndPrivateIPAddressFromLoadBalancerIPConfig(lbIPConfig); frontEndPrivateIP != "" {
+					if len(s.Scope.APIServerLB().FrontendIPs) == 0 {
+						s.Scope.APIServerLB().FrontendIPs = append(s.Scope.APIServerLB().FrontendIPs, infrav1.FrontendIP{})
+					}
+					s.Scope.APIServerLB().FrontendIPs[0].PrivateIPAddress = frontEndPrivateIP
+				}
 			}
 		}
 	}
@@ -127,4 +144,11 @@ func (s *Service) Delete(ctx context.Context) error {
 // IsManaged returns always returns true as CAPZ does not support BYO load balancers.
 func (s *Service) IsManaged(ctx context.Context) (bool, error) {
 	return true, nil
+}
+
+func getFrontEndPrivateIPAddressFromLoadBalancerIPConfig(lbIPConfig []*armnetwork.FrontendIPConfiguration) string {
+	if len(lbIPConfig) == 0 {
+		return ""
+	}
+	return ptr.Deref((lbIPConfig)[0].Properties.PrivateIPAddress, "")
 }

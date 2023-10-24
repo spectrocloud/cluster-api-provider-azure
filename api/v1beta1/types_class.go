@@ -122,6 +122,8 @@ type LoadBalancerClassSpec struct {
 	SKU SKU `json:"sku,omitempty"`
 	// +optional
 	Type LBType `json:"type,omitempty"`
+	// +optional
+	IPAllocationMethod IPAllocationMethod `json:"ipAllocationMethod,omitempty"`
 	// IdleTimeoutInMinutes specifies the timeout for the TCP idle connection.
 	// +optional
 	IdleTimeoutInMinutes *int32 `json:"idleTimeoutInMinutes,omitempty"`
