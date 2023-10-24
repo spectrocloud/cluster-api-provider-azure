@@ -515,7 +515,7 @@ func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, link
 		records := make([]azure.ResourceSpecGetter, 1)
 		records[0] = privatedns.RecordSpec{
 			Record: infrav1.AddressRecord{
-				Hostname: azure.PrivateAPIServerHostname,
+				Hostname: s.getHostName(),
 				IP:       s.APIServerPrivateIP(),
 			},
 			ZoneName:      s.GetPrivateDNSZoneName(),
@@ -526,6 +526,13 @@ func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, link
 	}
 
 	return nil, nil, nil
+}
+
+func (s *ClusterScope) getHostName() string {
+	if s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneName != "" {
+		return fmt.Sprintf("%s.%s", azure.PrivateAPIServerHostname, s.AzureCluster.Name)
+	}
+	return azure.PrivateAPIServerHostname
 }
 
 // IsAzureBastionEnabled returns true if the azure bastion is enabled.
@@ -870,7 +877,11 @@ func (s *ClusterScope) APIServerPort() int32 {
 // APIServerHost returns the hostname used to reach the API server.
 func (s *ClusterScope) APIServerHost() string {
 	if s.IsAPIServerPrivate() {
-		return azure.GeneratePrivateFQDN(s.GetPrivateDNSZoneName())
+		var isPrivateDNSZoneName bool
+		if len(s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneName) > 0 {
+			isPrivateDNSZoneName = true
+		}
+		return azure.GeneratePrivateFQDN(s.GetPrivateDNSZoneName(), s.AzureCluster.Name, isPrivateDNSZoneName)
 	}
 	return s.APIServerPublicIP().DNSName
 }
