@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Build architecture
-ARG ARCH
-
 # Build the manager binary
 ARG BUILDER_GOLANG_VERSION
 # First stage: build the executable.
@@ -73,7 +70,7 @@ RUN if [ "${CRYPTO_LIB}" ]; then assert-fips.sh manager; fi
 RUN scan-govulncheck.sh manager
 
 # Production image
-FROM gcr.io/distroless/static:nonroot-${ARCH}
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
 # Use uid of nonroot user (65532) because kubernetes expects numeric user when applying pod security policies
