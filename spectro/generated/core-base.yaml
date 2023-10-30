@@ -16,9 +16,10 @@ spec:
   template:
     metadata:
       annotations:
-        kubectl.kubernetes.io/default-logs-container: manager
+        kubectl.kubernetes.io/default-container: manager
       labels:
         aadpodidbinding: capz-controller-aadpodidentity-selector
+        azure.workload.identity/use: "true"
         cluster.x-k8s.io/provider: infrastructure-azure
         control-plane: capz-controller-manager
     spec:
@@ -26,7 +27,7 @@ spec:
       - args:
         - --leader-elect
         - --metrics-bind-addr=localhost:8080
-        - --feature-gates=MachinePool=${EXP_MACHINE_POOL:=false},AKS=${EXP_AKS:=false}
+        - --feature-gates=MachinePool=${EXP_MACHINE_POOL:=false},AKSResourceHealth=${EXP_AKS_RESOURCE_HEALTH:=false},EdgeZone=${EXP_EDGEZONE:=false}
         - --v=0
         env:
         - name: AZURE_SUBSCRIPTION_ID
@@ -64,4 +65,33 @@ spec:
         image: gcr.io/spectro-dev-public/ubuntu/release/cluster-api-azure-controller:v1.3.2-spectro-4.0.0-dev
         imagePullPolicy: Always
         name: manager
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsGroup: 65532
+          runAsUser: 65532
+        volumeMounts:
+        - mountPath: /var/run/secrets/azure/tokens
+          name: azure-identity-token
+          readOnly: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       terminationGracePeriodSeconds: 10
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      volumes:
+      - name: azure-identity-token
+        projected:
+          defaultMode: 420
+          sources:
+          - serviceAccountToken:
+              audience: api://AzureADTokenExchange
+              expirationSeconds: 3600
+              path: azure-identity-token
