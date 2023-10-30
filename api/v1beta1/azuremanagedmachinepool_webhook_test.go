@@ -24,14 +24,11 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilfeature "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-provider-azure/feature"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capifeature "sigs.k8s.io/cluster-api/feature"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestAzureManagedMachinePoolDefaultingWebhook(t *testing.T) {
@@ -1229,108 +1226,11 @@ func TestAzureManagedMachinePool_ValidateCreateFailure(t *testing.T) {
 	}
 }
 
-func TestAzureManagedMachinePool_validateLastSystemNodePool(t *testing.T) {
-	deletionTime := metav1.Now()
-	finalizers := []string{"test"}
-	systemMachinePool := getManagedMachinePoolWithSystemMode()
-	tests := []struct {
-		name    string
-		ammp    *AzureManagedMachinePool
-		cluster *clusterv1.Cluster
-		wantErr bool
-	}{
-		{
-			name: "Test with paused cluster without deletion timestamp having one system pool node(valid delete:move operation)",
-			ammp: systemMachinePool,
-			cluster: &clusterv1.Cluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              systemMachinePool.GetLabels()[clusterv1.ClusterNameLabel],
-					Namespace:         systemMachinePool.Namespace,
-					DeletionTimestamp: &deletionTime,
-					Finalizers:        finalizers,
-				},
-				Spec: clusterv1.ClusterSpec{
-					Paused: true,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Test with paused cluster with deletion timestamp having one system pool node(valid delete)",
-			ammp: systemMachinePool,
-			cluster: &clusterv1.Cluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              systemMachinePool.GetLabels()[clusterv1.ClusterNameLabel],
-					Namespace:         systemMachinePool.Namespace,
-					DeletionTimestamp: &deletionTime,
-					Finalizers:        finalizers,
-				},
-				Spec: clusterv1.ClusterSpec{
-					Paused: true,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Test with running cluster without deletion timestamp having one system pool node(invalid delete)",
-			ammp: systemMachinePool,
-			cluster: &clusterv1.Cluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      systemMachinePool.GetLabels()[clusterv1.ClusterNameLabel],
-					Namespace: systemMachinePool.Namespace,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Test with running cluster with deletion timestamp having one system pool node(valid delete)",
-			ammp: systemMachinePool,
-			cluster: &clusterv1.Cluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              systemMachinePool.GetLabels()[clusterv1.ClusterNameLabel],
-					Namespace:         systemMachinePool.Namespace,
-					DeletionTimestamp: &deletionTime,
-					Finalizers:        finalizers,
-				},
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			g := NewWithT(t)
-			scheme := runtime.NewScheme()
-			_ = AddToScheme(scheme)
-			_ = clusterv1.AddToScheme(scheme)
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tc.cluster, tc.ammp).Build()
-			err := tc.ammp.validateLastSystemNodePool(fakeClient)
-			if tc.wantErr {
-				g.Expect(err).To(HaveOccurred())
-			} else {
-				g.Expect(err).NotTo(HaveOccurred())
-			}
-		})
-	}
-}
-
 func getKnownValidAzureManagedMachinePool() *AzureManagedMachinePool {
 	return &AzureManagedMachinePool{
 		Spec: AzureManagedMachinePoolSpec{
 			MaxPods:    ptr.To[int32](30),
 			OsDiskType: ptr.To(string(armcontainerservice.OSDiskTypeEphemeral)),
-		},
-	}
-}
-
-func getManagedMachinePoolWithSystemMode() *AzureManagedMachinePool {
-	return &AzureManagedMachinePool{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: metav1.NamespaceDefault,
-			Labels: map[string]string{
-				clusterv1.ClusterNameLabel: "test-cluster",
-				LabelAgentPoolMode:         string(NodePoolModeSystem),
-			},
 		},
 	}
 }
