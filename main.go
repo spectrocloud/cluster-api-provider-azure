@@ -62,6 +62,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+// TLSOptions defines the tls options for tls config.
 type TLSOptions struct {
 	TLSMinVersion   string
 	TLSCipherSuites []string
@@ -367,6 +368,7 @@ func GetTLSOptionOverrideFuncs(options TLSOptions) ([]func(*tls.Config), error) 
 	return tlsOptions, nil
 }
 
+// GetDefaultTLSCipherSuits returns the default Cipher values.
 func GetDefaultTLSCipherSuits() []uint16 {
 	return []uint16{
 		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
