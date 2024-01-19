@@ -167,7 +167,7 @@ type AzureManagedControlPlaneSpec struct {
 	// AutoUpgradeProfile - Profile of auto upgrade configuration.
 	// +optional
 	AutoUpgradeProfile *ManagedClusterAutoUpgradeProfile `json:"autoUpgradeProfile,omitempty"`
-	
+
 	// AzureEnvironment is the name of the AzureCloud to be used.
 	// The default value that would be used by most users is "AzurePublicCloud", other values are:
 	// - ChinaCloud: "AzureChinaCloud"
