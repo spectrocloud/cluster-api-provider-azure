@@ -18,11 +18,11 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
 	"time"
-	"crypto/tls"
 
 	// +kubebuilder:scaffold:imports
 	asocontainerservicev1api20210501 "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20210501"
@@ -41,6 +41,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cgrecord "k8s.io/client-go/tools/record"
+	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -78,7 +79,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	cliflag "k8s.io/component-base/cli/flag"
 )
 
 type TLSOptions struct {
@@ -87,8 +87,8 @@ type TLSOptions struct {
 }
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme     = runtime.NewScheme()
+	setupLog   = ctrl.Log.WithName("setup")
 	tlsOptions = TLSOptions{}
 )
 
@@ -313,10 +313,10 @@ func main() {
 	})
 
 	tlsOptionOverrides, err := GetTLSOptionOverrideFuncs(tlsOptions)
- 	if err != nil {
- 		setupLog.Error(err, "unable to add TLS settings to the webhook server")
- 		os.Exit(1)
- 	}
+	if err != nil {
+		setupLog.Error(err, "unable to add TLS settings to the webhook server")
+		os.Exit(1)
+	}
 
 	tlsOptions, metricsOptions, err := flags.GetManagerOptions(managerOptions)
 	if err != nil {
@@ -349,7 +349,7 @@ func main() {
 		HealthProbeBindAddress:     healthAddr,
 		Port:                       webhookPort,
 		EventBroadcaster:           broadcaster,
-		TLSOpts: 					tlsOptionOverrides,
+		TLSOpts:                    tlsOptionOverrides,
 		HealthProbeBindAddress:     healthAddr,
 		PprofBindAddress:           profilerAddress,
 		Metrics:                    *metricsOptions,
