@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/versions"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -77,6 +78,9 @@ func (m *AzureManagedControlPlane) Default(_ client.Client) {
 	m.setDefaultVirtualNetwork()
 	m.setDefaultSubnet()
 	m.setDefaultSku()
+	if m.Spec.AzureEnvironment == "" {
+		m.Spec.AzureEnvironment = azure.PublicCloudName
+	}
 }
 
 // +kubebuilder:webhook:verbs=create;update,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedcontrolplane,mutating=false,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedcontrolplanes,versions=v1beta1,name=validation.azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
@@ -250,6 +254,25 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 						m.Spec.AADProfile.AdminGroupObjectIDs,
 						"length of AADProfile.AdminGroupObjectIDs cannot be zero"))
 			}
+		}
+	}
+
+	if old.Spec.AzureEnvironment != "" {
+		// Prevent AzureEnvironment modification if it was already set to some value
+		if m.Spec.AzureEnvironment == "" {
+			// unsetting the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "AzureEnvironment"),
+					m.Spec.AzureEnvironment,
+					"field is immutable, unsetting is not allowed"))
+		} else if m.Spec.AzureEnvironment != old.Spec.AzureEnvironment {
+			// changing the field is not allowed
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("Spec", "AzureEnvironment"),
+					*m.Spec.LoadBalancerSKU,
+					"field is immutable"))
 		}
 	}
 
