@@ -240,7 +240,7 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			Type:                 s.ControlPlaneOutboundLB().Type,
 			SKU:                  s.ControlPlaneOutboundLB().SKU,
 			BackendPoolName:      s.OutboundPoolName(azure.GenerateControlPlaneOutboundLBName(s.ClusterName())),
-			IdleTimeoutInMinutes: s.NodeOutboundLB().IdleTimeoutInMinutes,
+			IdleTimeoutInMinutes: s.ControlPlaneOutboundLB().IdleTimeoutInMinutes,
 			Role:                 infrav1.ControlPlaneOutboundRole,
 			AdditionalTags:       s.AdditionalTags(),
 		})
