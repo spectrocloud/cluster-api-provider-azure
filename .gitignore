@@ -80,3 +80,5 @@ _releasenotes
 
 # calico manifests archive
 release-*/manifests/calico-*.yaml
+
+.DS_Store
