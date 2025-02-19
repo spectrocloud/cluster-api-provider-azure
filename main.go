@@ -217,8 +217,8 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&webhookPort,
 		"webhook-port",
-		9443,
-		"The webhook server port the manager will listen on.",
+		0,
+		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed..",
 	)
 
 	fs.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs/",
@@ -390,9 +390,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	registerControllers(ctx, mgr)
-
-	registerWebhooks(mgr)
+	if webhookPort == 0 {
+		registerControllers(ctx, mgr)
+	} else {
+		registerWebhooks(mgr)
+	}
 
 	// +kubebuilder:scaffold:builder
 	setupLog.Info("starting manager", "version", version.Get().String())
