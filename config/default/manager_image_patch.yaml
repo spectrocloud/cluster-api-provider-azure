@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        image: gcr.io/spectro-dev-public/shubham/release/cluster-api-azure-controller:v1.3.2-spectro-4.0.0-dev
