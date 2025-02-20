@@ -23,6 +23,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cluster-api-provider-azure/feature"
+	"k8s.io/utils/pointer"
 )
 
 const (
@@ -289,12 +290,6 @@ func (c *AzureCluster) setAPIServerLBDefaults() {
 			}
 		}
 	} else if lb.Type == Internal {
-		var privateIP string
-		if lb.PrivateIP == "" {
-			privateIP = DefaultInternalLBIPAddress
-		} else {
-			privateIP = lb.PrivateIP
-		}
 		if lb.Name == "" {
 			lb.Name = generateInternalLBName(c.ObjectMeta.Name)
 		}
@@ -303,7 +298,7 @@ func (c *AzureCluster) setAPIServerLBDefaults() {
 				{
 					Name: generateFrontendIPConfigName(lb.Name),
 					FrontendIPClass: FrontendIPClass{
-						PrivateIPAddress: privateIP,
+						PrivateIPAddress: DefaultInternalLBIPAddress,
 					},
 				},
 			}

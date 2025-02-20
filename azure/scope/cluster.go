@@ -266,7 +266,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			Role:                 infrav1.APIServerRole,
 			BackendPoolName:      s.APIServerLB().BackendPool.Name,
 			IPAllocationMethod:   s.APIServerLB().IPAllocationMethod,
-			PrivateIP:            s.APIServerLB().PrivateIP,
 			IdleTimeoutInMinutes: s.APIServerLB().IdleTimeoutInMinutes,
 			AdditionalTags:       s.AdditionalTags(),
 		}
