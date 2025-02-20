@@ -691,6 +691,10 @@ spec:
                   SubnetName specifies the Subnet where the MachinePool will be placed
                   Immutable.
                 type: string
+              subnetName:
+                description: SubnetName selects the Subnet where the MachinePool will
+                  be placed
+                type: string
               taints:
                 description: |-
                   Taints specifies the taints for nodes present in this agent pool.
