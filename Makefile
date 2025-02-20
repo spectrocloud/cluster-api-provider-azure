@@ -22,7 +22,7 @@ SHELL:=/usr/bin/env bash
 
 GO_VERSION ?= $(shell sed -n 's/^go //p' go.mod)
 GOPATH  := $(shell go env GOPATH)
-GOARCH  := $(shell go env GOARCH)
+GOARCH  := amd64
 GOOS    := $(shell go env GOOS)
 GOPROXY := $(shell go env GOPROXY)
 ifeq ($(GOPROXY),)
@@ -150,6 +150,16 @@ ifneq ($(shell command -v gcloud),)
     endif
 endif
 
+REGISTRY ?= gcr.io/spectro-dev-public/$(USER)/${RELEASE_LOC}
+# Fips Flags
+FIPS_ENABLE ?= ""
+BUILDER_GOLANG_VERSION ?= 1.23
+BUILD_ARGS = --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg BUILDER_GOLANG_VERSION=${BUILDER_GOLANG_VERSION}
+RELEASE_LOC := release
+ifeq ($(FIPS_ENABLE),yes)
+  RELEASE_LOC := release-fips
+endif
+SPECTRO_VERSION ?= 4.0.0-dev
 # If REGISTRY is not set, default to localhost:5000 to use the kind registry.
 ifndef REGISTRY
 	REGISTRY ?= localhost:5000
@@ -158,9 +168,10 @@ STAGING_REGISTRY ?= gcr.io/k8s-staging-cluster-api-azure
 PROD_REGISTRY ?= registry.k8s.io/cluster-api-azure
 IMAGE_NAME ?= cluster-api-azure-controller
 CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= dev
-ARCH ?= $(GOARCH)
-ALL_ARCH = amd64 arm arm64 ppc64le s390x
+TAG ?= v1.18.0-spectro-${SPECTRO_VERSION}
+ARCH ?= amd64
+# ALL_ARCH = amd64 arm arm64 ppc64le s390x
+ALL_ARCH = arm64 amd64 
 
 # Allow overriding manifest generation destination directory
 MANIFEST_ROOT ?= config
@@ -421,8 +432,8 @@ docker-pull-prerequisites: ## Pull prerequisites for building controller-manager
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager.
-	DOCKER_BUILDKIT=1 docker build --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
-	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/capz/manager_image_patch.yaml"
+	docker buildx build --load --platform linux/${ARCH} ${BUILD_ARGS}  --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/default/manager_image_patch.yaml"
 	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/capz/manager_pull_policy.yaml"
 
 .PHONY: docker-push
