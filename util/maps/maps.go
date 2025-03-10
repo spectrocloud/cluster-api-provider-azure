@@ -16,6 +16,8 @@ limitations under the License.
 
 package maps
 
+import "strings"
+
 // Merge merges the two maps and returns the result. For overlapping keys,
 // values from overrides take precedence.
 func Merge[K comparable, V any](base map[K]V, overrides map[K]V) map[K]V {
@@ -29,4 +31,18 @@ func Merge[K comparable, V any](base map[K]V, overrides map[K]V) map[K]V {
 	}
 
 	return m
+}
+
+// FilterByKeyPrefix returns a sub-map of the input that only contains keys starting with 'prefix'.
+func FilterByKeyPrefix(input map[string]string, prefix string) map[string]string {
+	var result = map[string]string{}
+	for key, value := range input {
+		if strings.HasPrefix(key, prefix) {
+			remainingKey := strings.TrimPrefix(key, prefix)
+			if len(remainingKey) > 0 {
+				result[remainingKey] = value
+			}
+		}
+	}
+	return result
 }

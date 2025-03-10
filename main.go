@@ -70,15 +70,6 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/pkg/ot"
 	"sigs.k8s.io/cluster-api-provider-azure/util/reconciler"
 	"sigs.k8s.io/cluster-api-provider-azure/version"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha4"
-	clusterv1beta1exp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
-	capifeature "sigs.k8s.io/cluster-api/feature"
-	"sigs.k8s.io/cluster-api/util/record"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 type TLSOptions struct {
@@ -114,6 +105,7 @@ func init() {
 }
 
 var (
+	metricsAddr                        string
 	enableLeaderElection               bool
 	leaderElectionNamespace            string
 	leaderElectionLeaseDuration        time.Duration
@@ -318,11 +310,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	tlsOptions, metricsOptions, err := flags.GetManagerOptions(managerOptions)
+	_, metricsOptions, err := flags.GetManagerOptions(managerOptions)
 	if err != nil {
 		setupLog.Error(err, "Unable to start manager: invalid flags")
 		os.Exit(1)
 	}
+
+	metricsOptions.BindAddress = metricsAddr
 
 	var watchNamespaces map[string]cache.Config
 	if watchNamespace != "" {
@@ -336,7 +330,6 @@ func main() {
 	restConfig.UserAgent = "cluster-api-provider-azure-manager"
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                     scheme,
-		MetricsBindAddress:         metricsAddr,
 		LeaderElection:             enableLeaderElection,
 		LeaderElectionID:           "controller-leader-election-capz",
 		LeaderElectionNamespace:    leaderElectionNamespace,
@@ -344,12 +337,6 @@ func main() {
 		RenewDeadline:              &leaderElectionRenewDeadline,
 		RetryPeriod:                &leaderElectionRetryPeriod,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
-		SyncPeriod:                 &syncPeriod,
-		Namespace:                  watchNamespace,
-		HealthProbeBindAddress:     healthAddr,
-		Port:                       webhookPort,
-		EventBroadcaster:           broadcaster,
-		TLSOpts:                    tlsOptionOverrides,
 		HealthProbeBindAddress:     healthAddr,
 		PprofBindAddress:           profilerAddress,
 		Metrics:                    *metricsOptions,
@@ -368,7 +355,7 @@ func main() {
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port:    webhookPort,
 			CertDir: webhookCertDir,
-			TLSOpts: tlsOptions,
+			TLSOpts: tlsOptionOverrides,
 		}),
 		EventBroadcaster: broadcaster,
 	})

@@ -347,14 +347,14 @@ func (m *AzureManagedControlPlane) ValidateUpdate(oldRaw runtime.Object, client 
 				"field is immutable"))
 	}
 
-	if hv, _ := versions.GetHigherK8sVersion(m.Spec.Version, old.Spec.Version); hv != m.Spec.Version {
+	if hv := versions.GetHigherK8sVersion(m.Spec.Version, old.Spec.Version); hv != m.Spec.Version {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("Spec", "Version"),
 			m.Spec.Version, "fields version cannot be downgraded"),
 		)
 	}
 
 	if old.Status.AutoUpgradeVersion != "" && m.Spec.Version != old.Spec.Version {
-		if hv, _ := versions.GetHigherK8sVersion(m.Spec.Version, old.Status.AutoUpgradeVersion); hv != m.Spec.Version {
+		if hv := versions.GetHigherK8sVersion(m.Spec.Version, old.Status.AutoUpgradeVersion); hv != m.Spec.Version {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("Spec", "Version"),
 				m.Spec.Version, "fields version cannot be downgraded"),
 			)
@@ -539,7 +539,7 @@ func (m *AzureManagedControlPlane) validateManagedClusterNetwork(cli client.Clie
 	ctx := context.Background()
 
 	// Fetch the Cluster.
-	clusterName, ok := m.Labels[clusterv1.ClusterLabelName]
+	clusterName, ok := m.Labels[clusterv1.ClusterNameLabel]
 	if !ok {
 		return nil
 	}

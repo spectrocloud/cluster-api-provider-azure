@@ -86,7 +86,7 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	//  Order of precedence (highest -> lowest) is: error that is not an operationNotDoneError (i.e. error creating) -> operationNotDoneError (i.e. creating in progress) -> no error (i.e. created)
 	var result error
 	for _, lbSpec := range specs {
-		if _, err := s.CreateOrUpdateResource(ctx, lbSpec, serviceName); err != nil {
+		if lb, err := s.CreateOrUpdateResource(ctx, lbSpec, serviceName); err != nil {
 			if !azure.IsOperationNotDoneError(err) || result == nil {
 				result = err
 			}

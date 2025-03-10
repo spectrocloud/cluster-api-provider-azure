@@ -19,7 +19,6 @@ package scalesets
 import (
 	"context"
 	"fmt"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/pkg/errors"
 	azprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
@@ -48,6 +47,20 @@ type (
 		SetVMSSState(*azure.VMSS)
 		ReconcileReplicas(context.Context, *azure.VMSS) error
 	}
+
+	//genericScaleSetFuture interface {
+	//	DoneWithContext(ctx context.Context, sender autorest.Sender) (done bool, err error)
+	//	Result(client armcompute.VirtualMachineScaleSetsClient) (vmss armcompute.VirtualMachineScaleSet, err error)
+	//}
+	//
+	//genericScaleSetFutureImpl struct {
+	//	azureautorest.FutureAPI
+	//	result func(client armcompute.VirtualMachineScaleSetsClient) (vmss armcompute.VirtualMachineScaleSet, err error)
+	//}
+	//
+	//deleteResultAdapter struct {
+	//	compute.VirtualMachineScaleSetsDeleteFuture
+	//}
 
 	// Service provides operations on Azure resources.
 	Service struct {
@@ -128,7 +141,7 @@ func (s *Service) Reconcile(ctx context.Context) (retErr error) {
 	if future == nil {
 		fetchedVMSS, err = s.getVirtualMachineScaleSet(ctx, scaleSetSpec)
 	} else {
-		fetchedVMSS, err = s.getVirtualMachineScaleSetIfDone(ctx, future)
+		//fetchedVMSS, err = s.getVirtualMachineScaleSetIfDone(ctx, future)
 	}
 
 	result, err := s.Client.Get(ctx, spec)
@@ -208,6 +221,23 @@ func (s *Service) Delete(ctx context.Context) error {
 			s.Scope.SetVMSSState(fetchedVMSS)
 		}
 	}()
+
+	//// check if there is an ongoing long running operation
+	//future := s.Scope.GetLongRunningOperationState(scaleSetSpec.ResourceName(), serviceName, infrav1.DeleteFuture)
+	//if future != nil {
+	//	// if the operation is not complete this will return an error
+	//	_, err := s.GetResultIfDone(ctx, future)
+	//	if err != nil {
+	//		return errors.Wrap(err, "failed to get result from future")
+	//	}
+	//
+	//	// ScaleSet has been deleted
+	//	s.Scope.DeleteLongRunningOperationState(scaleSetSpec.ResourceName(), serviceName, infrav1.DeleteFuture)
+	//	// Note: we want to handle UpdateDeleteStatus when VMSSExtensions have an error when scalesets become an async service
+	//	s.Scope.UpdateDeleteStatus(infrav1.BootstrapSucceededCondition, serviceName, nil)
+	//
+	//	return nil
+	//}
 
 	err := s.DeleteResource(ctx, scaleSetSpec, serviceName)
 
@@ -348,27 +378,98 @@ func (s *Service) getVirtualMachineScaleSet(ctx context.Context, spec azure.Reso
 	return &result, nil
 }
 
-// getVirtualMachineScaleSetIfDone gets a Virtual Machine Scale Set and its instances from Azure if the future is completed.
-func (s *Service) getVirtualMachineScaleSetIfDone(ctx context.Context, future *infrav1.Future) (*azure.VMSS, error) {
-	ctx, _, done := tele.StartSpanWithLogger(ctx, "scalesets.Service.getVirtualMachineScaleSetIfDone")
-	defer done()
-
-	vmss, err := s.GetResultIfDone(ctx, future)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get result from future")
-	}
-
-	vmssInstances, err := s.Client.ListInstances(ctx, future.ResourceGroup, future.Name)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to list instances")
-	}
-
-	result := converters.SDKToVMSS(vmss, vmssInstances)
-
-	return &result, nil
-}
-
-// IsManaged returns always returns true as CAPZ does not support BYO scale set.
-func (s *Service) IsManaged(_ context.Context) (bool, error) {
-	return true, nil
-}
+//// getVirtualMachineScaleSetIfDone gets a Virtual Machine Scale Set and its instances from Azure if the future is completed.
+//func (s *Service) getVirtualMachineScaleSetIfDone(ctx context.Context, future *infrav1.Future) (*azure.VMSS, error) {
+//	ctx, _, done := tele.StartSpanWithLogger(ctx, "scalesets.Service.getVirtualMachineScaleSetIfDone")
+//	defer done()
+//
+//	vmss, err := s.GetResultIfDone(ctx, future)
+//	if err != nil {
+//		return nil, errors.Wrap(err, "failed to get result from future")
+//	}
+//
+//	vmssInstances, err := s.Client.ListInstances(ctx, future.ResourceGroup, future.Name)
+//	if err != nil {
+//		return nil, errors.Wrap(err, "failed to list instances")
+//	}
+//
+//	result := converters.SDKToVMSS(vmss, vmssInstances)
+//
+//	return &result, nil
+//}
+//
+//// IsManaged returns always returns true as CAPZ does not support BYO scale set.
+//func (s *Service) IsManaged(_ context.Context) (bool, error) {
+//	return true, nil
+//}
+//
+//// GetResultIfDone fetches the result of a long-running operation future if it is done.
+//func (s *Service) GetResultIfDone(ctx context.Context, future *infrav1.Future) (armcompute.VirtualMachineScaleSet, error) {
+//	var genericFuture genericScaleSetFuture
+//	futureData, err := base64.URLEncoding.DecodeString(future.Data)
+//	if err != nil {
+//		return armcompute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed to base64 decode future data")
+//	}
+//
+//	switch future.Type {
+//	case infrav1.PatchFuture:
+//		var future compute.VirtualMachineScaleSetsUpdateFuture
+//		if err := json.Unmarshal(futureData, &future); err != nil {
+//			return armcompute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed to unmarshal future data")
+//		}
+//
+//		genericFuture = &genericScaleSetFutureImpl{
+//			FutureAPI: &future,
+//			result:    future.Result,
+//		}
+//	case infrav1.PutFuture:
+//		var future compute.VirtualMachineScaleSetsCreateOrUpdateFuture
+//		if err := json.Unmarshal(futureData, &future); err != nil {
+//			return armcompute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed to unmarshal future data")
+//		}
+//
+//		genericFuture = &genericScaleSetFutureImpl{
+//			FutureAPI: &future,
+//			result:    future.Result,
+//		}
+//	case infrav1.DeleteFuture:
+//		var future compute.VirtualMachineScaleSetsDeleteFuture
+//		if err := json.Unmarshal(futureData, &future); err != nil {
+//			return armcompute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed to unmarshal future data")
+//		}
+//
+//		genericFuture = &deleteResultAdapter{
+//			VirtualMachineScaleSetsDeleteFuture: future,
+//		}
+//	default:
+//		return armcompute.VirtualMachineScaleSet{}, errors.Errorf("unknown future type %q", future.Type)
+//	}
+//
+//	done, err := genericFuture.DoneWithContext(ctx, ac.scalesets)
+//	if err != nil {
+//		return armcompute.VirtualMachineScaleSet{}, errors.Wrap(err, "failed checking if the operation was complete")
+//	}
+//
+//	if !done {
+//		return armcompute.VirtualMachineScaleSet{}, azure.WithTransientError(azure.NewOperationNotDoneError(future), 15*time.Second)
+//	}
+//
+//	vmss, err := genericFuture.Result(ac.scalesets)
+//	if err != nil {
+//		return vmss, errors.Wrap(err, "failed fetching the result of operation for vmss")
+//	}
+//
+//	return vmss, nil
+//}
+//
+//// Result wraps the delete result so that we can treat it generically. The only thing we care about is if the delete
+//// was successful. If it wasn't, an error will be returned.
+//func (da *deleteResultAdapter) Result(client armcompute.VirtualMachineScaleSetsClient) (armcompute.VirtualMachineScaleSet, error) {
+//	_, err := da.VirtualMachineScaleSetsDeleteFuture.Result(client)
+//	return armcompute.VirtualMachineScaleSet{}, err
+//}
+//
+//// Result returns the Result so that we can treat it generically.
+//func (g *genericScaleSetFutureImpl) Result(client armcompute.VirtualMachineScaleSetsClient) (armcompute.VirtualMachineScaleSet, error) {
+//	return g.result(client)
+//}

@@ -23,7 +23,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cluster-api-provider-azure/feature"
-	"k8s.io/utils/pointer"
 )
 
 const (
@@ -104,6 +103,7 @@ func (c *AzureCluster) setSubnetDefaults() {
 		c.Spec.NetworkSpec.UpdateSubnet(clusterSubnet, SubnetCluster)
 	}
 
+	var cpSubnet SubnetSpec
 	if c.Spec.ControlPlaneEnabled {
 		/* if there is a cp subnet set defaults
 		   if no cp subnet and cluster subnet create a default cp subnet */
@@ -132,14 +132,14 @@ func (c *AzureCluster) setSubnetDefaults() {
 			if subnet.SecurityGroup.Name == "" {
 				subnet.SecurityGroup.Name = generateNodeSecurityGroupName(c.ObjectMeta.Name)
 			}
-			cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults(SecurityRuleDirectionInbound)
+			cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults()
 
 			if subnet.RouteTable.Name == "" {
 				subnet.RouteTable.Name = generateNodeRouteTableName(c.ObjectMeta.Name)
 			}
 			if subnet.IsNatGatewayEnabled() {
 				if subnet.NatGateway.NatGatewayIP.Name == "" {
-					subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(c.ObjectMeta.Name, subnet.Name)
+					subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(subnet.NatGateway.Name)
 				}
 			}
 
