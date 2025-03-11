@@ -11,7 +11,12 @@ spec:
     webhook:
       clientConfig:
         service:
-          namespace: default
+          name: capz-webhook-service
+          namespace: capi-webhook-system
+          path: /convert
+      conversionReviewVersions:
+        - v1
+        - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:

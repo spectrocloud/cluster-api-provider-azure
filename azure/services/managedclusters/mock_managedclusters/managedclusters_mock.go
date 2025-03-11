@@ -240,7 +240,7 @@ func (m *MockManagedClusterScope) GetClient() client.Client {
 // GetClient indicates an expected call of GetClient.
 func (mr *MockManagedClusterScopeMockRecorder) GetClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAdminKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).GetAdminKubeConfigData))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClient", reflect.TypeOf((*MockManagedClusterScope)(nil).GetClient))
 }
 
 // GetLongRunningOperationState mocks base method.
@@ -269,20 +269,6 @@ func (m *MockManagedClusterScope) GetUserKubeconfigData() []byte {
 func (mr *MockManagedClusterScopeMockRecorder) GetUserKubeconfigData() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserKubeconfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).GetUserKubeconfigData))
-}
-
-// GetUserKubeConfigData mocks base method.
-func (m *MockManagedClusterScope) GetUserKubeConfigData() []byte {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUserKubeConfigData")
-	ret0, _ := ret[0].([]byte)
-	return ret0
-}
-
-// GetUserKubeConfigData indicates an expected call of GetUserKubeConfigData.
-func (mr *MockManagedClusterScopeMockRecorder) GetUserKubeConfigData() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).GetUserKubeConfigData))
 }
 
 // HashKey mocks base method.
@@ -341,20 +327,6 @@ func (mr *MockManagedClusterScopeMockRecorder) MakeClusterCA() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeClusterCA", reflect.TypeOf((*MockManagedClusterScope)(nil).MakeClusterCA))
 }
 
-// IsManagedVersionUpgrade mocks base method.
-func (m *MockManagedClusterScope) IsManagedVersionUpgrade() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsManagedVersionUpgrade")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsManagedVersionUpgrade indicates an expected call of IsManagedVersionUpgrade.
-func (mr *MockManagedClusterScopeMockRecorder) IsManagedVersionUpgrade() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsManagedVersionUpgrade", reflect.TypeOf((*MockManagedClusterScope)(nil).IsManagedVersionUpgrade))
-}
-
 // MakeEmptyKubeConfigSecret mocks base method.
 func (m *MockManagedClusterScope) MakeEmptyKubeConfigSecret() v1.Secret {
 	m.ctrl.T.Helper()
@@ -403,30 +375,6 @@ func (m *MockManagedClusterScope) SetAutoUpgradeVersionStatus(version string) {
 
 // SetAutoUpgradeVersionStatus indicates an expected call of SetAutoUpgradeVersionStatus.
 func (mr *MockManagedClusterScopeMockRecorder) SetAutoUpgradeVersionStatus(version any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAutoUpgradeVersionStatus", reflect.TypeOf((*MockManagedClusterScope)(nil).SetAutoUpgradeVersionStatus), version)
-}
-
-// SetAdminKubeConfigData mocks base method.
-func (m *MockManagedClusterScope) SetAdminKubeConfigData(arg0 []byte) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetAdminKubeConfigData", arg0)
-}
-
-// SetAdminKubeConfigData indicates an expected call of SetAdminKubeConfigData.
-func (mr *MockManagedClusterScopeMockRecorder) SetAdminKubeConfigData(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAdminKubeConfigData", reflect.TypeOf((*MockManagedClusterScope)(nil).SetAdminKubeConfigData), arg0)
-}
-
-// SetAutoUpgradeVersionStatus mocks base method.
-func (m *MockManagedClusterScope) SetAutoUpgradeVersionStatus(version string) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetAutoUpgradeVersionStatus", version)
-}
-
-// SetAutoUpgradeVersionStatus indicates an expected call of SetAutoUpgradeVersionStatus.
-func (mr *MockManagedClusterScopeMockRecorder) SetAutoUpgradeVersionStatus(version interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAutoUpgradeVersionStatus", reflect.TypeOf((*MockManagedClusterScope)(nil).SetAutoUpgradeVersionStatus), version)
 }

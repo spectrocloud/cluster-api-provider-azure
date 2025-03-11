@@ -108,9 +108,35 @@ patches:
     name: capz-aad-pod-id-nmi-binding
     version: v1
 - path: ../../config/default/manager_image_patch.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
 - path: ../../config/default/manager_pull_policy.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
 - path: ../../config/default/manager_webhook_patch.yaml
-- path: ../../config/default/webhookcainjection_patch.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
+- path: ../../config/default/mutatingwebhookcainjection_patch.yaml
+  target:
+    group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+    name: mutating-webhook-configuration
+    version: v1
+- path: ../../config/default/validatingwebhookcainjection_patch.yaml
+  target:
+    group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+    version: v1
 
 
 replacements:

@@ -31,5 +31,20 @@ patches:
     namespace: system
     version: v1
 - path: ../../config/default/manager_image_patch.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
 - path: ../../config/default/manager_pull_policy.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
 - path: ../../config/default/manager_credentials_patch.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1

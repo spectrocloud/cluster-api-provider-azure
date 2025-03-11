@@ -15,8 +15,8 @@ metadata:
   namespace: system
 spec:
   dnsNames:
-    - SERVICE_NAME_PLACEHOLDER.SERVICE_NAMESPACE_PLACEHOLDER.svc
-    - SERVICE_NAME_PLACEHOLDER.SERVICE_NAMESPACE_PLACEHOLDER.svc.cluster.local
+    - capz-webhook-service.capi-webhook-system.svc
+    - capz-webhook-service.capi-webhook-system.svc.cluster.local
   issuerRef:
     kind: Issuer
     name: selfsigned-issuer

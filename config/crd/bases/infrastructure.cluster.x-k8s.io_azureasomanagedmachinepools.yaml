@@ -6,6 +6,17 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.16.1
   name: azureasomanagedmachinepools.infrastructure.cluster.x-k8s.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        service:
+          name: capz-webhook-service
+          namespace: capi-webhook-system
+          path: /convert
+      conversionReviewVersions:
+        - v1
+        - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     kind: AzureASOManagedMachinePool
