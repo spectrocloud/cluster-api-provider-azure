@@ -11033,6 +11033,7 @@ spec:
       containers:
       - args:
         - --leader-elect
+        - --metrics-bind-addr=localhost:8080
         - --diagnostics-address=${CAPZ_DIAGNOSTICS_ADDRESS:=:8443}
         - --insecure-diagnostics=${CAPZ_INSECURE_DIAGNOSTICS:=false}
         - --feature-gates=MachinePool=${EXP_MACHINE_POOL:=true},AKSResourceHealth=${EXP_AKS_RESOURCE_HEALTH:=false},EdgeZone=${EXP_EDGEZONE:=false},ASOAPI=${EXP_ASO_API:=true},APIServerILB=${EXP_APISERVER_ILB:=false}
@@ -11103,7 +11104,7 @@ spec:
       - name: cert
         secret:
           defaultMode: 420
-          secretName: SERVICE_NAME_PLACEHOLDER-cert
+          secretName: capz-webhook-service-cert
       - name: azure-identity-token
         projected:
           defaultMode: 420
@@ -11217,7 +11218,7 @@ spec:
   issuerRef:
     kind: Issuer
     name: capz-selfsigned-issuer
-  secretName: SERVICE_NAME_PLACEHOLDER-cert
+  secretName: capz-webhook-service-cert
 ---
 apiVersion: cert-manager.io/v1
 kind: Issuer

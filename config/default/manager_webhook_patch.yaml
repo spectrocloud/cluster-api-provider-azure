@@ -20,4 +20,4 @@ spec:
         - name: cert
           secret:
             defaultMode: 420
-            secretName: "SERVICE_NAME_PLACEHOLDER-cert"
+            secretName: "capz-webhook-service-cert"
