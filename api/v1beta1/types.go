@@ -759,8 +759,8 @@ type SubnetSpec struct {
 	// +optional
 	ID string `json:"id,omitempty"`
 
-	// Name defines a name for the subnet resource.
-	Name string `json:"name"`
+	//// Name defines a name for the subnet resource.
+	//Name string `json:"name"`
 
 	// SecurityGroup defines the NSG (network security group) that should be attached to this subnet.
 	// +optional

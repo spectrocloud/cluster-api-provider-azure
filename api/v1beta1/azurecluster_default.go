@@ -18,7 +18,8 @@ package v1beta1
 
 import (
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
 	"k8s.io/utils/ptr"
 
@@ -96,6 +97,8 @@ func (c *AzureCluster) setVnetDefaults() {
 }
 
 func (c *AzureCluster) setSubnetDefaults() {
+	fmt.Println("These are the current subnets: ")
+	fmt.Println(c.Spec.NetworkSpec.Subnets)
 	clusterSubnet, err := c.Spec.NetworkSpec.GetSubnet(SubnetCluster)
 	clusterSubnetExists := err == nil
 	if clusterSubnetExists {
@@ -103,7 +106,6 @@ func (c *AzureCluster) setSubnetDefaults() {
 		c.Spec.NetworkSpec.UpdateSubnet(clusterSubnet, SubnetCluster)
 	}
 
-	var cpSubnet SubnetSpec
 	if c.Spec.ControlPlaneEnabled {
 		/* if there is a cp subnet set defaults
 		   if no cp subnet and cluster subnet create a default cp subnet */
@@ -120,35 +122,23 @@ func (c *AzureCluster) setSubnetDefaults() {
 
 	var nodeSubnetFound bool
 	var nodeSubnetCounter int
-	for i, subnet := range c.Spec.NetworkSpec.Subnets {
-		if subnet.Role == SubnetNode || subnet.Role == SubnetAll {
+	for i := range c.Spec.NetworkSpec.Subnets {
+		if c.Spec.NetworkSpec.Subnets[i].Role == SubnetNode || c.Spec.NetworkSpec.Subnets[i].Role == SubnetAll {
 			nodeSubnetCounter++
 			nodeSubnetFound = true
-			if subnet.Name == "" {
-				subnet.Name = withIndex(generateNodeSubnetName(c.ObjectMeta.Name), nodeSubnetCounter)
-			}
-			subnet.SubnetClassSpec.setDefaults(fmt.Sprintf(DefaultNodeSubnetCIDRPattern, nodeSubnetCounter))
+			c.Spec.NetworkSpec.Subnets[i].setNodeSubnetDefaults(c.ObjectMeta.Name, nodeSubnetCounter)
 
-			if subnet.SecurityGroup.Name == "" {
-				subnet.SecurityGroup.Name = generateNodeSecurityGroupName(c.ObjectMeta.Name)
-			}
-			cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults()
-
-			if subnet.RouteTable.Name == "" {
-				subnet.RouteTable.Name = generateNodeRouteTableName(c.ObjectMeta.Name)
-			}
-			if subnet.IsNatGatewayEnabled() {
-				if subnet.NatGateway.NatGatewayIP.Name == "" {
-					subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(subnet.NatGateway.Name)
+			if c.Spec.NetworkSpec.Subnets[i].IsNatGatewayEnabled() {
+				if c.Spec.NetworkSpec.Subnets[i].NatGateway.NatGatewayIP.Name == "" {
+					c.Spec.NetworkSpec.Subnets[i].NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(c.Spec.NetworkSpec.Subnets[i].NatGateway.Name)
 				}
 			}
-
-			c.Spec.NetworkSpec.Subnets[i] = subnet
 		}
 	}
 
 	if !nodeSubnetFound && !clusterSubnetExists {
 		nodeSubnet := SubnetSpec{
+			//Name: generateNodeSubnetName(c.ObjectMeta.Name),
 			SubnetClassSpec: SubnetClassSpec{
 				Role:       SubnetNode,
 				CIDRBlocks: []string{DefaultNodeSubnetCIDR},
@@ -172,8 +162,10 @@ func (c *AzureCluster) setSubnetDefaults() {
 
 func (s *SubnetSpec) setNodeSubnetDefaults(clusterName string, index int) {
 	if s.Name == "" {
+		fmt.Println("node subnet name is empty: ", s.Name)
 		s.Name = withIndex(generateNodeSubnetName(clusterName), index)
 	}
+	fmt.Println("node subnet name: ", s.Name)
 	s.SubnetClassSpec.setDefaults(fmt.Sprintf(DefaultNodeSubnetCIDRPattern, index))
 
 	if s.SecurityGroup.Name == "" {
@@ -200,8 +192,10 @@ func (s *SubnetSpec) setNodeSubnetDefaults(clusterName string, index int) {
 
 func (s *SubnetSpec) setControlPlaneSubnetDefaults(clusterName string) {
 	if s.Name == "" {
+		fmt.Println("control plane subnet name is empty: ", s.Name)
 		s.Name = generateControlPlaneSubnetName(clusterName)
 	}
+	fmt.Println("control plane subnet name: ", s.Name)
 
 	s.SubnetClassSpec.setDefaults(DefaultControlPlaneSubnetCIDR)
 
@@ -455,7 +449,7 @@ func (lb *LoadBalancerClassSpec) setAPIServerLBDefaults() {
 		lb.SKU = SKUStandard
 	}
 	if lb.IPAllocationMethod == "" {
-		lb.IPAllocationMethod = string(network.IPAllocationMethodDynamic)
+		lb.IPAllocationMethod = string(armnetwork.IPAllocationMethodDynamic)
 	}
 	if lb.IdleTimeoutInMinutes == nil {
 		lb.IdleTimeoutInMinutes = ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes)

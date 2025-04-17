@@ -21,7 +21,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
-	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-02-01/network"
 	"github.com/pkg/errors"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
@@ -91,18 +90,18 @@ func (s *Service) Reconcile(ctx context.Context) error {
 				result = err
 			}
 		} else {
-			loadBalancer, ok := lb.(network.LoadBalancer)
+			loadBalancer, ok := lb.(armnetwork.LoadBalancer)
 			if !ok {
 				// Return out of loop since this would be an unexpected fatal error
-				result = errors.Errorf("created resource %T is not a network.LoadBalancer", lb)
+				result = errors.Errorf("created resource %T is not an armnetwork.LoadBalancer", lb)
 				break
 			}
 			if lbSpec.ResourceName() == s.Scope.APIServerLB().Name {
-				lbIPConfig := loadBalancer.FrontendIPConfigurations
-				if (lbIPConfig != nil) && len(*lbIPConfig) > 0 &&
-					(*lbIPConfig)[0].PrivateIPAddress != nil &&
-					*(*lbIPConfig)[0].PrivateIPAddress != "" {
-					s.Scope.APIServerLB().FrontendIPs[0].PrivateIPAddress = *(*lbIPConfig)[0].PrivateIPAddress
+				lbIPConfig := loadBalancer.Properties.FrontendIPConfigurations
+				if lbIPConfig != nil && len(lbIPConfig) > 0 &&
+					lbIPConfig[0].Properties.PrivateIPAddress != nil &&
+					*lbIPConfig[0].Properties.PrivateIPAddress != "" {
+					s.Scope.APIServerLB().FrontendIPs[0].PrivateIPAddress = *lbIPConfig[0].Properties.PrivateIPAddress
 				}
 			}
 

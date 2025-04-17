@@ -223,23 +223,23 @@ func (m *AzureMachine) SetDefaults(client client.Client) error {
 	}
 
 	// Fetch the Cluster.
-	clusterName, ok := m.Labels[clusterv1.ClusterNameLabel]
-	if !ok {
-		errs = append(errs, errors.Errorf("failed to fetch ClusterName for AzureMachine %s/%s", m.Namespace, m.Name))
-	}
+	//clusterName, ok := m.Labels[clusterv1.ClusterNameLabel]
+	//if !ok {
+	//	errs = append(errs, errors.Errorf("failed to fetch ClusterName for AzureMachine %s/%s", m.Namespace, m.Name))
+	//}
 
-	ownerAzureClusterName, ownerAzureClusterNamespace, err := GetOwnerAzureClusterNameAndNamespace(client, clusterName, m.Namespace, 5)
-	if err != nil {
-		errs = append(errs, errors.Wrapf(err, "failed to fetch owner cluster for AzureMachine %s/%s", m.Namespace, m.Name))
-	}
-
-	subscriptionID, err := GetSubscriptionID(client, ownerAzureClusterName, ownerAzureClusterNamespace, 5)
-	if err != nil {
-		errs = append(errs, errors.Wrapf(err, "failed to fetch subscription ID for AzureMachine %s/%s", m.Namespace, m.Name))
-	}
+	//ownerAzureClusterName, ownerAzureClusterNamespace, err := GetOwnerAzureClusterNameAndNamespace(client, clusterName, m.Namespace, 5)
+	//if err != nil {
+	//	errs = append(errs, errors.Wrapf(err, "failed to fetch owner cluster for AzureMachine %s/%s", m.Namespace, m.Name))
+	//}
+	//
+	//subscriptionID, err := GetSubscriptionID(client, ownerAzureClusterName, ownerAzureClusterNamespace, 5)
+	//if err != nil {
+	//	errs = append(errs, errors.Wrapf(err, "failed to fetch subscription ID for AzureMachine %s/%s", m.Namespace, m.Name))
+	//}
 
 	m.Spec.SetDataDisksDefaults()
-	m.Spec.SetIdentityDefaults(subscriptionID)
+	m.Spec.SetIdentityDefaults("")
 	m.Spec.SetSpotEvictionPolicyDefaults()
 	m.Spec.SetDiagnosticsDefaults()
 	m.Spec.SetNetworkInterfacesDefaults()
