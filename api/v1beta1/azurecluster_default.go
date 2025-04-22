@@ -97,8 +97,6 @@ func (c *AzureCluster) setVnetDefaults() {
 }
 
 func (c *AzureCluster) setSubnetDefaults() {
-	fmt.Println("These are the current subnets: ")
-	fmt.Println(c.Spec.NetworkSpec.Subnets)
 	clusterSubnet, err := c.Spec.NetworkSpec.GetSubnet(SubnetCluster)
 	clusterSubnetExists := err == nil
 	if clusterSubnetExists {
@@ -162,10 +160,8 @@ func (c *AzureCluster) setSubnetDefaults() {
 
 func (s *SubnetSpec) setNodeSubnetDefaults(clusterName string, index int) {
 	if s.Name == "" {
-		fmt.Println("node subnet name is empty: ", s.Name)
 		s.Name = withIndex(generateNodeSubnetName(clusterName), index)
 	}
-	fmt.Println("node subnet name: ", s.Name)
 	s.SubnetClassSpec.setDefaults(fmt.Sprintf(DefaultNodeSubnetCIDRPattern, index))
 
 	if s.SecurityGroup.Name == "" {
@@ -192,10 +188,8 @@ func (s *SubnetSpec) setNodeSubnetDefaults(clusterName string, index int) {
 
 func (s *SubnetSpec) setControlPlaneSubnetDefaults(clusterName string) {
 	if s.Name == "" {
-		fmt.Println("control plane subnet name is empty: ", s.Name)
 		s.Name = generateControlPlaneSubnetName(clusterName)
 	}
-	fmt.Println("control plane subnet name: ", s.Name)
 
 	s.SubnetClassSpec.setDefaults(DefaultControlPlaneSubnetCIDR)
 
