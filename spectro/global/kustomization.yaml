@@ -11,6 +11,8 @@ resources:
 - ../../config/certmanager
 
 
+components:
+- ../../config/aso
 
 configurations:
 - ../../config/default/kustomizeconfig.yaml
