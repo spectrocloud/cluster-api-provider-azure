@@ -534,27 +534,24 @@ func validateManagedClusterNetwork(cli client.Client, labels map[string]string, 
 		Name:      clusterName,
 	}
 
-	if err := cli.Get(ctx, key, ownerCluster); err != nil {
-		allErrs = append(allErrs, field.InternalError(field.NewPath("Cluster", "spec", "clusterNetwork"), err))
-		return allErrs
-	}
-
-	if clusterNetwork := ownerCluster.Spec.ClusterNetwork; clusterNetwork != nil {
-		if clusterNetwork.Services != nil {
-			// A user may provide zero or one CIDR blocks. If they provide an empty array,
-			// we ignore it and use the default. AKS doesn't support > 1 Service/Pod CIDR.
-			if len(clusterNetwork.Services.CIDRBlocks) > 1 {
-				allErrs = append(allErrs, field.TooMany(field.NewPath("Cluster", "spec", "clusterNetwork", "services", "cidrBlocks"), len(clusterNetwork.Services.CIDRBlocks), 1))
+	if err := cli.Get(ctx, key, ownerCluster); err == nil {
+		if clusterNetwork := ownerCluster.Spec.ClusterNetwork; clusterNetwork != nil {
+			if clusterNetwork.Services != nil {
+				// A user may provide zero or one CIDR blocks. If they provide an empty array,
+				// we ignore it and use the default. AKS doesn't support > 1 Service/Pod CIDR.
+				if len(clusterNetwork.Services.CIDRBlocks) > 1 {
+					allErrs = append(allErrs, field.TooMany(field.NewPath("Cluster", "spec", "clusterNetwork", "services", "cidrBlocks"), len(clusterNetwork.Services.CIDRBlocks), 1))
+				}
+				if len(clusterNetwork.Services.CIDRBlocks) == 1 {
+					serviceCIDR = clusterNetwork.Services.CIDRBlocks[0]
+				}
 			}
-			if len(clusterNetwork.Services.CIDRBlocks) == 1 {
-				serviceCIDR = clusterNetwork.Services.CIDRBlocks[0]
-			}
-		}
-		if clusterNetwork.Pods != nil {
-			// A user may provide zero or one CIDR blocks. If they provide an empty array,
-			// we ignore it and use the default. AKS doesn't support > 1 Service/Pod CIDR.
-			if len(clusterNetwork.Pods.CIDRBlocks) > 1 {
-				allErrs = append(allErrs, field.TooMany(field.NewPath("Cluster", "spec", "clusterNetwork", "pods", "cidrBlocks"), len(clusterNetwork.Pods.CIDRBlocks), 1))
+			if clusterNetwork.Pods != nil {
+				// A user may provide zero or one CIDR blocks. If they provide an empty array,
+				// we ignore it and use the default. AKS doesn't support > 1 Service/Pod CIDR.
+				if len(clusterNetwork.Pods.CIDRBlocks) > 1 {
+					allErrs = append(allErrs, field.TooMany(field.NewPath("Cluster", "spec", "clusterNetwork", "pods", "cidrBlocks"), len(clusterNetwork.Pods.CIDRBlocks), 1))
+				}
 			}
 		}
 	}
