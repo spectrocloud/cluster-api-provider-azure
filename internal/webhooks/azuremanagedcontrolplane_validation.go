@@ -529,7 +529,10 @@ func validateAzureManagedControlPlaneVirtualNetworkUpdate(m *infrav1.AzureManage
 				"Subnet CIDRBlock is immutable"))
 	}
 
-	if old.Spec.VirtualNetwork.ResourceGroup != m.Spec.VirtualNetwork.ResourceGroup {
+	// For old palette clusters (created with CAPZ v1.3.2), the resource group of VirtualNetwork would be empty for dynamic AKS clusters.
+	// The new CAPZ (v1.18.0 as of now), adds the resource group to the AzureManagedControlPlane's VirtualNetwork spec by default.
+	// Hence, a validation is added here (for empty string check) which allows the old clusters to upgrade.
+	if old.Spec.VirtualNetwork.ResourceGroup != "" && old.Spec.VirtualNetwork.ResourceGroup != m.Spec.VirtualNetwork.ResourceGroup {
 		allErrs = append(allErrs,
 			field.Invalid(
 				field.NewPath("spec", "virtualNetwork", "resourceGroup"),
