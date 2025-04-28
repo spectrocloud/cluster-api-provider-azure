@@ -3,26 +3,37 @@ package scope
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/Azure/go-autorest/autorest/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
 
 const (
-	AzureEnvironentFileEnvName = "AZURE_ENVIRONMENT_FILE"
-	AzureSecretCloudName       = "AzureSecretCloud"
+	AzureEnvironentFolderEnvName = "AZURE_ENVIRONMENT_FOLDER"
 )
 
 func init() {
 	_, log, done := tele.StartSpanWithLogger(context.Background(), "scope.AzureScope.init")
 	defer done()
-	path := os.Getenv(AzureEnvironentFileEnvName)
+	path := os.Getenv(AzureEnvironentFolderEnvName)
 	if path == "" {
 		return
 	}
-	if env, err := azure.EnvironmentFromFile(path); err == nil {
-		azure.SetEnvironment(AzureSecretCloudName, env)
-	} else {
-		log.Error(err, "reason", "failed to load Azure environment from file", "path", path)
+	files, err := os.ReadDir(path)
+	if err != nil {
+		log.Error(err, "reason", "error reading folder", "path", path)
+		return
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && strings.EqualFold(filepath.Ext(file.Name()), ".json") {
+			if env, err := azure.EnvironmentFromFile(file.Name()); err == nil {
+				azure.SetEnvironment(env.Name, env)
+			} else {
+				log.Error(err, "reason", "failed to load Azure environment from file", "filename", file.Name())
+			}
+		}
 	}
 }
