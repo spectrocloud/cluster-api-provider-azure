@@ -63,13 +63,17 @@ func validateSingleDetailsOnly(image *Image, fldPath *field.Path) field.ErrorLis
 		}
 	}
 
-	if image.SharedGallery != nil {
-		if imageDetailsFound {
-			allErrs = append(allErrs, field.Forbidden(fldPath.Child("SharedGallery"), "SharedGallery cannot be used as an image ID. Marketplace or ComputeGallery images has been specified"))
-		} else {
-			imageDetailsFound = true
-		}
-	}
+	// TODO: VISHU
+	// Commenting this out since after CAPZ upgrade to v1.18.0, palette will be using both ComputeGallery & Shared Gallery
+	// to support palette version upgrade and not cause node repave.
+	// This function was causing to either allow one of them.
+	//if image.SharedGallery != nil {
+	//	if imageDetailsFound {
+	//		allErrs = append(allErrs, field.Forbidden(fldPath.Child("SharedGallery"), "SharedGallery cannot be used as an image ID. Marketplace or ComputeGallery images has been specified"))
+	//	} else {
+	//		imageDetailsFound = true
+	//	}
+	//}
 
 	if image.ComputeGallery != nil {
 		if imageDetailsFound {
