@@ -439,8 +439,12 @@ func validateAPIServerLB(lb *LoadBalancerSpec, old *LoadBalancerSpec, cidrs []st
 					fldPath.Child("frontendIPConfigs").Index(0).Child("privateIP")); err != nil {
 					allErrs = append(allErrs, err)
 				}
-				if lb.IPAllocationMethod == "Static" && len(old.FrontendIPs) != 0 && old.FrontendIPs[0].PrivateIPAddress == "" && old.FrontendIPs[0].PrivateIPAddress != lb.FrontendIPs[0].PrivateIPAddress {
-					allErrs = append(allErrs, field.Forbidden(fldPath.Child("name"), "API Server load balancer private IP should not be modified after AzureCluster creation."))
+				if lb.IPAllocationMethod == "Static" {
+					if old != nil {
+						if len(old.FrontendIPs) != 0 && old.FrontendIPs[0].PrivateIPAddress == "" && old.FrontendIPs[0].PrivateIPAddress != lb.FrontendIPs[0].PrivateIPAddress {
+							allErrs = append(allErrs, field.Forbidden(fldPath.Child("name"), "API Server load balancer private IP should not be modified after AzureCluster creation."))
+						}
+					}
 				}
 			}
 		}
