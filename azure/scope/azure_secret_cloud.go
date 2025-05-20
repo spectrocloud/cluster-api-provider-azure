@@ -23,7 +23,7 @@ func init() {
 	}
 	files, err := os.ReadDir(path)
 	if err != nil {
-		log.Error(err, "reason", "error reading folder", "path", path)
+		log.Error(err, "error reading folder", "path", path)
 		return
 	}
 
@@ -32,7 +32,7 @@ func init() {
 			if env, err := azure.EnvironmentFromFile(file.Name()); err == nil {
 				azure.SetEnvironment(env.Name, env)
 			} else {
-				log.Error(err, "reason", "failed to load Azure environment from file", "filename", file.Name())
+				log.Error(err, "failed to load Azure environment from file", "filename", file.Name())
 			}
 		}
 	}
