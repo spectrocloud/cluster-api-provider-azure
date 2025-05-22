@@ -1,0 +1,45 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: aso-mutating-webhook-configuration
+  labels:
+    cluster.x-k8s.io/provider: aso-infrastructure-azure
+webhooks:
+- name: default.azureasomanagedcluster.infrastructure.cluster.x-k8s.io
+  clientConfig:
+    service:
+      name: aso-webhook-service
+      namespace: capi-webhook-system
+- name: default.azureasomanagedcontrolplane.infrastructure.cluster.x-k8s.io
+  clientConfig:
+    service:
+      name: aso-webhook-service
+      namespace: capi-webhook-system
+- name: default.azureasomanagedmachinepool.infrastructure.cluster.x-k8s.io
+  clientConfig:
+    service:
+      name: aso-webhook-service
+      namespace: capi-webhook-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: aso-validating-webhook-configuration
+  labels:
+    cluster.x-k8s.io/provider: aso-infrastructure-azure
+webhooks:
+- name: validation.azureasomanagedcluster.infrastructure.cluster.x-k8s.io
+  clientConfig:
+    service:
+      name: aso-webhook-service
+      namespace: capi-webhook-system
+- name: validation.azureasomanagedcontrolplane.infrastructure.cluster.x-k8s.io
+  clientConfig:
+    service:
+      name: aso-webhook-service
+      namespace: capi-webhook-system
+- name: validation.azureasomanagedmachinepool.infrastructure.cluster.x-k8s.io
+  clientConfig:
+    service:
+      name: aso-webhook-service
+      namespace: capi-webhook-system 

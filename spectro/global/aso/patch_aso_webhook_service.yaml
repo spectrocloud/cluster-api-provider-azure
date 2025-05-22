@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aso-webhook-service
+  namespace: capi-webhook-system
+  labels:
+    cluster.x-k8s.io/provider: aso-infrastructure-azure
+spec:
+  selector:
+    cluster.x-k8s.io/provider: aso-infrastructure-azure 
