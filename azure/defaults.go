@@ -17,6 +17,8 @@ limitations under the License.
 package azure
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -44,6 +46,8 @@ const (
 	ChinaCloudName = "AzureChinaCloud"
 	// USGovernmentCloudName is the name of the Azure US Government cloud.
 	USGovernmentCloudName = "AzureUSGovernmentCloud"
+
+	AzSecretCloudName = "AzSecret"
 )
 
 const (
@@ -109,6 +113,45 @@ const (
 	CustomHeaderPrefix = "infrastructure.cluster.x-k8s.io/custom-header-"
 )
 
+// Cloud service names
+const (
+	MicrosoftGraphAPI = cloud.ServiceName("MicrosoftGraphAPI")
+	GalleryURL        = cloud.ServiceName("GalleryURL")
+	AzureStorageURL   = cloud.ServiceName("AzureStorageURL")
+)
+
+// AzureSecretConfig defines the configuration for Azure Secret cloud environment
+var AzureSecretConfig = cloud.Configuration{
+	ActiveDirectoryAuthorityHost: "https://login.microsoftonline.scombine.scloud",
+	Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+		cloud.ResourceManager: {
+			Endpoint: "https://usseceast.management.azure.scombine.scloud/",
+			Audience: "https://management.core.windows.net/",
+		},
+		MicrosoftGraphAPI: {
+			Endpoint: "https://graph.scombine.scloud/",
+			Audience: "https://graph.scombine.scloud/",
+		},
+		GalleryURL: {
+			Endpoint: "https://gallery.azure.com/",
+			Audience: "https://gallery.azure.com/",
+		},
+		AzureStorageURL: {
+			Endpoint: "https://core.scombine.scloud",
+			Audience: "https://core.scombine.scloud",
+		},
+	},
+}
+
+// AzSecretCertPool holds the certificate pool for AzSecret environment
+// This will be populated at runtime when AzSecret environment is detected
+var AzSecretCertPool *x509.CertPool
+
+// AzSecretCertData holds the raw certificate data for AzSecret environment
+// This will be populated at runtime when AzSecret environment is detected
+// and can be used for kubeconfig certificate injection
+var AzSecretCertData []byte
+
 var (
 	// LinuxBootstrapExtensionCommand is the command the VM bootstrap extension will execute to verify Linux nodes bootstrap completes successfully.
 	LinuxBootstrapExtensionCommand = fmt.Sprintf("for i in $(seq 1 %d); do test -f %s && break; if [ $i -eq %d ]; then exit 1; else sleep %d; fi; done", bootstrapExtensionRetries, bootstrapSentinelFile, bootstrapExtensionRetries, bootstrapExtensionSleep)
@@ -116,6 +159,11 @@ var (
 	WindowsBootstrapExtensionCommand = fmt.Sprintf("powershell.exe -Command \"for ($i = 0; $i -lt %d; $i++) {if (Test-Path '%s') {exit 0} else {Start-Sleep -Seconds %d}} exit -2\"",
 		bootstrapExtensionRetries, bootstrapSentinelFile, bootstrapExtensionSleep)
 )
+
+// IsAzSecretCertConfigured returns true if the AzSecret certificate pool has been configured
+func IsAzSecretCertConfigured() bool {
+	return AzSecretCertPool != nil
+}
 
 // GenerateBackendAddressPoolName generates a load balancer backend address pool name.
 func GenerateBackendAddressPoolName(lbName string) string {
@@ -360,6 +408,10 @@ func UserAgent() string {
 }
 
 // ARMClientOptions returns default ARM client options for CAPZ SDK v2 requests.
+//
+// For AzSecret cloud environment, if you need to configure custom certificates,
+// you should call ConfigureAzureSecretTLS(opts, certData) after getting the options
+// from this function.
 func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (*arm.ClientOptions, error) {
 	opts := &arm.ClientOptions{}
 
@@ -370,6 +422,26 @@ func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (
 		opts.Cloud = cloud.AzureChina
 	case USGovernmentCloudName:
 		opts.Cloud = cloud.AzureGovernment
+	case AzSecretCloudName:
+		opts.Cloud = AzureSecretConfig
+		// Automatically apply AzSecretCertPool if available
+		if AzSecretCertPool != nil {
+			// Create a transport with the certificate pool
+			opts.ClientOptions.Transport = &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						RootCAs:            AzSecretCertPool,
+						InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
+					},
+					// Use default proxy and other settings
+					Proxy: http.ProxyFromEnvironment,
+				},
+			}
+
+			fmt.Printf("AzSecretCertPool applied to ARM client options for %s\n", azureEnvironment)
+		} else {
+			fmt.Printf("WARNING: AzSecretCertPool is nil, TLS verification might fail for %s\n", azureEnvironment)
+		}
 	case "":
 		// No cloud name provided, so leave at defaults.
 	default:
@@ -437,3 +509,47 @@ func GetNormalizedKubernetesName(name string) string {
 	name = strings.Trim(name, "-")
 	return name
 }
+
+// ConfigureAzureSecretTLS configures the client options with a TLS transport that
+// includes the provided certificate for use with Azure Secret cloud environment.
+// This is useful when connecting to endpoints that use custom certificates.
+func ConfigureAzureSecretTLS(opts *arm.ClientOptions, certData []byte) error {
+	if len(certData) == 0 {
+		return nil
+	}
+
+	// Create a cert pool and add the custom certificate
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		certPool = x509.NewCertPool()
+	}
+
+	if ok := certPool.AppendCertsFromPEM(certData); !ok {
+		return fmt.Errorf("failed to append certificate to pool")
+	}
+
+	// Configure the transport with the custom cert pool
+	opts.ClientOptions.Transport = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs: certPool,
+			},
+		},
+	}
+
+	return nil
+}
+
+// IsAzSecretEnvironment checks if we're running in an AzSecret environment
+// This leverages the Azure environment type to determine if we're in the AzSecret environment
+//func IsAzSecretEnvironment() bool {
+// Get the Azure environment from the environment variable
+//	azureEnv := os.Getenv("AZURE_ENVIRONMENT")
+//	if azureEnv == "" {
+// Default to AzurePublicCloud if not set
+//		azureEnv = PublicCloudName
+//	}
+
+// Simply check if the Azure environment is AzSecret
+//	return azureEnv == AzSecretCloudName
+//}

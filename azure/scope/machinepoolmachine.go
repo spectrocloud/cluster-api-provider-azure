@@ -27,7 +27,6 @@ import (
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
-	"sigs.k8s.io/cluster-api/controllers/remote"
 	expv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -41,6 +40,8 @@ import (
 	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+
+	customremote "sigs.k8s.io/cluster-api-provider-azure/util/remote"
 )
 
 const (
@@ -554,5 +555,5 @@ func getWorkloadClient(ctx context.Context, c client.Client, cluster client.Obje
 	)
 	defer done()
 
-	return remote.NewClusterClient(ctx, MachinePoolMachineScopeName, c, cluster)
+	return customremote.NewClusterClient(ctx, MachinePoolMachineScopeName, c, cluster)
 }

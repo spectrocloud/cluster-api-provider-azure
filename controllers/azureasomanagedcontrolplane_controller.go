@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1alpha "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha1"
+	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/pkg/mutators"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
@@ -321,6 +322,15 @@ func (r *AzureASOManagedControlPlaneReconciler) reconcileKubeconfig(ctx context.
 			a.Exec = nil
 			a.Token = token.Token
 		}
+
+		// PATCH POINT: Inject custom CA certificate data here
+		// This allows patching CA certificates for AAD-enabled clusters with local accounts disabled
+		if customCACert := getCustomCACertificateForCluster(cluster.Name); customCACert != nil {
+			for _, clusterInfo := range kubeconfig.Clusters {
+				clusterInfo.CertificateAuthorityData = customCACert
+			}
+		}
+
 		kubeconfigData, err = clientcmd.Write(*kubeconfig)
 		if err != nil {
 			return nil, err
@@ -350,6 +360,23 @@ func (r *AzureASOManagedControlPlaneReconciler) reconcileKubeconfig(ctx context.
 		return nil, err
 	}
 	return tokenExpiresIn, nil
+}
+
+// getCustomCACertificateForCluster returns custom CA certificate data for a specific cluster
+// This function leverages the same certificate that is used for Azure authentication
+// by checking the global AzSecretCertPool that gets populated during Azure client initialization
+func getCustomCACertificateForCluster(clusterName string) []byte {
+	// Check if we have a certificate in the global AzSecretCertPool
+	// This is the same certificate pool used for Azure authentication
+	if azure.IsAzSecretCertConfigured() && azure.AzSecretCertPool != nil {
+		// Return the raw certificate data stored in AzSecretCertData
+		// This contains the original PEM data that was used to populate the certificate pool
+		if len(azure.AzSecretCertData) > 0 {
+			return azure.AzSecretCertData
+		}
+	}
+
+	return nil
 }
 
 func (r *AzureASOManagedControlPlaneReconciler) reconcilePaused(ctx context.Context, asoManagedControlPlane *infrav1alpha.AzureASOManagedControlPlane) (ctrl.Result, error) {

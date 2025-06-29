@@ -39,7 +39,6 @@ import (
 	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/secret"
@@ -57,6 +56,8 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/virtualnetworks"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+
+	customremote "sigs.k8s.io/cluster-api-provider-azure/util/remote"
 )
 
 const (
@@ -922,7 +923,7 @@ func (s *ManagedControlPlaneScope) SetUserKubeConfigData(kubeConfigData []byte) 
 
 // StoreClusterInfo stores the discovery cluster-info configmap in the kube-public namespace on the AKS cluster so kubeadm can access it to join nodes.
 func (s *ManagedControlPlaneScope) StoreClusterInfo(ctx context.Context, caData []byte) error {
-	remoteclient, err := remote.NewClusterClient(ctx, managedControlPlaneScopeName, s.Client, types.NamespacedName{
+	remoteclient, err := customremote.NewClusterClient(ctx, managedControlPlaneScopeName, s.Client, types.NamespacedName{
 		Namespace: s.Cluster.Namespace,
 		Name:      s.Cluster.Name,
 	})

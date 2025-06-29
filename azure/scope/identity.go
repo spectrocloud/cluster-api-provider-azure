@@ -18,8 +18,12 @@ package scope
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"net/http"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
@@ -40,6 +44,9 @@ import (
 // AzureSecretKey is the value for they client secret key.
 const AzureSecretKey = "clientSecret"
 
+// AzureSecretCertKey is the key for the Azure Secret certificate in the Secret.
+const AzureSecretCertKey = "azureSecretCert"
+
 // CredentialsProvider defines the behavior for azure identity based credential providers.
 type CredentialsProvider interface {
 	GetClientID() string
@@ -47,6 +54,7 @@ type CredentialsProvider interface {
 	GetTenantID() string
 	GetTokenCredential(ctx context.Context, resourceManagerEndpoint, activeDirectoryEndpoint, tokenAudience string) (azcore.TokenCredential, error)
 	Type() infrav1.IdentityType
+	GetAzSecretCertificate(ctx context.Context) ([]byte, error)
 }
 
 // AzureCredentialsProvider represents a credential provider with azure cluster identity.
@@ -91,6 +99,62 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 
 	tracingProvider := azotel.NewTracingProvider(otel.GetTracerProvider(), nil)
 
+	// Check if we're using AzSecret cloud and set the correct endpoints
+	isAzSecret := false
+
+	// Check if we're using resource manager endpoint for AzSecret
+	if strings.Contains(resourceManagerEndpoint, "scombine.scloud") {
+		isAzSecret = true
+		log.Info("Detected AzSecret cloud environment, using custom endpoints")
+
+		// Override the AD endpoint with the one from AzureSecretConfig
+		activeDirectoryEndpoint = azure.AzureSecretConfig.ActiveDirectoryAuthorityHost
+
+		log.Info("Using AzSecret AD endpoint",
+			"endpoint", activeDirectoryEndpoint)
+	}
+
+	// If this is AzSecret, get the certificate for TLS configuration
+	var certPool *x509.CertPool
+	if isAzSecret {
+		// Get the certificate from palette-fusion Secret
+		azSecretCert, err := p.GetAzSecretCertificate(ctx)
+		if err != nil {
+			log.Error(err, "Failed to get AzSecret certificate")
+			return nil, errors.Wrap(err, "failed to get AzSecret certificate")
+		}
+
+		if len(azSecretCert) > 0 {
+			log.Info("Retrieved AzSecret certificate from identity Secret",
+				"certLength", len(azSecretCert))
+
+			// Create a cert pool and add the certificate
+			systemPool, err := x509.SystemCertPool()
+			if err != nil {
+				log.Info("Failed to get system cert pool, creating new one")
+				certPool = x509.NewCertPool()
+			} else {
+				certPool = systemPool
+			}
+
+			if ok := certPool.AppendCertsFromPEM(azSecretCert); !ok {
+				log.Error(errors.New("failed to append certificate"), "Failed to append AzSecret certificate to pool")
+				return nil, errors.New("failed to append AzSecret certificate to pool")
+			}
+			log.Info("Successfully added certificate from identity Secret to pool")
+
+			// Store the certificate in the global pool for other clients to use
+			azure.AzSecretCertPool = certPool
+			log.Info("Stored certificate in global AzSecretCertPool for use by all Azure clients")
+
+			// Also store the raw certificate data for kubeconfig injection
+			azure.AzSecretCertData = azSecretCert
+			log.Info("Stored raw certificate data in global AzSecretCertData for kubeconfig injection")
+		} else {
+			log.Info("No AzSecret certificate found in identity Secret")
+		}
+	}
+
 	switch p.Identity.Spec.Type {
 	case infrav1.WorkloadIdentity:
 		cred, authErr = p.cache.GetOrStoreWorkloadIdentity(&azidentity.WorkloadIdentityCredentialOptions{
@@ -110,6 +174,7 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get client secret")
 		}
+
 		options := azidentity.ClientSecretCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
@@ -124,6 +189,29 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 				},
 			},
 		}
+
+		// For AzSecret environments, we also need to set DisableInstanceDiscovery
+		if isAzSecret {
+			options.DisableInstanceDiscovery = true
+			log.Info("Disabled instance discovery for AzSecret environment")
+
+			// Configure TLS with the certificate if available
+			if certPool != nil {
+				log.Info("Configuring transport for ClientSecretCredential with certificate from palette-fusion",
+					"transportConfigured", true)
+				options.ClientOptions.Transport = &http.Client{
+					Transport: &http.Transport{
+						TLSClientConfig: &tls.Config{
+							RootCAs:            certPool,
+							InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
+						},
+						// Use default proxy and other settings
+						Proxy: http.ProxyFromEnvironment,
+					},
+				}
+			}
+		}
+
 		cred, authErr = p.cache.GetOrStoreClientSecret(p.GetTenantID(), p.Identity.Spec.ClientID, clientSecret, &options)
 
 	case infrav1.ServicePrincipalCertificate:
@@ -141,19 +229,79 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 			}
 			certsContent = []byte(clientSecret)
 		}
-		cred, authErr = p.cache.GetOrStoreClientCert(p.GetTenantID(), p.Identity.Spec.ClientID, certsContent, nil, &azidentity.ClientCertificateCredentialOptions{
+
+		certOptions := &azidentity.ClientCertificateCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
+				Cloud: cloud.Configuration{
+					ActiveDirectoryAuthorityHost: activeDirectoryEndpoint,
+					Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+						cloud.ResourceManager: {
+							Audience: tokenAudience,
+							Endpoint: resourceManagerEndpoint,
+						},
+					},
+				},
 			},
-		})
+		}
+
+		// For AzSecret environments, disable instance discovery
+		if isAzSecret {
+			certOptions.DisableInstanceDiscovery = true
+			log.Info("Disabled instance discovery for AzSecret environment with certificate")
+
+			// Configure TLS with the certificate if available
+			if certPool != nil {
+				log.Info("Configuring transport for ClientCertificateCredential with certificate from palette-fusion",
+					"transportConfigured", true)
+				certOptions.ClientOptions.Transport = &http.Client{
+					Transport: &http.Transport{
+						TLSClientConfig: &tls.Config{
+							RootCAs:            certPool,
+							InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
+						},
+						// Use default proxy and other settings
+						Proxy: http.ProxyFromEnvironment,
+					},
+				}
+			}
+		}
+
+		cred, authErr = p.cache.GetOrStoreClientCert(p.GetTenantID(), p.Identity.Spec.ClientID, certsContent, nil, certOptions)
 
 	case infrav1.UserAssignedMSI:
 		options := azidentity.ManagedIdentityCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
+				Cloud: cloud.Configuration{
+					ActiveDirectoryAuthorityHost: activeDirectoryEndpoint,
+					Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+						cloud.ResourceManager: {
+							Audience: tokenAudience,
+							Endpoint: resourceManagerEndpoint,
+						},
+					},
+				},
 			},
 			ID: azidentity.ClientID(p.Identity.Spec.ClientID),
 		}
+
+		// For AzSecret environments, configure TLS with custom certificate
+		if isAzSecret && certPool != nil {
+			log.Info("Configuring transport for ManagedIdentityCredential with certificate from palette-fusion",
+				"transportConfigured", true)
+			options.ClientOptions.Transport = &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						RootCAs:            certPool,
+						InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
+					},
+					// Use default proxy and other settings
+					Proxy: http.ProxyFromEnvironment,
+				},
+			}
+		}
+
 		cred, authErr = p.cache.GetOrStoreManagedIdentity(&options)
 
 	default:
@@ -255,4 +403,56 @@ func IsClusterNamespaceAllowed(ctx context.Context, k8sClient client.Client, all
 	}
 
 	return false
+}
+
+// GetAzSecretCertificate fetches the Azure Secret certificate from the Secret when using AzSecret cloud.
+func (p *AzureCredentialsProvider) GetAzSecretCertificate(ctx context.Context) ([]byte, error) {
+	ctx, log, done := tele.StartSpanWithLogger(ctx, "azure.scope.AzureCredentialsProvider.GetAzSecretCertificate")
+	defer done()
+
+	// Simply check the identity's referenced Secret for the certificate
+	// This is the same Secret that contains the clientSecret
+	if p.Identity.Spec.ClientSecret.Name == "" {
+		log.Info("No ClientSecret reference set in AzureClusterIdentity")
+		return nil, nil
+	}
+
+	secretRef := p.Identity.Spec.ClientSecret
+	key := types.NamespacedName{
+		Namespace: secretRef.Namespace,
+		Name:      secretRef.Name,
+	}
+
+	log.Info("Checking identity Secret for certificate",
+		"secretName", secretRef.Name,
+		"namespace", secretRef.Namespace)
+
+	secret := &corev1.Secret{}
+	if err := p.Client.Get(ctx, key, secret); err != nil {
+		log.Error(err, "Unable to fetch identity Secret")
+		return nil, errors.Wrap(err, "Unable to fetch identity Secret")
+	}
+
+	// Look for the certificate in the Secret (checking the standard key first)
+	if certData, ok := secret.Data["azureSecretCert"]; ok && len(certData) > 0 {
+		log.Info("Found certificate in identity Secret",
+			"key", "azureSecretCert",
+			"certLength", len(certData))
+		return certData, nil
+	}
+
+	// Certificate not found in standard key, try common alternatives
+	log.Info("Certificate not found under 'azureSecretCert' key, checking alternatives")
+	certKeys := []string{"ca.crt", "tls.crt", "certificate", "cert"}
+	for _, keyName := range certKeys {
+		if certData, ok := secret.Data[keyName]; ok && len(certData) > 0 {
+			log.Info("Found certificate using alternative key",
+				"key", keyName,
+				"certLength", len(certData))
+			return certData, nil
+		}
+	}
+
+	log.Info("No certificate found in identity Secret")
+	return nil, nil
 }

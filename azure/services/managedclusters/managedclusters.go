@@ -169,6 +169,16 @@ func reconcileKubeconfig(ctx context.Context, scope ManagedClusterScope, namespa
 		return nil, nil, errors.Wrap(err, "failed to get ASO admin kubeconfig secret")
 	}
 	adminKubeConfigData = asoSecret.Data[secret.KubeconfigDataName]
+
+	// PATCH POINT: Inject custom CA certificate data into admin kubeconfig
+	// This allows patching CA certificates for admin kubeconfig retrieved from ASO
+	if adminKubeConfigData != nil && len(adminKubeConfigData) > 0 {
+		if patchedAdminConfig, err := patchKubeconfigWithCustomCA(adminKubeConfigData, scope.ClusterName()); err == nil {
+			adminKubeConfigData = patchedAdminConfig
+		}
+		// Note: We could log the error but not fail the reconciliation if patching fails
+	}
+
 	return adminKubeConfigData, userKubeConfigData, nil
 }
 
@@ -204,9 +214,61 @@ func getUserKubeConfigWithToken(ctx context.Context, userKubeConfigData []byte, 
 		auth.Token = token.Token
 		auth.Exec = nil
 	}
+
+	// PATCH POINT: Inject custom CA certificate data here
+	// This is where you could add logic to replace the certificate-authority-data
+	// with your custom CA certificate
+	if customCACert := getCustomCACertificate(); customCACert != nil {
+		for _, cluster := range config.Clusters {
+			cluster.CertificateAuthorityData = customCACert
+		}
+	}
+
 	kubeconfig, err := clientcmd.Write(*config)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while trying to marshal new user kubeconfig with token")
 	}
 	return kubeconfig, nil
+}
+
+// getCustomCACertificate returns custom CA certificate data if available
+// This function leverages the same certificate that is used for Azure authentication
+// by checking the global AzSecretCertPool that gets populated during Azure client initialization
+func getCustomCACertificate() []byte {
+	// Check if we have a certificate in the global AzSecretCertPool
+	// This is the same certificate pool used for Azure authentication
+	if azure.IsAzSecretCertConfigured() && azure.AzSecretCertPool != nil {
+		// Return the raw certificate data stored in AzSecretCertData
+		// This contains the original PEM data that was used to populate the certificate pool
+		if len(azure.AzSecretCertData) > 0 {
+			return azure.AzSecretCertData
+		}
+	}
+
+	return nil
+}
+
+// patchKubeconfigWithCustomCA patches kubeconfig data with custom CA certificate
+func patchKubeconfigWithCustomCA(kubeconfigData []byte, clusterName string) ([]byte, error) {
+	customCACert := getCustomCACertificate()
+	if customCACert == nil {
+		return kubeconfigData, nil // No custom CA, return original
+	}
+
+	config, err := clientcmd.Load(kubeconfigData)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load kubeconfig for CA patching")
+	}
+
+	// Replace CA data in all clusters
+	for _, cluster := range config.Clusters {
+		cluster.CertificateAuthorityData = customCACert
+	}
+
+	patchedKubeconfig, err := clientcmd.Write(*config)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to write patched kubeconfig")
+	}
+
+	return patchedKubeconfig, nil
 }

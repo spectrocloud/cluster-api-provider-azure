@@ -18,6 +18,7 @@ package privatedns
 
 import (
 	"context"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -26,15 +27,24 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
 
+// extractResourceGroupFromID extracts the resource group from a resource ID string.
+func extractResourceGroupFromID(id string) string {
+	// Example ID: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/privateDnsZones/{zone}
+	parts := strings.Split(id, "/")
+	for i, part := range parts {
+		if part == "resourceGroups" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
 func (s *Service) reconcileLinks(ctx context.Context, links []azure.ResourceSpecGetter) (managed bool, err error) {
 	ctx, log, done := tele.StartSpanWithLogger(ctx, "privatedns.Service.reconcileLinks")
 	defer done()
 
 	var resErr error
 
-	// We go through the list of links to reconcile each one, independently of the result of the previous one.
-	// If multiple errors occur, we return the most pressing one.
-	// Order of precedence (highest -> lowest) is: error that is not an operationNotDoneError (i.e. error creating) -> operationNotDoneError (i.e. creating in progress) -> no error (i.e. created)
 	for _, linkSpec := range links {
 		isLinkManaged, err := s.isVnetLinkManaged(ctx, linkSpec)
 		if err != nil {
@@ -51,7 +61,59 @@ func (s *Service) reconcileLinks(ctx context.Context, links []azure.ResourceSpec
 			continue
 		}
 
-		// we consider VnetLinks as managed if at least of the links is managed.
+		// Enhanced logic: check all zones with the same name across all resource groups
+		zoneName := linkSpec.OwnerResourceName()
+		vnetID := azure.VNetID(linkSpec.(LinkSpec).SubscriptionID, linkSpec.(LinkSpec).VNetResourceGroup, linkSpec.(LinkSpec).VNetName)
+		zones, err := s.zonesClient.ListAllZonesByName(ctx, zoneName)
+		if err != nil {
+			return managed, err
+		}
+		alreadyLinked := false
+		for _, zone := range zones {
+			if zone.Name == nil || zone.ID == nil {
+				continue
+			}
+			zoneRG := extractResourceGroupFromID(*zone.ID)
+			links, err := s.vnetLinkClient.ListByZone(ctx, zoneRG, *zone.Name)
+			if err != nil {
+				return managed, err
+			}
+			for _, link := range links {
+				if link.Properties != nil && link.Properties.VirtualNetwork != nil && link.Properties.VirtualNetwork.ID != nil && *link.Properties.VirtualNetwork.ID == vnetID {
+					// log.V(1).Info("Skipping vnet link creation as VNet is already linked to a zone with the same name across resource groups",
+					// 	"vnet link", linkSpec.ResourceName(),
+					// 	"private dns zone", zoneName,
+					// 	"vnet", linkSpec.(LinkSpec).VNetName,
+					// 	"resource group", linkSpec.ResourceGroupName(),
+					// 	"zone resource group", zoneRG)
+					alreadyLinked = true
+					break
+				}
+			}
+			if alreadyLinked {
+				break
+			}
+		}
+		if alreadyLinked {
+			managed = true
+			continue
+		}
+
+		// Fallback: check if link exists in the current zone/resource group
+		existingLink, err := s.vnetLinkClient.Get(ctx, linkSpec)
+		if err != nil && !azure.ResourceNotFound(err) {
+			return managed, err
+		}
+		if existingLink != nil {
+			log.V(1).Info("Skipping vnet link creation as it already exists",
+				"vnet link", linkSpec.ResourceName(),
+				"private dns zone", linkSpec.OwnerResourceName(),
+				"vnet", linkSpec.(LinkSpec).VNetName,
+				"resource group", linkSpec.ResourceGroupName())
+			managed = true
+			continue
+		}
+
 		managed = true
 		if _, err := s.vnetLinkReconciler.CreateOrUpdateResource(ctx, linkSpec, serviceName); err != nil {
 			if !azure.IsOperationNotDoneError(err) || resErr == nil {
