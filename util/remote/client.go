@@ -2,12 +2,9 @@ package remote
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 
 	"github.com/pkg/errors"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/util/kubeconfig"
@@ -17,8 +14,8 @@ import (
 )
 
 // NewClusterClient creates a new client to access a remote cluster using kubeconfig secret
-// stored in the management cluster. For AzSecret environments, it adds the certificate from
-// the global AzSecretCertPool to the client's transport.
+// stored in the management cluster. It automatically uses the global transport configuration
+// which includes any custom certificates if available.
 func NewClusterClient(ctx context.Context, sourceName string, c client.Client, cluster client.ObjectKey) (client.Client, error) {
 	// Get the kubeconfig bytes from the secret
 	kubeconfigBytes, err := kubeconfig.FromSecret(ctx, c, cluster)
@@ -33,29 +30,11 @@ func NewClusterClient(ctx context.Context, sourceName string, c client.Client, c
 	}
 
 	restConfig.UserAgent = remote.DefaultClusterAPIUserAgent(sourceName)
-	customCertsCount := len(azure.AzSecretCertPool.Subjects())
-	fmt.Printf("Certificate counts - AzSecretCertPool: %d\n",
-		customCertsCount)
-	// Check if we're in an AzSecret environment and have certificates in the global pool
-	//isAzSecret := azure.IsAzSecretEnvironment()
-	if azure.AzSecretCertPool != nil {
-		fmt.Printf("Using AzSecretCertPool for remote cluster client: %s/%s\n", cluster.Namespace, cluster.Name)
 
-		// Create a custom HTTP transport with the certificate pool
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:            azure.AzSecretCertPool,
-				InsecureSkipVerify: false, // Ensure we validate certificates
-			},
-			// Use default proxy and other settings
-			Proxy: http.ProxyFromEnvironment,
-		}
-
-		// Set the transport in the REST config
-		restConfig.Transport = transport // transport implements http.RoundTripper
-		restConfig.TLSClientConfig = rest.TLSClientConfig{
-			CAData: nil, // We'll use the transport's RootCAs instead
-		}
+	// Use centralized transport configuration
+	if globalClient := azure.GetGlobalHTTPClient(); globalClient != nil {
+		restConfig.Transport = globalClient.Transport
+		fmt.Printf("Using centralized transport for remote cluster client: %s/%s\n", cluster.Namespace, cluster.Name)
 	}
 
 	// Create and return the client

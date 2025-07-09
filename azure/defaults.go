@@ -17,7 +17,6 @@ limitations under the License.
 package azure
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net/http"
@@ -29,6 +28,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/sdk/tracing/azotel"
+	azureautorest "github.com/Azure/go-autorest/autorest/azure"
 	"go.opentelemetry.io/otel"
 
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
@@ -47,7 +47,7 @@ const (
 	// USGovernmentCloudName is the name of the Azure US Government cloud.
 	USGovernmentCloudName = "AzureUSGovernmentCloud"
 
-	AzSecretCloudName = "AzSecret"
+	// Remove AzSecretCloudName as it's now handled dynamically
 )
 
 const (
@@ -120,37 +120,19 @@ const (
 	AzureStorageURL   = cloud.ServiceName("AzureStorageURL")
 )
 
-// AzureSecretConfig defines the configuration for Azure Secret cloud environment
-var AzureSecretConfig = cloud.Configuration{
-	ActiveDirectoryAuthorityHost: "https://login.microsoftonline.scombine.scloud",
-	Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
-		cloud.ResourceManager: {
-			Endpoint: "https://usseceast.management.azure.scombine.scloud/",
-			Audience: "https://management.core.windows.net/",
-		},
-		MicrosoftGraphAPI: {
-			Endpoint: "https://graph.scombine.scloud/",
-			Audience: "https://graph.scombine.scloud/",
-		},
-		GalleryURL: {
-			Endpoint: "https://gallery.azure.com/",
-			Audience: "https://gallery.azure.com/",
-		},
-		AzureStorageURL: {
-			Endpoint: "https://core.scombine.scloud",
-			Audience: "https://core.scombine.scloud",
-		},
-	},
-}
+// Remove AzureSecretConfig as it's now loaded dynamically
 
-// AzSecretCertPool holds the certificate pool for AzSecret environment
-// This will be populated at runtime when AzSecret environment is detected
+// AzSecretCertPool holds the certificate pool for custom Azure environments
+// This will be populated at runtime when custom certificates are detected
 var AzSecretCertPool *x509.CertPool
 
-// AzSecretCertData holds the raw certificate data for AzSecret environment
-// This will be populated at runtime when AzSecret environment is detected
-// and can be used for kubeconfig certificate injection
+// AzSecretCertData holds the raw certificate data for custom Azure environments
+// This will be populated at runtime when custom certificates are detected
 var AzSecretCertData []byte
+
+// GlobalHTTPClient holds the global HTTP client for custom Azure environments
+// This will be populated by the scope package to avoid import cycles
+var GlobalHTTPClient *http.Client
 
 var (
 	// LinuxBootstrapExtensionCommand is the command the VM bootstrap extension will execute to verify Linux nodes bootstrap completes successfully.
@@ -409,9 +391,8 @@ func UserAgent() string {
 
 // ARMClientOptions returns default ARM client options for CAPZ SDK v2 requests.
 //
-// For AzSecret cloud environment, if you need to configure custom certificates,
-// you should call ConfigureAzureSecretTLS(opts, certData) after getting the options
-// from this function.
+// For custom cloud environments, it automatically converts dynamically loaded
+// environments to the new SDK v2 format.
 func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (*arm.ClientOptions, error) {
 	opts := &arm.ClientOptions{}
 
@@ -422,31 +403,23 @@ func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (
 		opts.Cloud = cloud.AzureChina
 	case USGovernmentCloudName:
 		opts.Cloud = cloud.AzureGovernment
-	case AzSecretCloudName:
-		opts.Cloud = AzureSecretConfig
-		// Automatically apply AzSecretCertPool if available
-		if AzSecretCertPool != nil {
-			// Create a transport with the certificate pool
-			opts.ClientOptions.Transport = &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{
-						RootCAs:            AzSecretCertPool,
-						InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
-					},
-					// Use default proxy and other settings
-					Proxy: http.ProxyFromEnvironment,
-				},
-			}
-
-			fmt.Printf("AzSecretCertPool applied to ARM client options for %s\n", azureEnvironment)
-		} else {
-			fmt.Printf("WARNING: AzSecretCertPool is nil, TLS verification might fail for %s\n", azureEnvironment)
-		}
 	case "":
 		// No cloud name provided, so leave at defaults.
 	default:
-		return nil, fmt.Errorf("invalid cloud name %q", azureEnvironment)
+		// For custom environments, try to get the environment configuration
+		// from the dynamically loaded environments
+		cloudConfig, err := getCloudConfigurationFromEnvironment(azureEnvironment)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cloud name %q: %w", azureEnvironment, err)
+		}
+		opts.Cloud = cloudConfig
 	}
+
+	// Use centralized transport configuration
+	if GlobalHTTPClient != nil {
+		opts.ClientOptions.Transport = GlobalHTTPClient
+	}
+
 	opts.PerCallPolicies = []policy.Policy{
 		correlationIDPolicy{},
 		userAgentPolicy{},
@@ -457,6 +430,39 @@ func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (
 	opts.TracingProvider = azotel.NewTracingProvider(otel.GetTracerProvider(), nil)
 
 	return opts, nil
+}
+
+// getCloudConfigurationFromEnvironment converts a dynamically loaded environment
+// to the new Azure SDK v2 cloud configuration format
+// Must have this, since we are using the new SDK v2.
+func getCloudConfigurationFromEnvironment(environmentName string) (cloud.Configuration, error) {
+	env, err := azureautorest.EnvironmentFromName(environmentName)
+	if err != nil {
+		return cloud.Configuration{}, fmt.Errorf("environment %q not found: %w", environmentName, err)
+	}
+
+	// Convert from old SDK v1 format to new SDK v2 format
+	return cloud.Configuration{
+		ActiveDirectoryAuthorityHost: env.ActiveDirectoryEndpoint,
+		Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+			cloud.ResourceManager: {
+				Endpoint: env.ResourceManagerEndpoint,
+				Audience: env.TokenAudience,
+			},
+			MicrosoftGraphAPI: {
+				Endpoint: env.GraphEndpoint,
+				Audience: env.GraphEndpoint,
+			},
+			GalleryURL: {
+				Endpoint: env.GalleryEndpoint,
+				Audience: env.GalleryEndpoint,
+			},
+			AzureStorageURL: {
+				Endpoint: fmt.Sprintf("https://%s", env.StorageEndpointSuffix),
+				Audience: fmt.Sprintf("https://%s", env.StorageEndpointSuffix),
+			},
+		},
+	}, nil
 }
 
 // correlationIDPolicy adds the "x-ms-correlation-request-id" header to requests.
@@ -510,46 +516,8 @@ func GetNormalizedKubernetesName(name string) string {
 	return name
 }
 
-// ConfigureAzureSecretTLS configures the client options with a TLS transport that
-// includes the provided certificate for use with Azure Secret cloud environment.
-// This is useful when connecting to endpoints that use custom certificates.
-func ConfigureAzureSecretTLS(opts *arm.ClientOptions, certData []byte) error {
-	if len(certData) == 0 {
-		return nil
-	}
-
-	// Create a cert pool and add the custom certificate
-	certPool, err := x509.SystemCertPool()
-	if err != nil {
-		certPool = x509.NewCertPool()
-	}
-
-	if ok := certPool.AppendCertsFromPEM(certData); !ok {
-		return fmt.Errorf("failed to append certificate to pool")
-	}
-
-	// Configure the transport with the custom cert pool
-	opts.ClientOptions.Transport = &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: certPool,
-			},
-		},
-	}
-
-	return nil
+// GetGlobalHTTPClient returns the global HTTP client for custom Azure environments
+// This is a wrapper to avoid import cycles by using a global variable approach
+func GetGlobalHTTPClient() *http.Client {
+	return GlobalHTTPClient
 }
-
-// IsAzSecretEnvironment checks if we're running in an AzSecret environment
-// This leverages the Azure environment type to determine if we're in the AzSecret environment
-//func IsAzSecretEnvironment() bool {
-// Get the Azure environment from the environment variable
-//	azureEnv := os.Getenv("AZURE_ENVIRONMENT")
-//	if azureEnv == "" {
-// Default to AzurePublicCloud if not set
-//		azureEnv = PublicCloudName
-//	}
-
-// Simply check if the Azure environment is AzSecret
-//	return azureEnv == AzSecretCloudName
-//}

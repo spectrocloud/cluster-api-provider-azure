@@ -18,12 +18,8 @@ package scope
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"net/http"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
@@ -99,72 +95,49 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 
 	tracingProvider := azotel.NewTracingProvider(otel.GetTracerProvider(), nil)
 
-	// Check if we're using AzSecret cloud and set the correct endpoints
-	isAzSecret := false
-
-	// Check if we're using resource manager endpoint for AzSecret
-	if strings.Contains(resourceManagerEndpoint, "scombine.scloud") {
-		isAzSecret = true
-		log.Info("Detected AzSecret cloud environment, using custom endpoints")
-
-		// Override the AD endpoint with the one from AzureSecretConfig
-		activeDirectoryEndpoint = azure.AzureSecretConfig.ActiveDirectoryAuthorityHost
-
-		log.Info("Using AzSecret AD endpoint",
-			"endpoint", activeDirectoryEndpoint)
+	// Get certificate data from the identity secret if available
+	// This will be used to update the global certificate pool
+	azSecretCert, err := p.GetAzSecretCertificate(ctx)
+	if err != nil {
+		log.Error(err, "Failed to get certificate from identity secret")
+		return nil, errors.Wrap(err, "failed to get certificate from identity secret")
 	}
 
-	// If this is AzSecret, get the certificate for TLS configuration
-	var certPool *x509.CertPool
-	if isAzSecret {
-		// Get the certificate from palette-fusion Secret
-		azSecretCert, err := p.GetAzSecretCertificate(ctx)
-		if err != nil {
-			log.Error(err, "Failed to get AzSecret certificate")
-			return nil, errors.Wrap(err, "failed to get AzSecret certificate")
+	if len(azSecretCert) > 0 {
+		log.Info("Retrieved certificate from identity Secret",
+			"certLength", len(azSecretCert))
+
+		// Update the global transport with the certificate
+		if err := UpdateGlobalTransportWithCertificate(azSecretCert); err != nil {
+			log.Error(err, "Failed to update global transport with certificate")
+			return nil, errors.Wrap(err, "failed to update global transport with certificate")
 		}
 
-		if len(azSecretCert) > 0 {
-			log.Info("Retrieved AzSecret certificate from identity Secret",
-				"certLength", len(azSecretCert))
+		// Store the certificate in the global pool for other clients to use
+		azure.AzSecretCertPool = GetGlobalCertPool()
+		log.Info("Updated global certificate pool for Azure clients")
 
-			// Create a cert pool and add the certificate
-			systemPool, err := x509.SystemCertPool()
-			if err != nil {
-				log.Info("Failed to get system cert pool, creating new one")
-				certPool = x509.NewCertPool()
-			} else {
-				certPool = systemPool
-			}
-
-			if ok := certPool.AppendCertsFromPEM(azSecretCert); !ok {
-				log.Error(errors.New("failed to append certificate"), "Failed to append AzSecret certificate to pool")
-				return nil, errors.New("failed to append AzSecret certificate to pool")
-			}
-			log.Info("Successfully added certificate from identity Secret to pool")
-
-			// Store the certificate in the global pool for other clients to use
-			azure.AzSecretCertPool = certPool
-			log.Info("Stored certificate in global AzSecretCertPool for use by all Azure clients")
-
-			// Also store the raw certificate data for kubeconfig injection
-			azure.AzSecretCertData = azSecretCert
-			log.Info("Stored raw certificate data in global AzSecretCertData for kubeconfig injection")
-		} else {
-			log.Info("No AzSecret certificate found in identity Secret")
-		}
+		// Also store the raw certificate data for kubeconfig injection
+		azure.AzSecretCertData = azSecretCert
+		log.Info("Stored raw certificate data in global AzSecretCertData for kubeconfig injection")
 	}
 
 	switch p.Identity.Spec.Type {
 	case infrav1.WorkloadIdentity:
-		cred, authErr = p.cache.GetOrStoreWorkloadIdentity(&azidentity.WorkloadIdentityCredentialOptions{
+		options := &azidentity.WorkloadIdentityCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
 			},
 			TenantID:      p.Identity.Spec.TenantID,
 			ClientID:      p.Identity.Spec.ClientID,
 			TokenFilePath: GetProjectedTokenPath(),
-		})
+		}
+
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&options.ClientOptions)
+		log.Info("Using centralized transport for WorkloadIdentityCredential")
+
+		cred, authErr = p.cache.GetOrStoreWorkloadIdentity(options)
 
 	case infrav1.ManualServicePrincipal:
 		log.Info("Identity type ManualServicePrincipal is deprecated and will be removed in a future release. See https://capz.sigs.k8s.io/topics/identities to find a supported identity type.")
@@ -190,27 +163,14 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 			},
 		}
 
-		// For AzSecret environments, we also need to set DisableInstanceDiscovery
-		if isAzSecret {
-			options.DisableInstanceDiscovery = true
-			log.Info("Disabled instance discovery for AzSecret environment")
+		// Always disable instance discovery for custom environments
+		// This is safe for standard Azure environments too
+		options.DisableInstanceDiscovery = true
+		log.Info("Disabled instance discovery for credential compatibility")
 
-			// Configure TLS with the certificate if available
-			if certPool != nil {
-				log.Info("Configuring transport for ClientSecretCredential with certificate from palette-fusion",
-					"transportConfigured", true)
-				options.ClientOptions.Transport = &http.Client{
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							RootCAs:            certPool,
-							InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
-						},
-						// Use default proxy and other settings
-						Proxy: http.ProxyFromEnvironment,
-					},
-				}
-			}
-		}
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&options.ClientOptions)
+		log.Info("Using centralized transport for ClientSecretCredential")
 
 		cred, authErr = p.cache.GetOrStoreClientSecret(p.GetTenantID(), p.Identity.Spec.ClientID, clientSecret, &options)
 
@@ -245,27 +205,14 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 			},
 		}
 
-		// For AzSecret environments, disable instance discovery
-		if isAzSecret {
-			certOptions.DisableInstanceDiscovery = true
-			log.Info("Disabled instance discovery for AzSecret environment with certificate")
+		// Always disable instance discovery for custom environments
+		// This is safe for standard Azure environments too
+		certOptions.DisableInstanceDiscovery = true
+		log.Info("Disabled instance discovery for certificate credential compatibility")
 
-			// Configure TLS with the certificate if available
-			if certPool != nil {
-				log.Info("Configuring transport for ClientCertificateCredential with certificate from palette-fusion",
-					"transportConfigured", true)
-				certOptions.ClientOptions.Transport = &http.Client{
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							RootCAs:            certPool,
-							InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
-						},
-						// Use default proxy and other settings
-						Proxy: http.ProxyFromEnvironment,
-					},
-				}
-			}
-		}
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&certOptions.ClientOptions)
+		log.Info("Using centralized transport for ClientCertificateCredential")
 
 		cred, authErr = p.cache.GetOrStoreClientCert(p.GetTenantID(), p.Identity.Spec.ClientID, certsContent, nil, certOptions)
 
@@ -286,21 +233,9 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 			ID: azidentity.ClientID(p.Identity.Spec.ClientID),
 		}
 
-		// For AzSecret environments, configure TLS with custom certificate
-		if isAzSecret && certPool != nil {
-			log.Info("Configuring transport for ManagedIdentityCredential with certificate from palette-fusion",
-				"transportConfigured", true)
-			options.ClientOptions.Transport = &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{
-						RootCAs:            certPool,
-						InsecureSkipVerify: false, // Explicitly set to false to ensure certificate verification
-					},
-					// Use default proxy and other settings
-					Proxy: http.ProxyFromEnvironment,
-				},
-			}
-		}
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&options.ClientOptions)
+		log.Info("Using centralized transport for ManagedIdentityCredential")
 
 		cred, authErr = p.cache.GetOrStoreManagedIdentity(&options)
 

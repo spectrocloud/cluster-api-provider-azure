@@ -3,7 +3,6 @@ package remote
 import (
 	"context"
 	"crypto/x509"
-	"os"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -25,32 +24,25 @@ func TestNewClusterClient(t *testing.T) {
 	// Save the original certificate pool to restore it after tests
 	prevEnv := azure.AzSecretCertPool
 
-	// Save original environment variables
-	originalAzureEnv := os.Getenv("AZURE_ENVIRONMENT")
-
 	// Restore the environment after the test
 	defer func() {
 		azure.AzSecretCertPool = prevEnv
-		os.Setenv("AZURE_ENVIRONMENT", originalAzureEnv)
 	}()
 
 	tests := []struct {
 		name          string
-		isAzSecret    bool
 		certPool      *x509.CertPool
 		kubeconfig    []byte
 		expectedError bool
 	}{
 		{
-			name:          "standard environment",
-			isAzSecret:    false,
+			name:          "no custom certificate pool",
 			certPool:      nil,
 			kubeconfig:    []byte("fake-kubeconfig-data"),
 			expectedError: false, // Will still error due to invalid kubeconfig in real test
 		},
 		{
-			name:          "azsecret environment with cert pool",
-			isAzSecret:    true,
+			name:          "with custom certificate pool",
 			certPool:      testCertPool,
 			kubeconfig:    []byte("fake-kubeconfig-data"),
 			expectedError: false, // Will still error due to invalid kubeconfig in real test
@@ -59,15 +51,8 @@ func TestNewClusterClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock the AzSecret environment
+			// Set the global certificate pool
 			azure.AzSecretCertPool = tt.certPool
-
-			// Set the environment variable to control IsAzSecretEnvironment()
-			if tt.isAzSecret {
-				os.Setenv("AZURE_ENVIRONMENT", "AzureSecretCloud")
-			} else {
-				os.Setenv("AZURE_ENVIRONMENT", "AzurePublicCloud")
-			}
 
 			// Create a fake client with a kubeconfig secret
 			scheme := runtime.NewScheme()
@@ -96,7 +81,7 @@ func TestNewClusterClient(t *testing.T) {
 			_, err := NewClusterClient(context.Background(), "test", fakeClient, cluster)
 
 			// We'll get errors from the kubeconfig parsing, but that's expected
-			// Just verify that our code handled the AzSecret environment correctly
+			// Just verify that our code handled the certificate pool correctly
 			g.Expect(err).To(gomega.HaveOccurred()) // Invalid kubeconfig will always cause an error
 		})
 	}
