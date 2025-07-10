@@ -296,15 +296,7 @@ func (c *AzureCluster) setAPIServerLBDefaults() {
 					},
 				},
 			}
-			//fmt.Printf("[CAPZ-DEBUG] Set default internal LB IP: %s for cluster: %s\n", DefaultInternalLBIPAddress, c.ObjectMeta.Name)
-		} //else {
-		// Log existing configuration
-		//for i, frontendIP := range lb.FrontendIPs {
-		//	if frontendIP.PrivateIPAddress != "" {
-		//		fmt.Printf("[CAPZ-DEBUG] Using existing internal LB IP[%d]: %s for cluster: %s\n", i, frontendIP.PrivateIPAddress, c.ObjectMeta.Name)
-		//	}
-		//}
-		//}
+		}
 	}
 	c.SetAPIServerLBBackendPoolNameDefault()
 }

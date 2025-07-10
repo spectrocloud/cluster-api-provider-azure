@@ -86,13 +86,6 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	//  Order of precedence (highest -> lowest) is: error that is not an operationNotDoneError (i.e. error creating) -> operationNotDoneError (i.e. creating in progress) -> no error (i.e. created)
 	var result error
 	for _, lbSpec := range specs {
-		// Log the LB spec details for debugging
-		if lbSpec.ResourceName() == s.Scope.APIServerLB().Name && s.Scope.APIServerLB().Type == "Internal" {
-			fmt.Printf("[CAPZ-DEBUG] Creating/updating internal LB '%s' in resource group '%s'\n", lbSpec.ResourceName(), s.Scope.ResourceGroup())
-			if len(s.Scope.APIServerLB().FrontendIPs) > 0 {
-				fmt.Printf("[CAPZ-DEBUG] Requested private IP: %s\n", s.Scope.APIServerLB().FrontendIPs[0].PrivateIPAddress)
-			}
-		}
 
 		if lb, err := s.CreateOrUpdateResource(ctx, lbSpec, serviceName); err != nil {
 			if !azure.IsOperationNotDoneError(err) || result == nil {

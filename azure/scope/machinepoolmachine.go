@@ -39,9 +39,8 @@ import (
 	infrav1exp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1beta1"
 	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
+	"sigs.k8s.io/cluster-api-provider-azure/util/remote"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
-
-	customremote "sigs.k8s.io/cluster-api-provider-azure/util/remote"
 )
 
 const (
@@ -555,5 +554,5 @@ func getWorkloadClient(ctx context.Context, c client.Client, cluster client.Obje
 	)
 	defer done()
 
-	return customremote.NewClusterClient(ctx, MachinePoolMachineScopeName, c, cluster)
+	return remote.NewClusterClient(ctx, MachinePoolMachineScopeName, c, cluster)
 }
