@@ -18,7 +18,6 @@ package loadbalancers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 
@@ -86,7 +85,6 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	//  Order of precedence (highest -> lowest) is: error that is not an operationNotDoneError (i.e. error creating) -> operationNotDoneError (i.e. creating in progress) -> no error (i.e. created)
 	var result error
 	for _, lbSpec := range specs {
-
 		if lb, err := s.CreateOrUpdateResource(ctx, lbSpec, serviceName); err != nil {
 			if !azure.IsOperationNotDoneError(err) || result == nil {
 				result = err
@@ -103,7 +101,6 @@ func (s *Service) Reconcile(ctx context.Context) error {
 				if lbIPConfig != nil && len(lbIPConfig) > 0 &&
 					lbIPConfig[0].Properties.PrivateIPAddress != nil &&
 					*lbIPConfig[0].Properties.PrivateIPAddress != "" {
-					fmt.Printf("[CAPZ-DEBUG] Successfully created/updated LB '%s' with actual private IP: %s\n", lbSpec.ResourceName(), *lbIPConfig[0].Properties.PrivateIPAddress)
 					s.Scope.APIServerLB().FrontendIPs[0].PrivateIPAddress = *lbIPConfig[0].Properties.PrivateIPAddress
 				}
 			}

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,366 +14,419 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package loadbalancers
+package managedclusters
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
+	asocontainerservicev1 "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20231001"
+	asocontainerservicev1preview "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20231102preview"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/cluster-api/util/secret"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-azure/azure"
+	"sigs.k8s.io/cluster-api-provider-azure/azure/services/agentpools"
 )
 
-func getExistingLBWithMissingFrontendIPConfigs() armnetwork.LoadBalancer {
-	existingLB := newSamplePublicAPIServerLB(false, true, true, true, true)
-	existingLB.Properties.FrontendIPConfigurations = []*armnetwork.FrontendIPConfiguration{}
-
-	return existingLB
-}
-
-func getExistingLBWithMissingBackendPool() armnetwork.LoadBalancer {
-	existingLB := newSamplePublicAPIServerLB(true, false, true, true, true)
-	existingLB.Properties.BackendAddressPools = []*armnetwork.BackendAddressPool{}
-
-	return existingLB
-}
-
-func getExistingLBWithMissingLBRules() armnetwork.LoadBalancer {
-	existingLB := newSamplePublicAPIServerLB(true, true, false, true, true)
-	existingLB.Properties.LoadBalancingRules = []*armnetwork.LoadBalancingRule{}
-
-	return existingLB
-}
-
-func getExistingLBWithMissingProbes() armnetwork.LoadBalancer {
-	existingLB := newSamplePublicAPIServerLB(true, true, true, false, true)
-	existingLB.Properties.Probes = []*armnetwork.Probe{}
-
-	return existingLB
-}
-
-func getExistingLBWithMissingOutboundRules() armnetwork.LoadBalancer {
-	existingLB := newSamplePublicAPIServerLB(true, true, true, true, false)
-	existingLB.Properties.OutboundRules = []*armnetwork.OutboundRule{}
-
-	return existingLB
-}
-
 func TestParameters(t *testing.T) {
-	testcases := []struct {
-		name          string
-		spec          *LBSpec
-		existing      interface{}
-		expect        func(g *WithT, result interface{})
-		expectedError string
-	}{
-		{
-			name:     "public API load balancer exists with all expected values",
-			spec:     &fakePublicAPILBSpec,
-			existing: newSamplePublicAPIServerLB(false, false, false, false, false),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeNil())
-			},
-			expectedError: "",
-		},
-		{
-			name:     "internal API load balancer with all expected values",
-			spec:     &fakeInternalAPILBSpec,
-			existing: newDefaultInternalAPIServerLB(),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeNil())
-			},
-			expectedError: "",
-		},
-		{
-			name:     "node outbound load balancer exists with all expected values",
-			spec:     &fakeNodeOutboundLBSpec,
-			existing: newDefaultNodeOutboundLB(),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeNil())
-			},
-			expectedError: "",
-		},
-		{
-			name:     "load balancer exists with missing frontend IP configs",
-			spec:     &fakePublicAPILBSpec,
-			existing: getExistingLBWithMissingFrontendIPConfigs(),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeAssignableToTypeOf(armnetwork.LoadBalancer{}))
-				g.Expect(result.(armnetwork.LoadBalancer)).To(Equal(newSamplePublicAPIServerLB(false, true, true, true, true)))
-			},
-			expectedError: "",
-		},
-		{
-			name:     "load balancer exists with missing backend pool",
-			spec:     &fakePublicAPILBSpec,
-			existing: getExistingLBWithMissingBackendPool(),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeAssignableToTypeOf(armnetwork.LoadBalancer{}))
-				g.Expect(result.(armnetwork.LoadBalancer)).To(Equal(newSamplePublicAPIServerLB(true, false, true, true, true)))
-			},
-			expectedError: "",
-		},
-		{
-			name:     "load balancer exists with missing load balancing rules",
-			spec:     &fakePublicAPILBSpec,
-			existing: getExistingLBWithMissingLBRules(),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeAssignableToTypeOf(armnetwork.LoadBalancer{}))
-				g.Expect(result.(armnetwork.LoadBalancer)).To(Equal(newSamplePublicAPIServerLB(true, true, false, true, true)))
-			},
-			expectedError: "",
-		},
-		{
-			name:     "load balancer exists with missing probes",
-			spec:     &fakePublicAPILBSpec,
-			existing: getExistingLBWithMissingProbes(),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeAssignableToTypeOf(armnetwork.LoadBalancer{}))
-				g.Expect(result.(armnetwork.LoadBalancer)).To(Equal(newSamplePublicAPIServerLB(true, true, true, false, true)))
-			},
-			expectedError: "",
-		},
-		{
-			name:     "load balancer exists with missing outbound rules",
-			spec:     &fakePublicAPILBSpec,
-			existing: getExistingLBWithMissingOutboundRules(),
-			expect: func(g *WithT, result interface{}) {
-				g.Expect(result).To(BeAssignableToTypeOf(armnetwork.LoadBalancer{}))
-				g.Expect(result.(armnetwork.LoadBalancer)).To(Equal(newSamplePublicAPIServerLB(true, true, true, true, false)))
-			},
-			expectedError: "",
-		},
-	}
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			g := NewWithT(t)
-			t.Parallel()
+	t.Run("no existing managed cluster", func(t *testing.T) {
+		g := NewGomegaWithT(t)
 
-			result, err := tc.spec.Parameters(context.TODO(), tc.existing)
-			if tc.expectedError != "" {
-				g.Expect(err).To(HaveOccurred())
-				g.Expect(err).To(MatchError(tc.expectedError))
-			} else {
-				g.Expect(err).NotTo(HaveOccurred())
-			}
-			tc.expect(g, result)
-		})
-	}
-}
-
-func newDefaultNodeOutboundLB() armnetwork.LoadBalancer {
-	return armnetwork.LoadBalancer{
-		Tags: map[string]*string{
-			"sigs.k8s.io_cluster-api-provider-azure_cluster_my-cluster": ptr.To("owned"),
-			"sigs.k8s.io_cluster-api-provider-azure_role":               ptr.To(infrav1.NodeOutboundRole),
-		},
-		SKU:      &armnetwork.LoadBalancerSKU{Name: ptr.To(armnetwork.LoadBalancerSKUNameStandard)},
-		Location: ptr.To("my-location"),
-		Properties: &armnetwork.LoadBalancerPropertiesFormat{
-			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+		spec := &ManagedClusterSpec{
+			Name:              "name",
+			ResourceGroup:     "rg",
+			NodeResourceGroup: "node rg",
+			ClusterName:       "cluster",
+			VnetSubnetID:      "vnet subnet id",
+			Location:          "location",
+			Tags:              map[string]string{"additional": "tags"},
+			Version:           "version",
+			LoadBalancerSKU:   "lb sku",
+			NetworkPlugin:     "network plugin",
+			NetworkPluginMode: ptr.To(infrav1.NetworkPluginMode("network plugin mode")),
+			NetworkPolicy:     "network policy",
+			OutboundType:      ptr.To(infrav1.ManagedControlPlaneOutboundType("outbound type")),
+			SSHPublicKey:      base64.StdEncoding.EncodeToString([]byte("ssh")),
+			GetAllAgentPools: func() ([]azure.ASOResourceSpecGetter[genruntime.MetaObject], error) {
+				return []azure.ASOResourceSpecGetter[genruntime.MetaObject]{
+					&agentpools.AgentPoolSpec{
+						Replicas:  5,
+						Mode:      "mode",
+						AzureName: "agentpool-b",
+						Patches:   []string{`{"spec": {"tags": {"from": "patches"}}}`},
+					},
+					&agentpools.AgentPoolSpec{
+						Replicas:  10,
+						Mode:      "mode",
+						AzureName: "agentpool-a",
+					},
+				}, nil
+			},
+			PodCIDR:      "pod cidr",
+			ServiceCIDR:  "0.0.0.0/10",
+			DNSServiceIP: nil,
+			AddonProfiles: []AddonProfile{
 				{
-					Name: ptr.To("my-cluster-frontEnd"),
-					Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
-						PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/publicIPAddresses/outbound-publicip")},
+					Name:    "addon name",
+					Enabled: true,
+					Config:  map[string]string{"addon": "config"},
+				},
+			},
+			AADProfile: &AADProfile{
+				Managed: true,
+			},
+			SKU: &SKU{
+				Tier: "sku tier",
+			},
+			LoadBalancerProfile: &LoadBalancerProfile{
+				ManagedOutboundIPs: ptr.To(16),
+				OutboundIPPrefixes: []string{"outbound ip prefixes"},
+				OutboundIPs:        []string{"outbound ips"},
+			},
+			APIServerAccessProfile: &APIServerAccessProfile{
+				AuthorizedIPRanges: []string{"authorized ip ranges"},
+			},
+			AutoScalerProfile: &AutoScalerProfile{
+				Expander: ptr.To("expander"),
+			},
+			AutoUpgradeProfile: &ManagedClusterAutoUpgradeProfile{
+				UpgradeChannel: ptr.To(infrav1.UpgradeChannelRapid),
+			},
+			Identity: &infrav1.Identity{
+				Type:                           infrav1.ManagedControlPlaneIdentityType(asocontainerservicev1.ManagedClusterIdentity_Type_UserAssigned),
+				UserAssignedIdentityResourceID: "user assigned id",
+			},
+			KubeletUserAssignedIdentity: "kubelet id",
+			HTTPProxyConfig: &HTTPProxyConfig{
+				NoProxy: []string{"noproxy"},
+			},
+			OIDCIssuerProfile: &OIDCIssuerProfile{
+				Enabled: ptr.To(true),
+			},
+			DNSPrefix:            ptr.To("dns prefix"),
+			DisableLocalAccounts: ptr.To(true),
+			SecurityProfile: &ManagedClusterSecurityProfile{
+				AzureKeyVaultKms: &AzureKeyVaultKms{
+					Enabled:               ptr.To(true),
+					KeyID:                 ptr.To("KeyID"),
+					KeyVaultNetworkAccess: ptr.To(infrav1.KeyVaultNetworkAccessTypesPublic),
+				},
+				Defender: &ManagedClusterSecurityProfileDefender{
+					LogAnalyticsWorkspaceResourceID: ptr.To("LogAnalyticsWorkspaceResourceID"),
+					SecurityMonitoring: &ManagedClusterSecurityProfileDefenderSecurityMonitoring{
+						Enabled: ptr.To(true),
 					},
 				},
-			},
-			BackendAddressPools: []*armnetwork.BackendAddressPool{
-				{
-					Name: ptr.To("my-cluster-outboundBackendPool"),
+				ImageCleaner: &ManagedClusterSecurityProfileImageCleaner{
+					Enabled:       ptr.To(true),
+					IntervalHours: ptr.To(24),
+				},
+				WorkloadIdentity: &ManagedClusterSecurityProfileWorkloadIdentity{
+					Enabled: ptr.To(true),
 				},
 			},
-			LoadBalancingRules: []*armnetwork.LoadBalancingRule{},
-			Probes:             []*armnetwork.Probe{},
-			OutboundRules: []*armnetwork.OutboundRule{
-				{
-					Name: ptr.To("OutboundNATAllProtocols"),
-					Properties: &armnetwork.OutboundRulePropertiesFormat{
-						FrontendIPConfigurations: []*armnetwork.SubResource{
-							{ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-cluster/frontendIPConfigurations/my-cluster-frontEnd")},
-						},
-						BackendAddressPool: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-cluster/backendAddressPools/my-cluster-outboundBackendPool"),
-						},
-						Protocol:             ptr.To(armnetwork.LoadBalancerOutboundRuleProtocolAll),
-						IdleTimeoutInMinutes: ptr.To[int32](30),
-					},
-				},
-			},
-		},
-	}
-}
-
-func newSamplePublicAPIServerLB(verifyFrontendIP bool, verifyBackendAddressPools bool, verifyLBRules bool, verifyProbes bool, verifyOutboundRules bool) armnetwork.LoadBalancer {
-	var subnet *armnetwork.Subnet
-	var backendAddressPoolProps *armnetwork.BackendAddressPoolPropertiesFormat
-	enableFloatingIP := ptr.To(false)
-	numProbes := ptr.To[int32](4)
-	idleTimeout := ptr.To[int32](4)
-
-	if verifyFrontendIP {
-		subnet = &armnetwork.Subnet{
-			Name: ptr.To("fake-test-subnet"),
 		}
-	}
-	if verifyBackendAddressPools {
-		backendAddressPoolProps = &armnetwork.BackendAddressPoolPropertiesFormat{
-			Location: ptr.To("fake-test-location"),
-		}
-	}
-	if verifyLBRules {
-		enableFloatingIP = ptr.To(true)
-	}
-	if verifyProbes {
-		numProbes = ptr.To[int32](999)
-	}
-	if verifyOutboundRules {
-		idleTimeout = ptr.To[int32](1000)
-	}
 
-	return armnetwork.LoadBalancer{
-		Tags: map[string]*string{
-			"sigs.k8s.io_cluster-api-provider-azure_cluster_my-cluster": ptr.To("owned"),
-			"sigs.k8s.io_cluster-api-provider-azure_role":               ptr.To(infrav1.APIServerRole),
-		},
-		SKU:      &armnetwork.LoadBalancerSKU{Name: ptr.To(armnetwork.LoadBalancerSKUNameStandard)},
-		Location: ptr.To("my-location"),
-		Properties: &armnetwork.LoadBalancerPropertiesFormat{
-			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
-				{
-					Name: ptr.To("my-publiclb-frontEnd"),
-					Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
-						PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/publicIPAddresses/my-publicip")},
-						Subnet:          subnet, // Add to verify that FrontendIPConfigurations aren't overwritten on update
+		expected := &asocontainerservicev1.ManagedCluster{
+			Spec: asocontainerservicev1.ManagedCluster_Spec{
+				AadProfile: &asocontainerservicev1.ManagedClusterAADProfile{
+					EnableAzureRBAC: ptr.To(false),
+					Managed:         ptr.To(true),
+				},
+				AddonProfiles: map[string]asocontainerservicev1.ManagedClusterAddonProfile{
+					"addon name": {
+						Config:  map[string]string{"addon": "config"},
+						Enabled: ptr.To(true),
+					},
+				},
+				AgentPoolProfiles: []asocontainerservicev1.ManagedClusterAgentPoolProfile{
+					{
+						Count:             ptr.To(10),
+						EnableAutoScaling: ptr.To(false),
+						Mode:              ptr.To(asocontainerservicev1.AgentPoolMode("mode")),
+						Name:              ptr.To("agentpool-a"),
+						OsDiskSizeGB:      ptr.To(asocontainerservicev1.ContainerServiceOSDisk(0)),
+						Type:              ptr.To(asocontainerservicev1.AgentPoolType_VirtualMachineScaleSets),
+					},
+					{
+						Count:             ptr.To(5),
+						EnableAutoScaling: ptr.To(false),
+						Mode:              ptr.To(asocontainerservicev1.AgentPoolMode("mode")),
+						Name:              ptr.To("agentpool-b"),
+						OsDiskSizeGB:      ptr.To(asocontainerservicev1.ContainerServiceOSDisk(0)),
+						Type:              ptr.To(asocontainerservicev1.AgentPoolType_VirtualMachineScaleSets),
+						Tags:              map[string]string{"from": "patches"},
+					},
+				},
+				ApiServerAccessProfile: &asocontainerservicev1.ManagedClusterAPIServerAccessProfile{
+					AuthorizedIPRanges: []string{"authorized ip ranges"},
+				},
+				AutoScalerProfile: &asocontainerservicev1.ManagedClusterProperties_AutoScalerProfile{
+					Expander: ptr.To(asocontainerservicev1.ManagedClusterProperties_AutoScalerProfile_Expander("expander")),
+				},
+				AutoUpgradeProfile: &asocontainerservicev1.ManagedClusterAutoUpgradeProfile{
+					UpgradeChannel: ptr.To(asocontainerservicev1.ManagedClusterAutoUpgradeProfile_UpgradeChannel_Rapid),
+				},
+				AzureName:            "name",
+				DisableLocalAccounts: ptr.To(true),
+				DnsPrefix:            ptr.To("dns prefix"),
+				EnableRBAC:           ptr.To(true),
+				HttpProxyConfig: &asocontainerservicev1.ManagedClusterHTTPProxyConfig{
+					NoProxy: []string{"noproxy"},
+				},
+				Identity: &asocontainerservicev1.ManagedClusterIdentity{
+					Type: ptr.To(asocontainerservicev1.ManagedClusterIdentity_Type_UserAssigned),
+					UserAssignedIdentities: []asocontainerservicev1.UserAssignedIdentityDetails{
+						{
+							Reference: genruntime.ResourceReference{
+								ARMID: "user assigned id",
+							},
+						},
+					},
+				},
+				IdentityProfile: map[string]asocontainerservicev1.UserAssignedIdentity{
+					kubeletIdentityKey: {
+						ResourceReference: &genruntime.ResourceReference{
+							ARMID: "kubelet id",
+						},
+					},
+				},
+				KubernetesVersion: ptr.To("version"),
+				LinuxProfile: &asocontainerservicev1.ContainerServiceLinuxProfile{
+					AdminUsername: ptr.To(azure.DefaultAKSUserName),
+					Ssh: &asocontainerservicev1.ContainerServiceSshConfiguration{
+						PublicKeys: []asocontainerservicev1.ContainerServiceSshPublicKey{
+							{
+								KeyData: ptr.To("ssh"),
+							},
+						},
+					},
+				},
+				Location: ptr.To("location"),
+				NetworkProfile: &asocontainerservicev1.ContainerServiceNetworkProfile{
+					DnsServiceIP: ptr.To("0.0.0.10"),
+					LoadBalancerProfile: &asocontainerservicev1.ManagedClusterLoadBalancerProfile{
+						ManagedOutboundIPs: &asocontainerservicev1.ManagedClusterLoadBalancerProfile_ManagedOutboundIPs{
+							Count: ptr.To(16),
+						},
+						OutboundIPPrefixes: &asocontainerservicev1.ManagedClusterLoadBalancerProfile_OutboundIPPrefixes{
+							PublicIPPrefixes: []asocontainerservicev1.ResourceReference{
+								{
+									Reference: &genruntime.ResourceReference{
+										ARMID: "outbound ip prefixes",
+									},
+								},
+							},
+						},
+						OutboundIPs: &asocontainerservicev1.ManagedClusterLoadBalancerProfile_OutboundIPs{
+							PublicIPs: []asocontainerservicev1.ResourceReference{
+								{
+									Reference: &genruntime.ResourceReference{
+										ARMID: "outbound ips",
+									},
+								},
+							},
+						},
+					},
+					LoadBalancerSku:   ptr.To(asocontainerservicev1.ContainerServiceNetworkProfile_LoadBalancerSku("lb sku")),
+					NetworkPlugin:     ptr.To(asocontainerservicev1.NetworkPlugin("network plugin")),
+					NetworkPluginMode: ptr.To(asocontainerservicev1.ContainerServiceNetworkProfile_NetworkPluginMode("network plugin mode")),
+					NetworkPolicy:     ptr.To(asocontainerservicev1.ContainerServiceNetworkProfile_NetworkPolicy("network policy")),
+					OutboundType:      ptr.To(asocontainerservicev1.ContainerServiceNetworkProfile_OutboundType("outbound type")),
+					PodCidr:           ptr.To("pod cidr"),
+					ServiceCidr:       ptr.To("0.0.0.0/10"),
+				},
+				NodeResourceGroup: ptr.To("node rg"),
+				OidcIssuerProfile: &asocontainerservicev1.ManagedClusterOIDCIssuerProfile{
+					Enabled: ptr.To(true),
+				},
+				OperatorSpec: &asocontainerservicev1.ManagedClusterOperatorSpec{
+					Secrets: &asocontainerservicev1.ManagedClusterOperatorSecrets{
+						UserCredentials: &genruntime.SecretDestination{
+							Name: userKubeconfigSecretName("cluster"),
+							Key:  secret.KubeconfigDataName,
+						},
+					},
+					ConfigMaps: &asocontainerservicev1.ManagedClusterOperatorConfigMaps{
+						OIDCIssuerProfile: &genruntime.ConfigMapDestination{
+							Name: oidcIssuerURLConfigMapName("cluster"),
+							Key:  oidcIssuerProfileURL,
+						},
+					},
+				},
+				Owner: &genruntime.KnownResourceReference{
+					Name: "rg",
+				},
+				ServicePrincipalProfile: &asocontainerservicev1.ManagedClusterServicePrincipalProfile{
+					ClientId: ptr.To("msi"),
+				},
+				Sku: &asocontainerservicev1.ManagedClusterSKU{
+					Name: ptr.To(asocontainerservicev1.ManagedClusterSKU_Name_Base),
+					Tier: ptr.To(asocontainerservicev1.ManagedClusterSKU_Tier("sku tier")),
+				},
+				Tags: map[string]string{
+					"Name": "name",
+					"sigs.k8s.io_cluster-api-provider-azure_cluster_cluster": "owned",
+					"sigs.k8s.io_cluster-api-provider-azure_role":            "common",
+				},
+				SecurityProfile: &asocontainerservicev1.ManagedClusterSecurityProfile{
+					AzureKeyVaultKms: &asocontainerservicev1.AzureKeyVaultKms{
+						Enabled:               ptr.To(true),
+						KeyId:                 ptr.To("KeyID"),
+						KeyVaultNetworkAccess: ptr.To(asocontainerservicev1.AzureKeyVaultKms_KeyVaultNetworkAccess_Public),
+					},
+					Defender: &asocontainerservicev1.ManagedClusterSecurityProfileDefender{
+						LogAnalyticsWorkspaceResourceReference: &genruntime.ResourceReference{
+							ARMID: "LogAnalyticsWorkspaceResourceID",
+						},
+						SecurityMonitoring: &asocontainerservicev1.ManagedClusterSecurityProfileDefenderSecurityMonitoring{
+							Enabled: ptr.To(true),
+						},
+					},
+					ImageCleaner: &asocontainerservicev1.ManagedClusterSecurityProfileImageCleaner{
+						Enabled:       ptr.To(true),
+						IntervalHours: ptr.To(24),
+					},
+					WorkloadIdentity: &asocontainerservicev1.ManagedClusterSecurityProfileWorkloadIdentity{
+						Enabled: ptr.To(true),
 					},
 				},
 			},
-			BackendAddressPools: []*armnetwork.BackendAddressPool{
-				{
-					Name:       ptr.To("my-publiclb-backendPool"),
-					Properties: backendAddressPoolProps, // Add to verify that BackendAddressPools aren't overwritten on update
-				},
-			},
-			LoadBalancingRules: []*armnetwork.LoadBalancingRule{
-				{
-					Name: ptr.To(lbRuleHTTPS),
-					Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
-						DisableOutboundSnat:  ptr.To(true),
-						Protocol:             ptr.To(armnetwork.TransportProtocolTCP),
-						FrontendPort:         ptr.To[int32](6443),
-						BackendPort:          ptr.To[int32](6443),
-						IdleTimeoutInMinutes: ptr.To[int32](4),
-						EnableFloatingIP:     enableFloatingIP, // Add to verify that LoadBalancingRules aren't overwritten on update
-						LoadDistribution:     ptr.To(armnetwork.LoadDistributionDefault),
-						FrontendIPConfiguration: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-publiclb/frontendIPConfigurations/my-publiclb-frontEnd"),
-						},
-						BackendAddressPool: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-publiclb/backendAddressPools/my-publiclb-backendPool"),
-						},
-						Probe: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-publiclb/probes/HTTPSProbe"),
-						},
+		}
+
+		actual, err := spec.Parameters(context.Background(), nil)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(cmp.Diff(actual, expected)).To(BeEmpty())
+	})
+
+	t.Run("no existing preview managed cluster", func(t *testing.T) {
+		g := NewGomegaWithT(t)
+
+		spec := &ManagedClusterSpec{
+			Name:    "name",
+			Preview: true,
+			GetAllAgentPools: func() ([]azure.ASOResourceSpecGetter[genruntime.MetaObject], error) {
+				return []azure.ASOResourceSpecGetter[genruntime.MetaObject]{
+					&agentpools.AgentPoolSpec{
+						Replicas:  5,
+						Mode:      "mode",
+						AzureName: "agentpool",
+						Patches:   []string{`{"spec": {"tags": {"from": "patches"}}}`},
+						Preview:   true,
 					},
-				},
+				}, nil
 			},
-			Probes: []*armnetwork.Probe{
-				{
-					Name: ptr.To(httpsProbe),
-					Properties: &armnetwork.ProbePropertiesFormat{
-						Protocol:          ptr.To(armnetwork.ProbeProtocolHTTPS),
-						Port:              ptr.To[int32](6443),
-						RequestPath:       ptr.To(httpsProbeRequestPath),
-						IntervalInSeconds: ptr.To[int32](15),
-						NumberOfProbes:    numProbes, // Add to verify that Probes aren't overwritten on update
-					},
-				},
+		}
+
+		actual, err := spec.Parameters(context.Background(), nil)
+		g.Expect(err).NotTo(HaveOccurred())
+		_, ok := actual.(*asocontainerservicev1preview.ManagedCluster)
+		g.Expect(ok).To(BeTrue())
+	})
+
+	t.Run("with existing managed cluster", func(t *testing.T) {
+		g := NewGomegaWithT(t)
+
+		spec := &ManagedClusterSpec{
+			DNSPrefix: ptr.To("managed by CAPZ"),
+			Tags:      map[string]string{"additional": "tags"},
+			Version:   "1.25.9",
+		}
+		existing := &asocontainerservicev1.ManagedCluster{
+			Spec: asocontainerservicev1.ManagedCluster_Spec{
+				DnsPrefix:               ptr.To("set by the user"),
+				EnablePodSecurityPolicy: ptr.To(true), // set by the user
 			},
-			OutboundRules: []*armnetwork.OutboundRule{
-				{
-					Name: ptr.To("OutboundNATAllProtocols"),
-					Properties: &armnetwork.OutboundRulePropertiesFormat{
-						FrontendIPConfigurations: []*armnetwork.SubResource{
-							{ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-publiclb/frontendIPConfigurations/my-publiclb-frontEnd")},
-						},
-						BackendAddressPool: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-publiclb/backendAddressPools/my-publiclb-backendPool"),
-						},
-						Protocol:             ptr.To(armnetwork.LoadBalancerOutboundRuleProtocolAll),
-						IdleTimeoutInMinutes: idleTimeout, // Add to verify that OutboundRules aren't overwritten on update
-					},
-				},
+			Status: asocontainerservicev1.ManagedCluster_STATUS{
+				AgentPoolProfiles:        []asocontainerservicev1.ManagedClusterAgentPoolProfile_STATUS{},
+				Tags:                     map[string]string{},
+				CurrentKubernetesVersion: ptr.To("1.26.6"),
 			},
-		},
-	}
+		}
+
+		actualObj, err := spec.Parameters(context.Background(), existing)
+		actual := actualObj.(*asocontainerservicev1.ManagedCluster)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(actual.Spec.AgentPoolProfiles).To(BeNil())
+		g.Expect(actual.Spec.Tags).To(BeNil())
+		g.Expect(actual.Spec.DnsPrefix).To(Equal(ptr.To("managed by CAPZ")))
+		g.Expect(actual.Spec.EnablePodSecurityPolicy).To(Equal(ptr.To(true)))
+		g.Expect(actual.Spec.KubernetesVersion).NotTo(BeNil())
+		g.Expect(*actual.Spec.KubernetesVersion).To(Equal("1.26.6"))
+	})
+
+	t.Run("updating existing managed cluster to a non nil DNS Service IP", func(t *testing.T) {
+		g := NewGomegaWithT(t)
+
+		spec := &ManagedClusterSpec{
+			DNSPrefix:    ptr.To("managed by CAPZ"),
+			Tags:         map[string]string{"additional": "tags"},
+			ServiceCIDR:  "123.200.198.0/10",
+			DNSServiceIP: ptr.To("123.200.198.99"),
+		}
+		existing := &asocontainerservicev1.ManagedCluster{
+			Spec: asocontainerservicev1.ManagedCluster_Spec{
+				DnsPrefix:               ptr.To("set by the user"),
+				EnablePodSecurityPolicy: ptr.To(true), // set by the user
+
+func getSampleManagedCluster() containerservice.ManagedCluster {
+	return containerservice.ManagedCluster{
+		ManagedClusterProperties: &containerservice.ManagedClusterProperties{
+			KubernetesVersion: to.StringPtr("v1.22.0"),
+			AgentPoolProfiles: &[]containerservice.ManagedClusterAgentPoolProfile{
+				converters.AgentPoolToManagedClusterAgentPoolProfile(azure.AgentPoolSpec{
+					Name:          "test-agentpool-0",
+					Mode:          string(infrav1exp.NodePoolModeSystem),
+					ResourceGroup: "test-rg",
+					Replicas:      int32(2),
+				}),
+				converters.AgentPoolToManagedClusterAgentPoolProfile(azure.AgentPoolSpec{
+					Name:              "test-agentpool-1",
+					Mode:              string(infrav1exp.NodePoolModeUser),
+					ResourceGroup:     "test-rg",
+					Replicas:          int32(4),
+					Cluster:           "test-managedcluster",
+					SKU:               "test_SKU",
+					Version:           to.StringPtr("v1.22.0"),
+					VnetSubnetID:      "fake/subnet/id",
+					MaxPods:           to.Int32Ptr(int32(32)),
+					AvailabilityZones: []string{"1", "2"},
+				}),
+			},
+			Status: asocontainerservicev1.ManagedCluster_STATUS{
+				AgentPoolProfiles: []asocontainerservicev1.ManagedClusterAgentPoolProfile_STATUS{},
+				Tags:              map[string]string{},
+			},
+		}
+
+		actualObj, err := spec.Parameters(context.Background(), existing)
+		actual := actualObj.(*asocontainerservicev1.ManagedCluster)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(actual.Spec.AgentPoolProfiles).To(BeNil())
+		g.Expect(actual.Spec.Tags).To(BeNil())
+		g.Expect(actual.Spec.DnsPrefix).To(Equal(ptr.To("managed by CAPZ")))
+		g.Expect(actual.Spec.EnablePodSecurityPolicy).To(Equal(ptr.To(true)))
+		g.Expect(actual.Spec.NetworkProfile.DnsServiceIP).To(Equal(ptr.To("123.200.198.99")))
+		g.Expect(actual.Spec.NetworkProfile.ServiceCidr).To(Equal(ptr.To("123.200.198.0/10")))
+	})
 }
 
-func newDefaultInternalAPIServerLB() armnetwork.LoadBalancer {
-	return armnetwork.LoadBalancer{
-		Tags: map[string]*string{
-			"sigs.k8s.io_cluster-api-provider-azure_cluster_my-cluster": ptr.To("owned"),
-			"sigs.k8s.io_cluster-api-provider-azure_role":               ptr.To(infrav1.APIServerRole),
-		},
-		SKU:      &armnetwork.LoadBalancerSKU{Name: ptr.To(armnetwork.LoadBalancerSKUNameStandard)},
-		Location: ptr.To("my-location"),
-		Properties: &armnetwork.LoadBalancerPropertiesFormat{
-			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
-				{
-					Name: ptr.To("my-private-lb-frontEnd"),
-					Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
-						PrivateIPAllocationMethod: ptr.To(armnetwork.IPAllocationMethodStatic),
-						Subnet: &armnetwork.Subnet{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/virtualNetworks/my-vnet/subnets/my-cp-subnet"),
-						},
-						PrivateIPAddress: ptr.To("10.0.0.10"),
-					},
-				},
-			},
-			BackendAddressPools: []*armnetwork.BackendAddressPool{
-				{
-					Name: ptr.To("my-private-lb-backendPool"),
-				},
-			},
-			LoadBalancingRules: []*armnetwork.LoadBalancingRule{
-				{
-					Name: ptr.To(lbRuleHTTPS),
-					Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
-						DisableOutboundSnat:  ptr.To(true),
-						Protocol:             ptr.To(armnetwork.TransportProtocolTCP),
-						FrontendPort:         ptr.To[int32](6443),
-						BackendPort:          ptr.To[int32](6443),
-						IdleTimeoutInMinutes: ptr.To[int32](4),
-						EnableFloatingIP:     ptr.To(false),
-						LoadDistribution:     ptr.To(armnetwork.LoadDistributionDefault),
-						FrontendIPConfiguration: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-private-lb/frontendIPConfigurations/my-private-lb-frontEnd"),
-						},
-						BackendAddressPool: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-private-lb/backendAddressPools/my-private-lb-backendPool"),
-						},
-						Probe: &armnetwork.SubResource{
-							ID: ptr.To("/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/my-private-lb/probes/HTTPSProbe"),
-						},
-					},
-				},
-			},
-			OutboundRules: []*armnetwork.OutboundRule{},
-			Probes: []*armnetwork.Probe{
-				{
-					Name: ptr.To(httpsProbe),
-					Properties: &armnetwork.ProbePropertiesFormat{
-						Protocol:          ptr.To(armnetwork.ProbeProtocolHTTPS),
-						Port:              ptr.To[int32](6443),
-						RequestPath:       ptr.To(httpsProbeRequestPath),
-						IntervalInSeconds: ptr.To[int32](15),
-						NumberOfProbes:    ptr.To[int32](4),
-					},
-				},
-			},
-		},
-	}
+func TestOIDCIssuerURLConfigMap(t *testing.T) {
+	t.Run("get oidc issuer profile", func(t *testing.T) {
+		g := NewGomegaWithT(t)
+
+		clusterName := "my-cluster"
+		actualOIDCIssuerConfigMapName := oidcIssuerURLConfigMapName(clusterName)
+
+		g.Expect(actualOIDCIssuerConfigMapName).To(Equal("my-cluster-aso-oidc-issuer-profile"))
+	})
 }
