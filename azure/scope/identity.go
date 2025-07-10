@@ -50,7 +50,6 @@ type CredentialsProvider interface {
 	GetTenantID() string
 	GetTokenCredential(ctx context.Context, resourceManagerEndpoint, activeDirectoryEndpoint, tokenAudience string) (azcore.TokenCredential, error)
 	Type() infrav1.IdentityType
-	GetAzSecretCertificate(ctx context.Context) ([]byte, error)
 }
 
 // AzureCredentialsProvider represents a credential provider with azure cluster identity.
@@ -95,32 +94,9 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 
 	tracingProvider := azotel.NewTracingProvider(otel.GetTracerProvider(), nil)
 
-	// Get certificate data from the identity secret if available
-	// This will be used to update the global certificate pool
-	azSecretCert, err := p.GetAzSecretCertificate(ctx)
-	if err != nil {
-		log.Error(err, "Failed to get certificate from identity secret")
-		return nil, errors.Wrap(err, "failed to get certificate from identity secret")
-	}
-
-	if len(azSecretCert) > 0 {
-		log.Info("Retrieved certificate from identity Secret",
-			"certLength", len(azSecretCert))
-
-		// Update the global transport with the certificate
-		if err := UpdateGlobalTransportWithCertificate(azSecretCert); err != nil {
-			log.Error(err, "Failed to update global transport with certificate")
-			return nil, errors.Wrap(err, "failed to update global transport with certificate")
-		}
-
-		// Store the certificate in the global pool for other clients to use
-		azure.AzSecretCertPool = GetGlobalCertPool()
-		log.Info("Updated global certificate pool for Azure clients")
-
-		// Also store the raw certificate data for kubeconfig injection
-		azure.AzSecretCertData = azSecretCert
-		log.Info("Stored raw certificate data in global AzSecretCertData for kubeconfig injection")
-	}
+	// Create credentials using the global transport system
+	// Certificate handling is done at initialization time in azure_secret_cloud.go
+	log.Info("Using global transport system for Azure credential configuration")
 
 	switch p.Identity.Spec.Type {
 	case infrav1.WorkloadIdentity:
@@ -338,56 +314,4 @@ func IsClusterNamespaceAllowed(ctx context.Context, k8sClient client.Client, all
 	}
 
 	return false
-}
-
-// GetAzSecretCertificate fetches the Azure Secret certificate from the Secret when using AzSecret cloud.
-func (p *AzureCredentialsProvider) GetAzSecretCertificate(ctx context.Context) ([]byte, error) {
-	ctx, log, done := tele.StartSpanWithLogger(ctx, "azure.scope.AzureCredentialsProvider.GetAzSecretCertificate")
-	defer done()
-
-	// Simply check the identity's referenced Secret for the certificate
-	// This is the same Secret that contains the clientSecret
-	if p.Identity.Spec.ClientSecret.Name == "" {
-		log.Info("No ClientSecret reference set in AzureClusterIdentity")
-		return nil, nil
-	}
-
-	secretRef := p.Identity.Spec.ClientSecret
-	key := types.NamespacedName{
-		Namespace: secretRef.Namespace,
-		Name:      secretRef.Name,
-	}
-
-	log.Info("Checking identity Secret for certificate",
-		"secretName", secretRef.Name,
-		"namespace", secretRef.Namespace)
-
-	secret := &corev1.Secret{}
-	if err := p.Client.Get(ctx, key, secret); err != nil {
-		log.Error(err, "Unable to fetch identity Secret")
-		return nil, errors.Wrap(err, "Unable to fetch identity Secret")
-	}
-
-	// Look for the certificate in the Secret (checking the standard key first)
-	if certData, ok := secret.Data["azureSecretCert"]; ok && len(certData) > 0 {
-		log.Info("Found certificate in identity Secret",
-			"key", "azureSecretCert",
-			"certLength", len(certData))
-		return certData, nil
-	}
-
-	// Certificate not found in standard key, try common alternatives
-	log.Info("Certificate not found under 'azureSecretCert' key, checking alternatives")
-	certKeys := []string{"ca.crt", "tls.crt", "certificate", "cert"}
-	for _, keyName := range certKeys {
-		if certData, ok := secret.Data[keyName]; ok && len(certData) > 0 {
-			log.Info("Found certificate using alternative key",
-				"key", keyName,
-				"certLength", len(certData))
-			return certData, nil
-		}
-	}
-
-	log.Info("No certificate found in identity Secret")
-	return nil, nil
 }

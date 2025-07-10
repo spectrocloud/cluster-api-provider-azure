@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -42,6 +43,14 @@ func init() {
 	path := os.Getenv(AzureEnvironentFolderEnvName)
 	log.Info("Path is", path)
 	if path == "" {
+		// If no environment folder is set, try fallback certificate path
+		certPath := "/home/ubuntu/combine-harbor-combined.crt"
+		if certData, err := os.ReadFile(certPath); err == nil && len(certData) > 0 {
+			log.Info("loaded certificate from fallback path", "path", certPath)
+			if err := initializeGlobalTransportWithCertData(certData); err != nil {
+				log.Error(err, "failed to initialize global transport with fallback certificate")
+			}
+		}
 		return
 	}
 	files, err := os.ReadDir(path)
@@ -50,38 +59,66 @@ func init() {
 		return
 	}
 
+	var certData []byte
 	for _, file := range files {
-		if !file.IsDir() && strings.EqualFold(filepath.Ext(file.Name()), ".json") {
-			if env, err := azure.EnvironmentFromFile(filepath.Join(path, file.Name())); err == nil {
-				azure.SetEnvironment(env.Name, env)
-				log.Info("loaded Azure environment from file", "EnvName", env.Name)
-				log.Info("loaded Azure environment from file", "filename", file.Name())
-			} else {
-				log.Error(err, "failed to load Azure environment from file", "filename", file.Name())
+		if !file.IsDir() {
+			filePath := filepath.Join(path, file.Name())
+			fileExt := filepath.Ext(file.Name())
+
+			// Load Azure environment JSON files
+			if strings.EqualFold(fileExt, ".json") {
+				// Read and log the file contents for debugging
+				if jsonData, err := os.ReadFile(filePath); err == nil {
+					//fmt.Printf("CAPZ: Loading Azure environment JSON file: %s\n", file.Name())
+					fmt.Printf("CAPZ: JSON file contents: %s\n", string(jsonData))
+				}
+
+				if env, err := azure.EnvironmentFromFile(filePath); err == nil {
+					azure.SetEnvironment(env.Name, env)
+					//fmt.Printf("CAPZ: Successfully loaded Azure environment: %s\n", env.Name)
+					//fmt.Printf("CAPZ: ResourceManagerEndpoint: %s\n", env.ResourceManagerEndpoint)
+					//fmt.Printf("CAPZ: ActiveDirectoryEndpoint: %s\n", env.ActiveDirectoryEndpoint)
+					log.Info("loaded Azure environment from file", "EnvName", env.Name)
+					log.Info("loaded Azure environment from file", "filename", file.Name())
+				} else {
+					fmt.Printf("CAPZ: Failed to load Azure environment from file %s: %v\n", file.Name(), err)
+					log.Error(err, "failed to load Azure environment from file", "filename", file.Name())
+				}
+			}
+
+			// Load certificate files
+			if strings.EqualFold(fileExt, ".crt") || strings.EqualFold(fileExt, ".pem") {
+				if data, err := os.ReadFile(filePath); err == nil && len(data) > 0 {
+					certData = data
+					fmt.Printf("CAPZ: Successfully loaded certificate from file: %s (%d bytes)\n", file.Name(), len(data))
+					log.Info("loaded certificate from file", "filename", file.Name())
+				} else {
+					log.Error(err, "failed to load certificate from file", "filename", file.Name())
+				}
+			}
+		}
+	}
+
+	// Initialize global transport with certificate data if found
+	if len(certData) > 0 {
+		if err := initializeGlobalTransportWithCertData(certData); err != nil {
+			log.Error(err, "failed to initialize global transport with certificate")
+		}
+	} else {
+		// If no certificate found in environment folder, try fallback path
+		certPath := "/home/ubuntu/combine-harbor-combined.crt"
+		if fallbackCertData, err := os.ReadFile(certPath); err == nil && len(fallbackCertData) > 0 {
+			log.Info("loaded certificate from fallback path", "path", certPath)
+			if err := initializeGlobalTransportWithCertData(fallbackCertData); err != nil {
+				log.Error(err, "failed to initialize global transport with fallback certificate")
 			}
 		}
 	}
 }
 
-// InitializeGlobalTransport initializes the global certificate pool and HTTP transport
-// This should be called once during application startup after loading Azure environments
-func InitializeGlobalTransport() error {
-	globalTransportMutex.Lock()
-	defer globalTransportMutex.Unlock()
-
-	// Get certificate data from the environment or secret
-	certData, err := getAzSecretCertificateData()
-	if err != nil {
-		return errors.Wrap(err, "failed to get certificate data")
-	}
-
-	// Initialize the global transport system
-	return updateGlobalTransportLocked(certData)
-}
-
-// UpdateGlobalTransportWithCertificate updates the global transport with new certificate data
-// This is called when certificates are discovered from identity secrets
-func UpdateGlobalTransportWithCertificate(certData []byte) error {
+// initializeGlobalTransportWithCertData initializes the global transport with provided certificate data
+// This is called during init() when certificate files are found in the environment folder
+func initializeGlobalTransportWithCertData(certData []byte) error {
 	globalTransportMutex.Lock()
 	defer globalTransportMutex.Unlock()
 
@@ -197,37 +234,4 @@ func ConfigureRestConfig(config *rest.Config) {
 	if globalTransport != nil {
 		config.Transport = globalTransport
 	}
-}
-
-// getAzSecretCertificateData retrieves certificate data from environment or secrets
-func getAzSecretCertificateData() ([]byte, error) {
-	// Try multiple sources for certificate data, in order of preference:
-
-	// 1. Environment variable pointing to certificate file
-	certPath := os.Getenv("AZURE_SECRET_CERT_PATH")
-	if certPath != "" {
-		if certData, err := os.ReadFile(certPath); err == nil {
-			return certData, nil
-		}
-	}
-
-	// 2. Environment variable with certificate content directly
-	certContent := os.Getenv("AZURE_SECRET_CERT_DATA")
-	if certContent != "" {
-		return []byte(certContent), nil
-	}
-
-	// 3. Check well-known certificate file locations
-	wellKnownPaths := []string{
-		"/home/ubuntu/combine-harbor-combined.crt",
-	}
-
-	for _, path := range wellKnownPaths {
-		if certData, err := os.ReadFile(path); err == nil && len(certData) > 0 {
-			return certData, nil
-		}
-	}
-
-	// 4. No certificate found - this is fine for standard Azure environments
-	return nil, nil
 }
