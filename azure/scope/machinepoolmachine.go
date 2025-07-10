@@ -40,6 +40,7 @@ import (
 	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/remote"
+
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
 

@@ -19,51 +19,34 @@ package scope
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
-	asocontainerservicev1preview "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20230315preview"
-	asokubernetesconfigurationv1 "github.com/Azure/azure-service-operator/v2/api/kubernetesconfiguration/v1api20230501"
-	asonetworkv1api20201101 "github.com/Azure/azure-service-operator/v2/api/network/v1api20201101"
-	asonetworkv1api20220701 "github.com/Azure/azure-service-operator/v2/api/network/v1api20220701"
-	asoresourcesv1 "github.com/Azure/azure-service-operator/v2/api/resources/v1api20200601"
-	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
-	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
-	"sigs.k8s.io/cluster-api/util/secret"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
+	"k8s.io/utils/pointer"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
-	"sigs.k8s.io/cluster-api-provider-azure/azure/services/aksextensions"
-	"sigs.k8s.io/cluster-api-provider-azure/azure/services/fleetsmembers"
+	"sigs.k8s.io/cluster-api-provider-azure/azure/services/asogroups"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/groups"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/managedclusters"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/privateendpoints"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/subnets"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/virtualnetworks"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
-	"sigs.k8s.io/cluster-api-provider-azure/util/remote"
+	"sigs.k8s.io/cluster-api-provider-azure/util/maps"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/secret"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	resourceHealthWarningInitialGracePeriod = 1 * time.Hour
-	// managedControlPlaneScopeName is the sourceName, or more specifically the UserAgent, of client used to store the Cluster Info configmap.
-	managedControlPlaneScopeName = "azuremanagedcontrolplane-scope"
-)
+const resourceHealthWarningInitialGracePeriod = 1 * time.Hour
 
 // ManagedControlPlaneScopeParams defines the input parameters used to create a new managed
 // control plane.
@@ -74,8 +57,6 @@ type ManagedControlPlaneScopeParams struct {
 	ControlPlane        *infrav1.AzureManagedControlPlane
 	ManagedMachinePools []ManagedMachinePool
 	Cache               *ManagedControlPlaneCache
-	Timeouts            azure.AsyncReconciler
-	CredentialCache     azure.CredentialCache
 }
 
 // NewManagedControlPlaneScope creates a new Scope from the supplied parameters.
@@ -92,13 +73,19 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 		return nil, errors.New("failed to generate new scope from nil ControlPlane")
 	}
 
-	credentialsProvider, err := NewAzureCredentialsProvider(ctx, params.CredentialCache, params.Client, params.ControlPlane.Spec.IdentityRef, params.ControlPlane.Namespace)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to init credentials provider")
-	}
+	if params.ControlPlane.Spec.IdentityRef == nil {
+		if err := params.AzureClients.setCredentials(params.ControlPlane.Spec.SubscriptionID, params.ControlPlane.Spec.AzureEnvironment); err != nil {
+			return nil, errors.Wrap(err, "failed to create Azure session")
+		}
+	} else {
+		credentialsProvider, err := NewManagedControlPlaneCredentialsProvider(ctx, params.Client, params.ControlPlane)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to init credentials provider")
+		}
 
-	if err := params.AzureClients.setCredentialsWithProvider(ctx, params.ControlPlane.Spec.SubscriptionID, params.ControlPlane.Spec.AzureEnvironment, credentialsProvider); err != nil {
-		return nil, errors.Wrap(err, "failed to configure azure settings and credentials for Identity")
+		if err := params.AzureClients.setCredentialsWithProvider(ctx, params.ControlPlane.Spec.SubscriptionID, params.ControlPlane.Spec.AzureEnvironment, credentialsProvider); err != nil {
+			return nil, errors.Wrap(err, "failed to configure azure settings and credentials for Identity")
+		}
 	}
 
 	if params.Cache == nil {
@@ -116,25 +103,22 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 		Cluster:             params.Cluster,
 		ControlPlane:        params.ControlPlane,
 		ManagedMachinePools: params.ManagedMachinePools,
-		PatchHelper:         helper,
+		patchHelper:         helper,
 		cache:               params.Cache,
-		AsyncReconciler:     params.Timeouts,
 	}, nil
 }
 
 // ManagedControlPlaneScope defines the basic context for an actuator to operate upon.
 type ManagedControlPlaneScope struct {
-	Client              client.Client
-	PatchHelper         *patch.Helper
-	adminKubeConfigData []byte
-	userKubeConfigData  []byte
-	cache               *ManagedControlPlaneCache
+	Client         client.Client
+	patchHelper    *patch.Helper
+	kubeConfigData []byte
+	cache          *ManagedControlPlaneCache
 
 	AzureClients
 	Cluster             *clusterv1.Cluster
 	ControlPlane        *infrav1.AzureManagedControlPlane
 	ManagedMachinePools []ManagedMachinePool
-	azure.AsyncReconciler
 }
 
 // ManagedControlPlaneCache stores ManagedControlPlane data locally so we don't have to hit the API multiple times within the same reconcile loop.
@@ -145,16 +129,6 @@ type ManagedControlPlaneCache struct {
 // GetClient returns the controller-runtime client.
 func (s *ManagedControlPlaneScope) GetClient() client.Client {
 	return s.Client
-}
-
-// ASOOwner implements aso.Scope.
-func (s *ManagedControlPlaneScope) ASOOwner() client.Object {
-	return s.ControlPlane
-}
-
-// GetDeletionTimestamp returns the deletion timestamp of the cluster.
-func (s *ManagedControlPlaneScope) GetDeletionTimestamp() *metav1.Time {
-	return s.Cluster.DeletionTimestamp
 }
 
 // ResourceGroup returns the managed control plane's resource group.
@@ -215,11 +189,6 @@ func (s *ManagedControlPlaneScope) AdditionalTags() infrav1.Tags {
 	return tags
 }
 
-// AzureFleetMembership returns the cluster AzureFleetMembership.
-func (s *ManagedControlPlaneScope) AzureFleetMembership() *infrav1.FleetsMember {
-	return s.ControlPlane.Spec.FleetsMember
-}
-
 // SubscriptionID returns the Azure client Subscription ID.
 func (s *ManagedControlPlaneScope) SubscriptionID() string {
 	return s.AzureClients.SubscriptionID()
@@ -230,6 +199,11 @@ func (s *ManagedControlPlaneScope) BaseURI() string {
 	return s.AzureClients.ResourceManagerEndpoint
 }
 
+// Authorizer returns the Azure client Authorizer.
+func (s *ManagedControlPlaneScope) Authorizer() autorest.Authorizer {
+	return s.AzureClients.Authorizer
+}
+
 // PatchObject persists the cluster configuration and status.
 func (s *ManagedControlPlaneScope) PatchObject(ctx context.Context) error {
 	ctx, _, done := tele.StartSpanWithLogger(ctx, "scope.ManagedControlPlaneScope.PatchObject")
@@ -237,7 +211,7 @@ func (s *ManagedControlPlaneScope) PatchObject(ctx context.Context) error {
 
 	conditions.SetSummary(s.ControlPlane)
 
-	return s.PatchHelper.Patch(
+	return s.patchHelper.Patch(
 		ctx,
 		s.ControlPlane,
 		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
@@ -270,31 +244,30 @@ func (s *ManagedControlPlaneScope) Vnet() *infrav1.VnetSpec {
 	}
 }
 
-// GroupSpecs returns the resource group spec.
-func (s *ManagedControlPlaneScope) GroupSpecs() []azure.ASOResourceSpecGetter[*asoresourcesv1.ResourceGroup] {
-	specs := []azure.ASOResourceSpecGetter[*asoresourcesv1.ResourceGroup]{
-		&groups.GroupSpec{
-			Name:           s.ResourceGroup(),
-			AzureName:      s.ResourceGroup(),
-			Location:       s.Location(),
-			ClusterName:    s.ClusterName(),
-			AdditionalTags: s.AdditionalTags(),
-		},
+// GroupSpec returns the resource group spec.
+func (s *ManagedControlPlaneScope) GroupSpec() azure.ResourceSpecGetter {
+	return &groups.GroupSpec{
+		Name:           s.ResourceGroup(),
+		Location:       s.Location(),
+		ClusterName:    s.ClusterName(),
+		AdditionalTags: s.AdditionalTags(),
 	}
-	if s.Vnet().ResourceGroup != "" && s.Vnet().ResourceGroup != s.ResourceGroup() {
-		specs = append(specs, &groups.GroupSpec{
-			Name:           azure.GetNormalizedKubernetesName(s.Vnet().ResourceGroup),
-			AzureName:      s.Vnet().ResourceGroup,
-			Location:       s.Location(),
-			ClusterName:    s.ClusterName(),
-			AdditionalTags: s.AdditionalTags(),
-		})
+}
+
+// ASOGroupSpec returns the resource group spec.
+func (s *ManagedControlPlaneScope) ASOGroupSpec() azure.ASOResourceSpecGetter {
+	return &asogroups.GroupSpec{
+		Name:           s.ResourceGroup(),
+		Namespace:      s.Cluster.Namespace,
+		Location:       s.Location(),
+		ClusterName:    s.ClusterName(),
+		AdditionalTags: s.AdditionalTags(),
+		Owner:          *metav1.NewControllerRef(s.ControlPlane, infrav1.GroupVersion.WithKind("AzureManagedControlPlane")),
 	}
-	return specs
 }
 
 // VNetSpec returns the virtual network spec.
-func (s *ManagedControlPlaneScope) VNetSpec() azure.ASOResourceSpecGetter[*asonetworkv1api20201101.VirtualNetwork] {
+func (s *ManagedControlPlaneScope) VNetSpec() azure.ResourceSpecGetter {
 	return &virtualnetworks.VNetSpec{
 		ResourceGroup:  s.Vnet().ResourceGroup,
 		Name:           s.Vnet().Name,
@@ -303,22 +276,6 @@ func (s *ManagedControlPlaneScope) VNetSpec() azure.ASOResourceSpecGetter[*asone
 		ClusterName:    s.ClusterName(),
 		AdditionalTags: s.AdditionalTags(),
 	}
-}
-
-// AzureFleetsMemberSpec returns the fleet spec.
-func (s *ManagedControlPlaneScope) AzureFleetsMemberSpec() []azure.ASOResourceSpecGetter[*asocontainerservicev1preview.FleetsMember] {
-	if s.AzureFleetMembership() == nil {
-		return nil
-	}
-	return []azure.ASOResourceSpecGetter[*asocontainerservicev1preview.FleetsMember]{&fleetsmembers.AzureFleetsMemberSpec{
-		Name:                 s.AzureFleetMembership().Name,
-		ClusterName:          s.ClusterName(),
-		ClusterResourceGroup: s.ResourceGroup(),
-		Group:                s.AzureFleetMembership().Group,
-		SubscriptionID:       s.SubscriptionID(),
-		ManagerName:          s.AzureFleetMembership().ManagerName,
-		ManagerResourceGroup: s.AzureFleetMembership().ManagerResourceGroup,
-	}}
 }
 
 // ControlPlaneRouteTable returns the cluster controlplane routetable.
@@ -337,8 +294,8 @@ func (s *ManagedControlPlaneScope) NodeNatGateway() infrav1.NatGateway {
 }
 
 // SubnetSpecs returns the subnets specs.
-func (s *ManagedControlPlaneScope) SubnetSpecs() []azure.ASOResourceSpecGetter[*asonetworkv1api20201101.VirtualNetworksSubnet] {
-	return []azure.ASOResourceSpecGetter[*asonetworkv1api20201101.VirtualNetworksSubnet]{
+func (s *ManagedControlPlaneScope) SubnetSpecs() []azure.ResourceSpecGetter {
+	return []azure.ResourceSpecGetter{
 		&subnets.SubnetSpec{
 			Name:              s.NodeSubnet().Name,
 			ResourceGroup:     s.ResourceGroup(),
@@ -347,6 +304,7 @@ func (s *ManagedControlPlaneScope) SubnetSpecs() []azure.ASOResourceSpecGetter[*
 			VNetName:          s.Vnet().Name,
 			VNetResourceGroup: s.Vnet().ResourceGroup,
 			IsVNetManaged:     s.IsVnetManaged(),
+			Role:              infrav1.SubnetNode,
 			ServiceEndpoints:  s.NodeSubnet().ServiceEndpoints,
 		},
 	}
@@ -428,24 +386,18 @@ func (s *ManagedControlPlaneScope) IsIPv6Enabled() bool {
 // IsVnetManaged returns true if the vnet is managed.
 func (s *ManagedControlPlaneScope) IsVnetManaged() bool {
 	if s.cache.isVnetManaged != nil {
-		return ptr.Deref(s.cache.isVnetManaged, false)
+		return pointer.BoolDeref(s.cache.isVnetManaged, false)
 	}
 	// TODO refactor `IsVnetManaged` so that it is able to use an upstream context
 	// see https://github.com/kubernetes-sigs/cluster-api-provider-azure/issues/2581
 	ctx := context.Background()
 	ctx, log, done := tele.StartSpanWithLogger(ctx, "scope.ManagedControlPlaneScope.IsVnetManaged")
 	defer done()
-
-	vnet := s.VNetSpec().ResourceRef()
-	vnet.SetNamespace(s.ASOOwner().GetNamespace())
-	err := s.Client.Get(ctx, client.ObjectKeyFromObject(vnet), vnet)
+	isManaged, err := virtualnetworks.New(s).IsManaged(ctx)
 	if err != nil {
-		log.Error(err, "Unable to determine if ManagedControlPlaneScope VNET is managed by capz, assuming unmanaged", "AzureManagedCluster", s.ClusterName())
-		return false
+		log.Error(err, "Unable to determine if ManagedControlPlaneScope VNET is managed by capz", "AzureManagedCluster", s.ClusterName())
 	}
-
-	isManaged := infrav1.Tags(vnet.Status.Tags).HasOwned(s.ClusterName())
-	s.cache.isVnetManaged = ptr.To(isManaged)
+	s.cache.isVnetManaged = pointer.Bool(isManaged)
 	return isManaged
 }
 
@@ -460,7 +412,7 @@ func (s *ManagedControlPlaneScope) APIServerLBName() string {
 }
 
 // APIServerLBPoolName returns the API Server LB backend pool name.
-func (s *ManagedControlPlaneScope) APIServerLBPoolName() string {
+func (s *ManagedControlPlaneScope) APIServerLBPoolName(_ string) string {
 	return "" // does not apply for AKS
 }
 
@@ -493,100 +445,17 @@ func (s *ManagedControlPlaneScope) CloudProviderConfigOverrides() *infrav1.Cloud
 }
 
 // FailureDomains returns the failure domains for the cluster.
-func (s *ManagedControlPlaneScope) FailureDomains() []*string {
-	return []*string{}
+func (s *ManagedControlPlaneScope) FailureDomains() []string {
+	return []string{}
 }
 
-// AreLocalAccountsDisabled checks if local accounts are disabled for aad enabled managed clusters.
-func (s *ManagedControlPlaneScope) AreLocalAccountsDisabled() bool {
-	if s.IsAADEnabled() &&
-		s.ControlPlane.Spec.DisableLocalAccounts != nil &&
-		*s.ControlPlane.Spec.DisableLocalAccounts {
-		return true
-	}
-	return false
-}
-
-// IsAADEnabled checks if azure active directory is enabled for managed clusters.
-func (s *ManagedControlPlaneScope) IsAADEnabled() bool {
-	if s.ControlPlane.Spec.AADProfile != nil && s.ControlPlane.Spec.AADProfile.Managed {
-		return true
-	}
-	return false
-}
-
-// SetVersionStatus sets the k8s version in status.
-func (s *ManagedControlPlaneScope) SetVersionStatus(version string) {
-	s.ControlPlane.Status.Version = version
-}
-
-func isManagedVersionUpgrade(managedControlPlane *infrav1.AzureManagedControlPlane) bool {
-	return managedControlPlane.Spec.AutoUpgradeProfile != nil &&
-		managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != nil &&
-		(*managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1.UpgradeChannelNone &&
-			*managedControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != infrav1.UpgradeChannelNodeImage)
-}
-
-// IsLocalAcountsDisabled checks if local accounts have been disabled.
-func (s *ManagedControlPlaneScope) IsLocalAcountsDisabled() bool {
-	if s.IsAadEnabled() &&
-		s.ControlPlane.Spec.DisableLocalAccounts != nil &&
-		*s.ControlPlane.Spec.DisableLocalAccounts {
-		return true
-	}
-	return false
-}
-
-// IsAadEnabled checks if aad is enabled.
-func (s *ManagedControlPlaneScope) IsAadEnabled() bool {
-	if s.ControlPlane.Spec.AADProfile != nil && s.ControlPlane.Spec.AADProfile.Managed {
-		return true
-	}
-	return false
-}
-
-// SetAutoUpgradeVersionStatus sets the auto upgrade version in status
-func (s *ManagedControlPlaneScope) SetAutoUpgradeVersionStatus(version string) {
-	s.ControlPlane.Status.AutoUpgradeVersion = version
-}
-
-// IsManagedVersionUpgrade checks if auto upgrade profile is set and if the upgradeChannel is of the type patch, stable or rapid.
-func (s *ManagedControlPlaneScope) IsManagedVersionUpgrade() bool {
-	return s.IsPatchAutoUpgrade() || s.IsStableAutoUpgrade() || s.IsRapidAutoUpgrade()
-}
-
-// IsAutoUpgradeStable checks if auto upgrade channel is stable.
-func (s *ManagedControlPlaneScope) IsStableAutoUpgrade() bool {
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; string(*upgradeChannel) == string(infrav1.UpgradeChannelStable) {
-			return true
-		}
-	}
-	return false
-}
-
-// IsAutoUpgradeStable checks if auto upgrade channel is rapid.
-func (s *ManagedControlPlaneScope) IsRapidAutoUpgrade() bool {
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; string(*upgradeChannel) == string(infrav1.UpgradeChannelRapid) {
-			return true
-		}
-	}
-	return false
-}
-
-// IsAutoUpgradeStable checks if auto upgrade channel is patch.
-func (s *ManagedControlPlaneScope) IsPatchAutoUpgrade() bool {
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		if upgradeChannel := s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel; string(*upgradeChannel) == string(infrav1.UpgradeChannelPatch) {
-			return true
-		}
-	}
-	return false
+// ManagedClusterAnnotations returns the annotations for the managed cluster.
+func (s *ManagedControlPlaneScope) ManagedClusterAnnotations() map[string]string {
+	return s.ControlPlane.Annotations
 }
 
 // ManagedClusterSpec returns the managed cluster spec.
-func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGetter[genruntime.MetaObject] {
+func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ResourceSpecGetter {
 	managedClusterSpec := managedclusters.ManagedClusterSpec{
 		Name:              s.ControlPlane.Name,
 		ResourceGroup:     s.ControlPlane.Spec.ResourceGroupName,
@@ -594,57 +463,28 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		ClusterName:       s.ClusterName(),
 		Location:          s.ControlPlane.Spec.Location,
 		Tags:              s.ControlPlane.Spec.AdditionalTags,
+		Headers:           maps.FilterByKeyPrefix(s.ManagedClusterAnnotations(), infrav1.CustomHeaderPrefix),
 		Version:           strings.TrimPrefix(s.ControlPlane.Spec.Version, "v"),
+		SSHPublicKey:      s.ControlPlane.Spec.SSHPublicKey,
 		DNSServiceIP:      s.ControlPlane.Spec.DNSServiceIP,
 		VnetSubnetID: azure.SubnetID(
 			s.ControlPlane.Spec.SubscriptionID,
-			s.Vnet().ResourceGroup,
+			s.VNetSpec().ResourceGroupName(),
 			s.ControlPlane.Spec.VirtualNetwork.Name,
 			s.ControlPlane.Spec.VirtualNetwork.Subnet.Name,
 		),
-		GetAllAgentPools:            s.GetAllAgentPoolSpecs,
-		OutboundType:                s.ControlPlane.Spec.OutboundType,
-		Identity:                    s.ControlPlane.Spec.Identity,
-		KubeletUserAssignedIdentity: s.ControlPlane.Spec.KubeletUserAssignedIdentity,
-		NetworkPluginMode:           s.ControlPlane.Spec.NetworkPluginMode,
-		DNSPrefix:                   s.ControlPlane.Spec.DNSPrefix,
-		Patches:                     s.ControlPlane.Spec.ASOManagedClusterPatches,
-		Preview:                     ptr.Deref(s.ControlPlane.Spec.EnablePreviewFeatures, false),
+		GetAllAgentPools: s.GetAllAgentPoolSpecs,
+		OutboundType:     s.ControlPlane.Spec.OutboundType,
 	}
 
-	if s.ControlPlane.Spec.OutboundType != nil {
-		managedClusterSpec.OutboundType = s.ControlPlane.Spec.OutboundType
-	}
-
-	if s.ControlPlane.Spec.DNSPrefix != nil {
-		managedClusterSpec.DNSPrefix = s.ControlPlane.Spec.DNSPrefix
-	} else {
-		managedClusterSpec.DNSPrefix = &s.ControlPlane.Name
-	}
-
-	if s.ControlPlane.Spec.FqdnSubdomain != nil {
-		managedClusterSpec.FqdnSubdomain = s.ControlPlane.Spec.FqdnSubdomain
-	}
-
-	if s.ControlPlane.Spec.DockerBridgeCidr != nil {
-		managedClusterSpec.DockerBridgeCidr = s.ControlPlane.Spec.DockerBridgeCidr
-	}
-
-	if s.ControlPlane.Spec.SSHPublicKey != nil {
-		managedClusterSpec.SSHPublicKey = *s.ControlPlane.Spec.SSHPublicKey
-	}
 	if s.ControlPlane.Spec.NetworkPlugin != nil {
 		managedClusterSpec.NetworkPlugin = *s.ControlPlane.Spec.NetworkPlugin
 	}
 	if s.ControlPlane.Spec.NetworkPolicy != nil {
 		managedClusterSpec.NetworkPolicy = *s.ControlPlane.Spec.NetworkPolicy
 	}
-	if s.ControlPlane.Spec.NetworkDataplane != nil {
-		managedClusterSpec.NetworkDataplane = s.ControlPlane.Spec.NetworkDataplane
-	}
 	if s.ControlPlane.Spec.LoadBalancerSKU != nil {
-		// CAPZ accepts Standard/Basic, Azure accepts standard/basic
-		managedClusterSpec.LoadBalancerSKU = strings.ToLower(*s.ControlPlane.Spec.LoadBalancerSKU)
+		managedClusterSpec.LoadBalancerSKU = *s.ControlPlane.Spec.LoadBalancerSKU
 	}
 
 	if clusterNetwork := s.Cluster.Spec.ClusterNetwork; clusterNetwork != nil {
@@ -661,9 +501,6 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 			Managed:             s.ControlPlane.Spec.AADProfile.Managed,
 			EnableAzureRBAC:     s.ControlPlane.Spec.AADProfile.Managed,
 			AdminGroupObjectIDs: s.ControlPlane.Spec.AADProfile.AdminGroupObjectIDs,
-		}
-		if s.ControlPlane.Spec.DisableLocalAccounts != nil {
-			managedClusterSpec.DisableLocalAccounts = s.ControlPlane.Spec.DisableLocalAccounts
 		}
 	}
 
@@ -702,20 +539,6 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		}
 	}
 
-	if s.ControlPlane.Spec.UserAssignedIdentities != nil {
-		managedClusterSpec.UserAssignedIdentities = []managedclusters.UserAssignedIdentity{
-			{
-				ProviderID: s.ControlPlane.Spec.UserAssignedIdentities[0].ProviderID,
-			},
-		}
-	}
-
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		managedClusterSpec.AutoUpgradeProfile = &managedclusters.ManagedClusterAutoUpgradeProfile{
-			UpgradeChannel: s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel,
-		}
-	}
-
 	if s.ControlPlane.Spec.AutoScalerProfile != nil {
 		managedClusterSpec.AutoScalerProfile = &managedclusters.AutoScalerProfile{
 			BalanceSimilarNodeGroups:      (*string)(s.ControlPlane.Spec.AutoScalerProfile.BalanceSimilarNodeGroups),
@@ -738,89 +561,13 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		}
 	}
 
-	if s.ControlPlane.Spec.HTTPProxyConfig != nil {
-		managedClusterSpec.HTTPProxyConfig = &managedclusters.HTTPProxyConfig{
-			HTTPProxy:  s.ControlPlane.Spec.HTTPProxyConfig.HTTPProxy,
-			HTTPSProxy: s.ControlPlane.Spec.HTTPProxyConfig.HTTPSProxy,
-			NoProxy:    s.ControlPlane.Spec.HTTPProxyConfig.NoProxy,
-			TrustedCA:  s.ControlPlane.Spec.HTTPProxyConfig.TrustedCA,
-		}
-	}
-
-	if s.ControlPlane.Spec.OIDCIssuerProfile != nil {
-		managedClusterSpec.OIDCIssuerProfile = &managedclusters.OIDCIssuerProfile{
-			Enabled: s.ControlPlane.Spec.OIDCIssuerProfile.Enabled,
-		}
-	}
-
-	if s.ControlPlane.Spec.AutoUpgradeProfile != nil {
-		managedClusterSpec.AutoUpgradeProfile = &managedclusters.ManagedClusterAutoUpgradeProfile{}
-		if s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel != nil {
-			managedClusterSpec.AutoUpgradeProfile.UpgradeChannel = s.ControlPlane.Spec.AutoUpgradeProfile.UpgradeChannel
-		}
-	}
-
-	if s.ControlPlane.Spec.SecurityProfile != nil {
-		managedClusterSpec.SecurityProfile = s.getManagedClusterSecurityProfile()
-	}
-
-	if len(s.ControlPlane.Spec.UserAssignedIdentities) > 0 {
-		var userAssignedIdentities []managedclusters.UserAssignedIdentity
-		for _, i := range s.ControlPlane.Spec.UserAssignedIdentities {
-			userAssignedIdentities = append(userAssignedIdentities, managedclusters.UserAssignedIdentity{
-				ProviderID: i.ProviderID,
-			})
-		}
-	}
-
 	return &managedClusterSpec
 }
 
-// GetManagedClusterSecurityProfile gets the security profile for managed cluster.
-func (s *ManagedControlPlaneScope) getManagedClusterSecurityProfile() *managedclusters.ManagedClusterSecurityProfile {
-	securityProfile := &managedclusters.ManagedClusterSecurityProfile{}
-	if s.ControlPlane.Spec.SecurityProfile.AzureKeyVaultKms != nil {
-		securityProfile.AzureKeyVaultKms = &managedclusters.AzureKeyVaultKms{
-			Enabled: ptr.To(s.ControlPlane.Spec.SecurityProfile.AzureKeyVaultKms.Enabled),
-			KeyID:   ptr.To(s.ControlPlane.Spec.SecurityProfile.AzureKeyVaultKms.KeyID),
-		}
-		if s.ControlPlane.Spec.SecurityProfile.AzureKeyVaultKms.KeyVaultNetworkAccess != nil {
-			securityProfile.AzureKeyVaultKms.KeyVaultNetworkAccess = s.ControlPlane.Spec.SecurityProfile.AzureKeyVaultKms.KeyVaultNetworkAccess
-		}
-		if s.ControlPlane.Spec.SecurityProfile.AzureKeyVaultKms.KeyVaultResourceID != nil {
-			securityProfile.AzureKeyVaultKms.KeyVaultResourceID = s.ControlPlane.Spec.SecurityProfile.AzureKeyVaultKms.KeyVaultResourceID
-		}
-	}
-
-	if s.ControlPlane.Spec.SecurityProfile.Defender != nil {
-		securityProfile.Defender = &managedclusters.ManagedClusterSecurityProfileDefender{
-			LogAnalyticsWorkspaceResourceID: ptr.To(s.ControlPlane.Spec.SecurityProfile.Defender.LogAnalyticsWorkspaceResourceID),
-			SecurityMonitoring: &managedclusters.ManagedClusterSecurityProfileDefenderSecurityMonitoring{
-				Enabled: ptr.To(s.ControlPlane.Spec.SecurityProfile.Defender.SecurityMonitoring.Enabled),
-			},
-		}
-	}
-
-	if s.ControlPlane.Spec.SecurityProfile.ImageCleaner != nil {
-		securityProfile.ImageCleaner = &managedclusters.ManagedClusterSecurityProfileImageCleaner{
-			Enabled:       ptr.To(s.ControlPlane.Spec.SecurityProfile.ImageCleaner.Enabled),
-			IntervalHours: s.ControlPlane.Spec.SecurityProfile.ImageCleaner.IntervalHours,
-		}
-	}
-
-	if s.ControlPlane.Spec.SecurityProfile.WorkloadIdentity != nil {
-		securityProfile.WorkloadIdentity = &managedclusters.ManagedClusterSecurityProfileWorkloadIdentity{
-			Enabled: ptr.To(s.ControlPlane.Spec.SecurityProfile.WorkloadIdentity.Enabled),
-		}
-	}
-
-	return securityProfile
-}
-
 // GetAllAgentPoolSpecs gets a slice of azure.AgentPoolSpec for the list of agent pools.
-func (s *ManagedControlPlaneScope) GetAllAgentPoolSpecs() ([]azure.ASOResourceSpecGetter[genruntime.MetaObject], error) {
+func (s *ManagedControlPlaneScope) GetAllAgentPoolSpecs() ([]azure.ResourceSpecGetter, error) {
 	var (
-		ammps           = make([]azure.ASOResourceSpecGetter[genruntime.MetaObject], 0, len(s.ManagedMachinePools))
+		ammps           = make([]azure.ResourceSpecGetter, 0, len(s.ManagedMachinePools))
 		foundSystemPool = false
 	)
 	for _, pool := range s.ManagedMachinePools {
@@ -836,7 +583,7 @@ func (s *ManagedControlPlaneScope) GetAllAgentPoolSpecs() ([]azure.ASOResourceSp
 			foundSystemPool = true
 		}
 
-		ammp := buildAgentPoolSpec(s.ControlPlane, pool.MachinePool, pool.InfraMachinePool)
+		ammp := buildAgentPoolSpec(s.ControlPlane, pool.MachinePool, pool.InfraMachinePool, pool.InfraMachinePool.Annotations)
 		ammps = append(ammps, ammp)
 	}
 
@@ -860,109 +607,20 @@ func (s *ManagedControlPlaneScope) MakeEmptyKubeConfigSecret() corev1.Secret {
 			Name:      secret.Name(s.Cluster.Name, secret.Kubeconfig),
 			Namespace: s.Cluster.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(s.ControlPlane, infrav1.GroupVersion.WithKind(infrav1.AzureManagedControlPlaneKind)),
-			},
-			Labels: map[string]string{clusterv1.ClusterNameLabel: s.Cluster.Name},
-		},
-	}
-}
-
-// GetAdminKubeconfigData returns admin kubeconfig.
-func (s *ManagedControlPlaneScope) GetAdminKubeconfigData() []byte {
-	return s.adminKubeConfigData
-}
-
-// SetAdminKubeconfigData sets admin kubeconfig data.
-func (s *ManagedControlPlaneScope) SetAdminKubeconfigData(kubeConfigData []byte) {
-	s.adminKubeConfigData = kubeConfigData
-}
-
-// GetUserKubeconfigData returns user kubeconfig, required when using AAD with AKS cluster.
-func (s *ManagedControlPlaneScope) GetUserKubeconfigData() []byte {
-	return s.userKubeConfigData
-}
-
-// SetUserKubeconfigData sets userKubeconfig data.
-func (s *ManagedControlPlaneScope) SetUserKubeconfigData(kubeConfigData []byte) {
-	s.userKubeConfigData = kubeConfigData
-}
-
-// MakeClusterCA returns a cluster CA Secret for the managed control plane.
-func (s *ManagedControlPlaneScope) MakeClusterCA() *corev1.Secret {
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret.Name(s.Cluster.Name, secret.ClusterCA),
-			Namespace: s.Cluster.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(s.ControlPlane, infrav1.GroupVersion.WithKind(infrav1.AzureManagedControlPlaneKind)),
+				*metav1.NewControllerRef(s.ControlPlane, infrav1.GroupVersion.WithKind("AzureManagedControlPlane")),
 			},
 		},
 	}
 }
 
-// GetAdminKubeConfigData returns admin kubeconfig.
-func (s *ManagedControlPlaneScope) GetAdminKubeConfigData() []byte {
-	return s.adminKubeConfigData
+// GetKubeConfigData returns a []byte that contains kubeconfig.
+func (s *ManagedControlPlaneScope) GetKubeConfigData() []byte {
+	return s.kubeConfigData
 }
 
-// SetAdminKubeConfigData sets adminKubeconfig data.
-func (s *ManagedControlPlaneScope) SetAdminKubeConfigData(kubeConfigData []byte) {
-	s.adminKubeConfigData = kubeConfigData
-}
-
-// GetUserKubeConfigData returns user kubeconfig, required when using AAD with AKS cluster.
-func (s *ManagedControlPlaneScope) GetUserKubeConfigData() []byte {
-	return s.userKubeConfigData
-}
-
-// SetUserKubeConfigData sets userKubeconfig data.
-func (s *ManagedControlPlaneScope) SetUserKubeConfigData(kubeConfigData []byte) {
-	s.userKubeConfigData = kubeConfigData
-}
-
-// StoreClusterInfo stores the discovery cluster-info configmap in the kube-public namespace on the AKS cluster so kubeadm can access it to join nodes.
-func (s *ManagedControlPlaneScope) StoreClusterInfo(ctx context.Context, caData []byte) error {
-	remoteclient, err := remote.NewClusterClient(ctx, managedControlPlaneScopeName, s.Client, types.NamespacedName{
-		Namespace: s.Cluster.Namespace,
-		Name:      s.Cluster.Name,
-	})
-	if err != nil {
-		return errors.Wrap(err, "failed to create remote cluster kubeclient")
-	}
-
-	discoveryFile := clientcmdapi.NewConfig()
-	discoveryFile.Clusters[""] = &clientcmdapi.Cluster{
-		CertificateAuthorityData: caData,
-		Server: fmt.Sprintf(
-			"%s:%d",
-			s.ControlPlane.Spec.ControlPlaneEndpoint.Host,
-			s.ControlPlane.Spec.ControlPlaneEndpoint.Port,
-		),
-	}
-
-	data, err := yaml.Marshal(&discoveryFile)
-	if err != nil {
-		return errors.Wrap(err, "failed to serialize cluster-info to yaml")
-	}
-
-	clusterInfo := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      bootstrapapi.ConfigMapClusterInfo,
-			Namespace: metav1.NamespacePublic,
-		},
-		Data: map[string]string{
-			bootstrapapi.KubeConfigKey: string(data),
-		},
-	}
-
-	if _, err := controllerutil.CreateOrUpdate(ctx, remoteclient, clusterInfo, func() error {
-		clusterInfo.Data[bootstrapapi.KubeConfigKey] = string(data)
-		return nil
-	}); err != nil {
-		return errors.Wrapf(err, "failed to reconcile certificate authority data secret for cluster")
-	}
-
-	return nil
+// SetKubeConfigData sets kubeconfig data.
+func (s *ManagedControlPlaneScope) SetKubeConfigData(kubeConfigData []byte) {
+	s.kubeConfigData = kubeConfigData
 }
 
 // SetLongRunningOperationState will set the future on the AzureManagedControlPlane status to allow the resource to continue
@@ -1052,6 +710,22 @@ func (s *ManagedControlPlaneScope) SetAnnotation(key, value string) {
 	s.ControlPlane.Annotations[key] = value
 }
 
+// TagsSpecs returns the tag specs for the ManagedControlPlane.
+func (s *ManagedControlPlaneScope) TagsSpecs() []azure.TagsSpec {
+	return []azure.TagsSpec{
+		{
+			Scope:      azure.ResourceGroupID(s.SubscriptionID(), s.ResourceGroup()),
+			Tags:       s.AdditionalTags(),
+			Annotation: azure.RGTagsLastAppliedAnnotation,
+		},
+		{
+			Scope:      azure.ManagedClusterID(s.SubscriptionID(), s.ResourceGroup(), s.ManagedClusterSpec().ResourceName()),
+			Tags:       s.AdditionalTags(),
+			Annotation: azure.ManagedClusterTagsLastAppliedAnnotation,
+		},
+	}
+}
+
 // AvailabilityStatusResource refers to the AzureManagedControlPlane.
 func (s *ManagedControlPlaneScope) AvailabilityStatusResource() conditions.Setter {
 	return s.ControlPlane
@@ -1073,19 +747,19 @@ func (s *ManagedControlPlaneScope) AvailabilityStatusFilter(cond *clusterv1.Cond
 }
 
 // PrivateEndpointSpecs returns the private endpoint specs.
-func (s *ManagedControlPlaneScope) PrivateEndpointSpecs() []azure.ASOResourceSpecGetter[*asonetworkv1api20220701.PrivateEndpoint] {
-	privateEndpointSpecs := make([]azure.ASOResourceSpecGetter[*asonetworkv1api20220701.PrivateEndpoint], 0, len(s.ControlPlane.Spec.VirtualNetwork.Subnet.PrivateEndpoints))
+func (s *ManagedControlPlaneScope) PrivateEndpointSpecs() []azure.ResourceSpecGetter {
+	privateEndpointSpecs := make([]azure.ResourceSpecGetter, len(s.ControlPlane.Spec.VirtualNetwork.Subnet.PrivateEndpoints))
 
 	for _, privateEndpoint := range s.ControlPlane.Spec.VirtualNetwork.Subnet.PrivateEndpoints {
 		privateEndpointSpec := &privateendpoints.PrivateEndpointSpec{
 			Name:                       privateEndpoint.Name,
-			ResourceGroup:              s.Vnet().ResourceGroup,
+			ResourceGroup:              s.VNetSpec().ResourceGroupName(),
 			Location:                   privateEndpoint.Location,
 			CustomNetworkInterfaceName: privateEndpoint.CustomNetworkInterfaceName,
 			PrivateIPAddresses:         privateEndpoint.PrivateIPAddresses,
 			SubnetID: azure.SubnetID(
 				s.ControlPlane.Spec.SubscriptionID,
-				s.Vnet().ResourceGroup,
+				s.VNetSpec().ResourceGroupName(),
 				s.ControlPlane.Spec.VirtualNetwork.Name,
 				s.ControlPlane.Spec.VirtualNetwork.Subnet.Name,
 			),
@@ -1104,45 +778,9 @@ func (s *ManagedControlPlaneScope) PrivateEndpointSpecs() []azure.ASOResourceSpe
 			}
 			privateEndpointSpec.PrivateLinkServiceConnections = append(privateEndpointSpec.PrivateLinkServiceConnections, pl)
 		}
+
 		privateEndpointSpecs = append(privateEndpointSpecs, privateEndpointSpec)
 	}
 
 	return privateEndpointSpecs
-}
-
-// SetOIDCIssuerProfileStatus sets the status for the OIDC issuer profile config.
-func (s *ManagedControlPlaneScope) SetOIDCIssuerProfileStatus(oidc *infrav1.OIDCIssuerProfileStatus) {
-	s.ControlPlane.Status.OIDCIssuerProfile = oidc
-}
-
-// AKSExtension returns the cluster AKS extensions.
-func (s *ManagedControlPlaneScope) AKSExtension() []infrav1.AKSExtension {
-	return s.ControlPlane.Spec.Extensions
-}
-
-// AKSExtensionSpecs returns the AKS extension specs.
-func (s *ManagedControlPlaneScope) AKSExtensionSpecs() []azure.ASOResourceSpecGetter[*asokubernetesconfigurationv1.Extension] {
-	if s.AKSExtension() == nil {
-		return nil
-	}
-	extensionSpecs := make([]azure.ASOResourceSpecGetter[*asokubernetesconfigurationv1.Extension], 0, len(s.ControlPlane.Spec.Extensions))
-	for _, extension := range s.AKSExtension() {
-		extensionSpec := &aksextensions.AKSExtensionSpec{
-			Name:                    extension.Name,
-			Namespace:               s.Cluster.Namespace,
-			AutoUpgradeMinorVersion: extension.AutoUpgradeMinorVersion,
-			ConfigurationSettings:   extension.ConfigurationSettings,
-			ExtensionType:           extension.ExtensionType,
-			ReleaseTrain:            extension.ReleaseTrain,
-			Version:                 extension.Version,
-			Owner:                   azure.ManagedClusterID(s.SubscriptionID(), s.ResourceGroup(), s.ControlPlane.Name),
-			Plan:                    extension.Plan,
-			AKSAssignedIdentityType: extension.AKSAssignedIdentityType,
-			ExtensionIdentity:       extension.Identity,
-		}
-
-		extensionSpecs = append(extensionSpecs, extensionSpec)
-	}
-
-	return extensionSpecs
 }
