@@ -43,14 +43,7 @@ func init() {
 	path := os.Getenv(AzureEnvironentFolderEnvName)
 	log.Info("Path is", path)
 	if path == "" {
-		// If no environment folder is set, try fallback certificate path
-		certPath := "/home/ubuntu/combine-harbor-combined.crt"
-		if certData, err := os.ReadFile(certPath); err == nil && len(certData) > 0 {
-			log.Info("loaded certificate from fallback path", "path", certPath)
-			if err := initializeGlobalTransportWithCertData(certData); err != nil {
-				log.Error(err, "failed to initialize global transport with fallback certificate")
-			}
-		}
+		// If no environment folder is set, treat as Public/Gov cloud (no custom cert)
 		return
 	}
 	files, err := os.ReadDir(path)
@@ -105,15 +98,10 @@ func init() {
 			log.Error(err, "failed to initialize global transport with certificate")
 		}
 	} else {
-		// If no certificate found in environment folder, try fallback path
-		certPath := "/home/ubuntu/combine-harbor-combined.crt"
-		if fallbackCertData, err := os.ReadFile(certPath); err == nil && len(fallbackCertData) > 0 {
-			log.Info("loaded certificate from fallback path", "path", certPath)
-			if err := initializeGlobalTransportWithCertData(fallbackCertData); err != nil {
-				log.Error(err, "failed to initialize global transport with fallback certificate")
-			}
-		}
+		// If environment folder is set but no certificates found, log error
+		log.Error(errors.New("no certificate files found in environment folder"), "expected certificate files (.crt or .pem) but none found", "path", path)
 	}
+	// If no certificate found in environment folder, treat as Public/Gov cloud (no custom cert)
 }
 
 // initializeGlobalTransportWithCertData initializes the global transport with provided certificate data
