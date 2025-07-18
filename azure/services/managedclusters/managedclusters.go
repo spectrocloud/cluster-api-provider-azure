@@ -142,43 +142,54 @@ func postCreateOrUpdateResourceHook(ctx context.Context, scope ManagedClusterSco
   The user needs to ensure to provide service principal with admin AAD privileges.
 */
 func reconcileKubeconfig(ctx context.Context, scope ManagedClusterScope, namespace string) (adminKubeConfigData []byte, userKubeConfigData []byte, err error) {
+	fmt.Printf("=== DEBUG: reconcileKubeconfig() called for cluster: %s ===\n", scope.ClusterName())
+	fmt.Printf("DEBUG: Namespace: %s\n", namespace)
+	fmt.Printf("DEBUG: IsAADEnabled: %v\n", scope.IsAADEnabled())
+	fmt.Printf("DEBUG: AreLocalAccountsDisabled: %v\n", scope.AreLocalAccountsDisabled())
+
 	if scope.IsAADEnabled() {
+		fmt.Printf("DEBUG: AAD is enabled, getting user kubeconfig data\n")
 		if userKubeConfigData, err = getUserKubeconfigData(ctx, scope, namespace); err != nil {
+			fmt.Printf("DEBUG: ERROR - Failed to get user kubeconfig: %v\n", err)
 			return nil, nil, errors.Wrap(err, "error while trying to get user kubeconfig")
 		}
+		fmt.Printf("DEBUG: Got user kubeconfig data: %d bytes\n", len(userKubeConfigData))
 	}
 
 	if scope.AreLocalAccountsDisabled() {
+		fmt.Printf("DEBUG: Local accounts disabled, using user kubeconfig with token path\n")
 		userKubeconfigWithToken, err := getUserKubeConfigWithToken(ctx, userKubeConfigData, scope)
 		if err != nil {
+			fmt.Printf("DEBUG: ERROR - Failed to get user kubeconfig with token: %v\n", err)
 			return nil, nil, errors.Wrap(err, "error while trying to get user kubeconfig with token")
 		}
+		fmt.Printf("DEBUG: Successfully got user kubeconfig with token: %d bytes\n", len(userKubeconfigWithToken))
 		return userKubeconfigWithToken, userKubeConfigData, nil
 	}
 
+	fmt.Printf("DEBUG: Using admin kubeconfig path (local accounts enabled)\n")
 	asoSecret := &corev1.Secret{}
+	secretName := adminKubeconfigSecretName(scope.ClusterName())
+	fmt.Printf("DEBUG: Looking for ASO admin kubeconfig secret: %s/%s\n", namespace, secretName)
+
 	err = scope.GetClient().Get(
 		ctx,
 		client.ObjectKey{
 			Namespace: namespace,
-			Name:      adminKubeconfigSecretName(scope.ClusterName()),
+			Name:      secretName,
 		},
 		asoSecret,
 	)
 	if err != nil {
+		fmt.Printf("DEBUG: ERROR - Failed to get ASO admin kubeconfig secret: %v\n", err)
 		return nil, nil, errors.Wrap(err, "failed to get ASO admin kubeconfig secret")
 	}
+
 	adminKubeConfigData = asoSecret.Data[secret.KubeconfigDataName]
+	fmt.Printf("DEBUG: Retrieved admin kubeconfig from ASO secret: %d bytes\n", len(adminKubeConfigData))
 
-	// PATCH POINT: Inject custom CA certificate data into admin kubeconfig
-	// This allows patching CA certificates for admin kubeconfig retrieved from ASO
-	if adminKubeConfigData != nil && len(adminKubeConfigData) > 0 {
-		if patchedAdminConfig, err := patchKubeconfigWithCustomCA(adminKubeConfigData, scope.ClusterName()); err == nil {
-			adminKubeConfigData = patchedAdminConfig
-		}
-		// Note: We could log the error but not fail the reconciliation if patching fails
-	}
-
+	fmt.Printf("DEBUG: reconcileKubeconfig() completed - admin: %d bytes, user: %d bytes\n",
+		len(adminKubeConfigData), len(userKubeConfigData))
 	return adminKubeConfigData, userKubeConfigData, nil
 }
 
@@ -215,15 +226,6 @@ func getUserKubeConfigWithToken(ctx context.Context, userKubeConfigData []byte, 
 		auth.Exec = nil
 	}
 
-	// PATCH POINT: Inject custom CA certificate data here
-	// This is where you could add logic to replace the certificate-authority-data
-	// with your custom CA certificate
-	if customCACert := getCustomCACertificate(); customCACert != nil {
-		for _, cluster := range config.Clusters {
-			cluster.CertificateAuthorityData = customCACert
-		}
-	}
-
 	kubeconfig, err := clientcmd.Write(*config)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while trying to marshal new user kubeconfig with token")
@@ -231,44 +233,9 @@ func getUserKubeConfigWithToken(ctx context.Context, userKubeConfigData []byte, 
 	return kubeconfig, nil
 }
 
-// getCustomCACertificate returns custom CA certificate data if available
-// This function leverages the same certificate that is used for Azure authentication
-// by checking the global AzSecretCertPool that gets populated during Azure client initialization
-func getCustomCACertificate() []byte {
-	// Check if we have a certificate in the global AzSecretCertPool
-	// This is the same certificate pool used for Azure authentication
-	if azure.IsAzSecretCertConfigured() && azure.AzSecretCertPool != nil {
-		// Return the raw certificate data stored in AzSecretCertData
-		// This contains the original PEM data that was used to populate the certificate pool
-		if len(azure.AzSecretCertData) > 0 {
-			return azure.AzSecretCertData
-		}
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-
-	return nil
-}
-
-// patchKubeconfigWithCustomCA patches kubeconfig data with custom CA certificate
-func patchKubeconfigWithCustomCA(kubeconfigData []byte, clusterName string) ([]byte, error) {
-	customCACert := getCustomCACertificate()
-	if customCACert == nil {
-		return kubeconfigData, nil // No custom CA, return original
-	}
-
-	config, err := clientcmd.Load(kubeconfigData)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to load kubeconfig for CA patching")
-	}
-
-	// Replace CA data in all clusters
-	for _, cluster := range config.Clusters {
-		cluster.CertificateAuthorityData = customCACert
-	}
-
-	patchedKubeconfig, err := clientcmd.Write(*config)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to write patched kubeconfig")
-	}
-
-	return patchedKubeconfig, nil
+	return b
 }

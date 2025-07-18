@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
@@ -120,10 +121,14 @@ func updateGlobalTransportLocked(certData []byte) error {
 		// No custom certificate, use system defaults
 		globalCertPool = nil
 		globalTransport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy:                 http.ProxyFromEnvironment,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
 		}
 		globalHTTPClient = &http.Client{
 			Transport: globalTransport,
+			Timeout:   60 * time.Second,
 		}
 		azurepkg.GlobalHTTPClient = globalHTTPClient
 		return nil
@@ -147,12 +152,16 @@ func updateGlobalTransportLocked(certData []byte) error {
 			RootCAs:            globalCertPool,
 			InsecureSkipVerify: false,
 		},
-		Proxy: http.ProxyFromEnvironment,
+		Proxy:                 http.ProxyFromEnvironment,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 
 	// Create global HTTP client
 	globalHTTPClient = &http.Client{
 		Transport: globalTransport,
+		Timeout:   60 * time.Second,
 	}
 
 	// Store in azure package globals for backward compatibility
