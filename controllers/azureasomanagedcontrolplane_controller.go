@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -417,7 +418,7 @@ func getCustomCACertificateForCluster(clusterName string) []byte {
 		if len(azure.AzSecretCertData) > 0 {
 			fmt.Printf("DEBUG: ASO - Found certificate data, returning %d bytes\n", len(azure.AzSecretCertData))
 			fmt.Printf("DEBUG: ASO - Certificate data preview (first 100 chars): %s...\n",
-				string(azure.AzSecretCertData[:min(100, len(azure.AzSecretCertData))]))
+				string(azure.AzSecretCertData[:int(math.Min(100, float64(len(azure.AzSecretCertData))))]))
 			return azure.AzSecretCertData
 		} else {
 			fmt.Printf("DEBUG: ASO - Certificate data is empty, returning nil\n")
@@ -428,13 +429,6 @@ func getCustomCACertificateForCluster(clusterName string) []byte {
 
 	fmt.Printf("DEBUG: ASO - getCustomCACertificateForCluster() returning nil\n")
 	return nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func (r *AzureASOManagedControlPlaneReconciler) reconcilePaused(ctx context.Context, asoManagedControlPlane *infrav1alpha.AzureASOManagedControlPlane) (ctrl.Result, error) {

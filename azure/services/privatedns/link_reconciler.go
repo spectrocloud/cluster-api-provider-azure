@@ -80,12 +80,12 @@ func (s *Service) reconcileLinks(ctx context.Context, links []azure.ResourceSpec
 			}
 			for _, link := range links {
 				if link.Properties != nil && link.Properties.VirtualNetwork != nil && link.Properties.VirtualNetwork.ID != nil && *link.Properties.VirtualNetwork.ID == vnetID {
-					// log.V(1).Info("Skipping vnet link creation as VNet is already linked to a zone with the same name across resource groups",
-					// 	"vnet link", linkSpec.ResourceName(),
-					// 	"private dns zone", zoneName,
-					// 	"vnet", linkSpec.(LinkSpec).VNetName,
-					// 	"resource group", linkSpec.ResourceGroupName(),
-					// 	"zone resource group", zoneRG)
+					log.V(1).Info("Skipping vnet link creation as VNet is already linked to a zone with the same name across resource groups",
+						"vnet link", linkSpec.ResourceName(),
+						"private dns zone", zoneName,
+						"vnet", linkSpec.(LinkSpec).VNetName,
+						"resource group", linkSpec.ResourceGroupName(),
+						"zone resource group", zoneRG)
 					alreadyLinked = true
 					break
 				}

@@ -565,7 +565,7 @@ func (s *ClusterScope) VNetSpec() azure.ASOResourceSpecGetter[*asonetworkv1api20
 func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, linkSpec, recordSpec []azure.ResourceSpecGetter) {
 	// Check for bypass annotation
 	if s.AzureCluster.Annotations != nil {
-		if bypass, exists := s.AzureCluster.Annotations["capz.io/disable-private-dns"]; exists && bypass == "true" {
+		if bypass, exists := s.AzureCluster.Annotations[azure.DisablePrivateDNSAnnotation]; exists && bypass == "true" {
 			return nil, nil, nil
 		}
 	}

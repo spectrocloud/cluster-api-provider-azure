@@ -69,9 +69,6 @@ func init() {
 
 				if env, err := azure.EnvironmentFromFile(filePath); err == nil {
 					azure.SetEnvironment(env.Name, env)
-					//fmt.Printf("CAPZ: Successfully loaded Azure environment: %s\n", env.Name)
-					//fmt.Printf("CAPZ: ResourceManagerEndpoint: %s\n", env.ResourceManagerEndpoint)
-					//fmt.Printf("CAPZ: ActiveDirectoryEndpoint: %s\n", env.ActiveDirectoryEndpoint)
 					log.Info("loaded Azure environment from file", "EnvName", env.Name)
 					log.Info("loaded Azure environment from file", "filename", file.Name())
 				} else {

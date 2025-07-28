@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/secret"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
@@ -142,35 +143,34 @@ func postCreateOrUpdateResourceHook(ctx context.Context, scope ManagedClusterSco
   The user needs to ensure to provide service principal with admin AAD privileges.
 */
 func reconcileKubeconfig(ctx context.Context, scope ManagedClusterScope, namespace string) (adminKubeConfigData []byte, userKubeConfigData []byte, err error) {
-	fmt.Printf("=== DEBUG: reconcileKubeconfig() called for cluster: %s ===\n", scope.ClusterName())
-	fmt.Printf("DEBUG: Namespace: %s\n", namespace)
-	fmt.Printf("DEBUG: IsAADEnabled: %v\n", scope.IsAADEnabled())
-	fmt.Printf("DEBUG: AreLocalAccountsDisabled: %v\n", scope.AreLocalAccountsDisabled())
+	logger := log.FromContext(ctx)
+	logger.V(1).Info("reconcileKubeconfig called", "cluster", scope.ClusterName())
+	logger.V(1).Info("kubeconfig reconciliation details", "namespace", namespace, "isAADEnabled", scope.IsAADEnabled(), "areLocalAccountsDisabled", scope.AreLocalAccountsDisabled())
 
 	if scope.IsAADEnabled() {
-		fmt.Printf("DEBUG: AAD is enabled, getting user kubeconfig data\n")
+		logger.V(1).Info("AAD is enabled, getting user kubeconfig data")
 		if userKubeConfigData, err = getUserKubeconfigData(ctx, scope, namespace); err != nil {
-			fmt.Printf("DEBUG: ERROR - Failed to get user kubeconfig: %v\n", err)
+			logger.Error(err, "failed to get user kubeconfig")
 			return nil, nil, errors.Wrap(err, "error while trying to get user kubeconfig")
 		}
-		fmt.Printf("DEBUG: Got user kubeconfig data: %d bytes\n", len(userKubeConfigData))
+		logger.V(1).Info("got user kubeconfig data", "bytes", len(userKubeConfigData))
 	}
 
 	if scope.AreLocalAccountsDisabled() {
-		fmt.Printf("DEBUG: Local accounts disabled, using user kubeconfig with token path\n")
+		logger.V(1).Info("local accounts disabled, using user kubeconfig with token path")
 		userKubeconfigWithToken, err := getUserKubeConfigWithToken(ctx, userKubeConfigData, scope)
 		if err != nil {
-			fmt.Printf("DEBUG: ERROR - Failed to get user kubeconfig with token: %v\n", err)
+			logger.Error(err, "failed to get user kubeconfig with token")
 			return nil, nil, errors.Wrap(err, "error while trying to get user kubeconfig with token")
 		}
-		fmt.Printf("DEBUG: Successfully got user kubeconfig with token: %d bytes\n", len(userKubeconfigWithToken))
+		logger.V(1).Info("successfully got user kubeconfig with token", "bytes", len(userKubeconfigWithToken))
 		return userKubeconfigWithToken, userKubeConfigData, nil
 	}
 
-	fmt.Printf("DEBUG: Using admin kubeconfig path (local accounts enabled)\n")
+	logger.V(1).Info("using admin kubeconfig path (local accounts enabled)")
 	asoSecret := &corev1.Secret{}
 	secretName := adminKubeconfigSecretName(scope.ClusterName())
-	fmt.Printf("DEBUG: Looking for ASO admin kubeconfig secret: %s/%s\n", namespace, secretName)
+	logger.V(1).Info("looking for ASO admin kubeconfig secret", "namespace", namespace, "secretName", secretName)
 
 	err = scope.GetClient().Get(
 		ctx,
@@ -181,15 +181,14 @@ func reconcileKubeconfig(ctx context.Context, scope ManagedClusterScope, namespa
 		asoSecret,
 	)
 	if err != nil {
-		fmt.Printf("DEBUG: ERROR - Failed to get ASO admin kubeconfig secret: %v\n", err)
+		logger.Error(err, "failed to get ASO admin kubeconfig secret")
 		return nil, nil, errors.Wrap(err, "failed to get ASO admin kubeconfig secret")
 	}
 
 	adminKubeConfigData = asoSecret.Data[secret.KubeconfigDataName]
-	fmt.Printf("DEBUG: Retrieved admin kubeconfig from ASO secret: %d bytes\n", len(adminKubeConfigData))
+	logger.V(1).Info("retrieved admin kubeconfig from ASO secret", "bytes", len(adminKubeConfigData))
 
-	fmt.Printf("DEBUG: reconcileKubeconfig() completed - admin: %d bytes, user: %d bytes\n",
-		len(adminKubeConfigData), len(userKubeConfigData))
+	logger.V(1).Info("reconcileKubeconfig completed", "adminBytes", len(adminKubeConfigData), "userBytes", len(userKubeConfigData))
 	return adminKubeConfigData, userKubeConfigData, nil
 }
 
@@ -231,11 +230,4 @@ func getUserKubeConfigWithToken(ctx context.Context, userKubeConfigData []byte, 
 		return nil, errors.Wrap(err, "error while trying to marshal new user kubeconfig with token")
 	}
 	return kubeconfig, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

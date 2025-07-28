@@ -56,4 +56,10 @@ const (
 	// ReplicasManagedByAutoscalerAnnotation is set to true in the corresponding capi machine pool
 	// when an external autoscaler manages the node count of the associated machine pool.
 	ReplicasManagedByAutoscalerAnnotation = "cluster.x-k8s.io/replicas-managed-by-autoscaler"
+
+	// DisablePrivateDNSAnnotation is the key for the Azure Cluster object annotation
+	// which disables private DNS zone creation when set to "true".
+	// See https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+	// for annotation formatting rules.
+	DisablePrivateDNSAnnotation = "capz.io/disable-private-dns"
 )

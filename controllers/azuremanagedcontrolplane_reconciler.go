@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/clientcmd"
@@ -262,7 +263,7 @@ func getCustomCACertificateForAMCP(clusterName string) []byte {
 		if len(azure.AzSecretCertData) > 0 {
 			fmt.Printf("DEBUG: AMCP - Found certificate data, returning %d bytes\n", len(azure.AzSecretCertData))
 			fmt.Printf("DEBUG: AMCP - Certificate data preview (first 100 chars): %s...\n",
-				string(azure.AzSecretCertData[:min(100, len(azure.AzSecretCertData))]))
+				string(azure.AzSecretCertData[:int(math.Min(100, float64(len(azure.AzSecretCertData))))]))
 			return azure.AzSecretCertData
 		} else {
 			fmt.Printf("DEBUG: AMCP - Certificate data is empty, returning nil\n")
