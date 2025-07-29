@@ -46,8 +46,8 @@ const (
 	ChinaCloudName = "AzureChinaCloud"
 	// USGovernmentCloudName is the name of the Azure US Government cloud.
 	USGovernmentCloudName = "AzureUSGovernmentCloud"
-
-	// Remove AzSecretCloudName as it's now handled dynamically
+	// AzSecretCloudName is the name of the Azure US Secret cloud.
+	AzSecretCloudName = "AzureUSSecretCloud"
 )
 
 const (

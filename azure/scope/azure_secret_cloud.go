@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,13 +14,25 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/rest"
 	azurepkg "sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	AzureEnvironentFolderEnvName = "AZURE_ENVIRONMENT_FOLDER"
+	// Deprecated: Use ConfigMaps instead
+	AzureEnvironentFolderEnvName = "AZURE_ENVIRONMENT_FOLDER_CAPZ"
+
+	// ConfigMap names for Azure secret cloud configuration
+	AzureEnvConfigMapName  = "azure-capz-env-config"
+	AzureCertConfigMapName = "azure-capz-cert-config"
+
+	// ConfigMap keys
+	AzureEnvConfigKey  = "azure-capz-env.json"
+	AzureCertConfigKey = "azure-ca.crt"
 )
 
 var (
@@ -37,69 +47,110 @@ var (
 )
 
 func init() {
-
 	_, log, done := tele.StartSpanWithLogger(context.Background(), "scope.AzureScope.init")
-	log.Info("AzureSecretCloud initializing")
 	defer done()
-	path := os.Getenv(AzureEnvironentFolderEnvName)
-	log.Info("Path is", path)
-	if path == "" {
-		// If no environment folder is set, treat as Public/Gov cloud (no custom cert)
-		return
+
+	log.Info("Azure secret cloud init completed - ConfigMap initialization will be performed during controller setup")
+
+	// Check for deprecated environment variable
+	if path := os.Getenv(AzureEnvironentFolderEnvName); path != "" {
+		log.Info("DEPRECATED: AZURE_ENVIRONMENT_FOLDER_CAPZ is deprecated, use ConfigMaps instead")
+		fmt.Printf("CAPZ: WARNING - AZURE_ENVIRONMENT_FOLDER_CAPZ is deprecated. Please use ConfigMaps instead.\n")
 	}
-	files, err := os.ReadDir(path)
+}
+
+// InitializeAzureConfigForCluster initializes Azure environment and certificates from ConfigMaps
+// in the specified cluster namespace
+func InitializeAzureConfigForCluster(ctx context.Context, kubeClient client.Client, namespace, azureEnvironment string) error {
+	_, log, done := tele.StartSpanWithLogger(ctx, "scope.InitializeAzureConfigForCluster")
+	defer done()
+
+	log.Info("Initializing Azure config for cluster", "namespace", namespace, "azureEnvironment", azureEnvironment)
+
+	// Try to read environment ConfigMap from cluster namespace
+	envConfigMap := &corev1.ConfigMap{}
+	envKey := client.ObjectKey{Namespace: namespace, Name: AzureEnvConfigMapName}
+
+	if err := kubeClient.Get(ctx, envKey, envConfigMap); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("Azure environment ConfigMap not found in cluster namespace, using default configuration", "namespace", namespace)
+			return nil // No custom config, use defaults
+		}
+		return errors.Wrap(err, "failed to read Azure environment ConfigMap from cluster namespace")
+	}
+
+	// ConfigMap found, process environment JSON
+	envJSON, hasEnvJSON := envConfigMap.Data[AzureEnvConfigKey]
+	if !hasEnvJSON || envJSON == "" {
+		return errors.New("Azure environment ConfigMap found but JSON data is missing")
+	}
+
+	log.Info("Processing Azure environment JSON from cluster ConfigMap")
+	if err := processAzureEnvironmentJSON(envJSON); err != nil {
+		return errors.Wrap(err, "failed to process Azure environment JSON")
+	}
+
+	// Try to read certificate ConfigMap from cluster namespace
+	certConfigMap := &corev1.ConfigMap{}
+	certKey := client.ObjectKey{Namespace: namespace, Name: AzureCertConfigMapName}
+
+	if err := kubeClient.Get(ctx, certKey, certConfigMap); err != nil {
+		if apierrors.IsNotFound(err) {
+			return errors.New("Azure environment ConfigMap found but certificate ConfigMap is missing - custom Azure environments require certificates")
+		}
+		return errors.Wrap(err, "failed to read Azure certificate ConfigMap from cluster namespace")
+	}
+
+	// Certificate ConfigMap found, process certificate data
+	certPEM, hasCertPEM := certConfigMap.Data[AzureCertConfigKey]
+	if !hasCertPEM || certPEM == "" {
+		return errors.New("Azure certificate ConfigMap found but certificate data is missing")
+	}
+
+	certData := []byte(certPEM)
+	log.Info("Successfully loaded certificate from cluster ConfigMap", "bytes", len(certData))
+
+	// Initialize global transport with certificate data
+	if err := initializeGlobalTransportWithCertData(certData); err != nil {
+		return errors.Wrap(err, "failed to initialize global transport with certificate")
+	}
+
+	log.Info("Azure config initialization completed successfully for cluster", "namespace", namespace)
+	return nil
+}
+
+// processAzureEnvironmentJSON processes the Azure environment JSON configuration
+func processAzureEnvironmentJSON(envJSON string) error {
+	// Create a temporary file for azure.EnvironmentFromFile to read
+	tmpFile, err := os.CreateTemp("", "azure-env-*.json")
 	if err != nil {
-		log.Error(err, "error reading folder", "path", path)
-		return
+		return errors.Wrap(err, "failed to create temporary file for Azure environment")
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Write JSON content to temporary file
+	if _, err := tmpFile.WriteString(envJSON); err != nil {
+		return errors.Wrap(err, "failed to write Azure environment JSON to temporary file")
 	}
 
-	var certData []byte
-	for _, file := range files {
-		if !file.IsDir() {
-			filePath := filepath.Join(path, file.Name())
-			fileExt := filepath.Ext(file.Name())
-
-			// Load Azure environment JSON files
-			if strings.EqualFold(fileExt, ".json") {
-				// Read and log the file contents for debugging
-				if jsonData, err := os.ReadFile(filePath); err == nil {
-					//fmt.Printf("CAPZ: Loading Azure environment JSON file: %s\n", file.Name())
-					fmt.Printf("CAPZ: JSON file contents: %s\n", string(jsonData))
-				}
-
-				if env, err := azure.EnvironmentFromFile(filePath); err == nil {
-					azure.SetEnvironment(env.Name, env)
-					log.Info("loaded Azure environment from file", "EnvName", env.Name)
-					log.Info("loaded Azure environment from file", "filename", file.Name())
-				} else {
-					fmt.Printf("CAPZ: Failed to load Azure environment from file %s: %v\n", file.Name(), err)
-					log.Error(err, "failed to load Azure environment from file", "filename", file.Name())
-				}
-			}
-
-			// Load certificate files
-			if strings.EqualFold(fileExt, ".crt") || strings.EqualFold(fileExt, ".pem") {
-				if data, err := os.ReadFile(filePath); err == nil && len(data) > 0 {
-					certData = data
-					fmt.Printf("CAPZ: Successfully loaded certificate from file: %s (%d bytes)\n", file.Name(), len(data))
-					log.Info("loaded certificate from file", "filename", file.Name())
-				} else {
-					log.Error(err, "failed to load certificate from file", "filename", file.Name())
-				}
-			}
-		}
+	// Parse Azure environment from file
+	env, err := azure.EnvironmentFromFile(tmpFile.Name())
+	if err != nil {
+		return errors.Wrap(err, "failed to parse Azure environment JSON")
 	}
 
-	// Initialize global transport with certificate data if found
-	if len(certData) > 0 {
-		if err := initializeGlobalTransportWithCertData(certData); err != nil {
-			log.Error(err, "failed to initialize global transport with certificate")
-		}
-	} else {
-		// If environment folder is set but no certificates found, log error
-		log.Error(errors.New("no certificate files found in environment folder"), "expected certificate files (.crt or .pem) but none found", "path", path)
-	}
-	// If no certificate found in environment folder, treat as Public/Gov cloud (no custom cert)
+	azure.SetEnvironment(env.Name, env)
+	fmt.Printf("CAPZ: Loaded Azure environment: %s\n", env.Name)
+	return nil
+}
+
+// initializeDefaultTransport initializes the default transport for public clouds
+func initializeDefaultTransport() error {
+	globalTransportMutex.Lock()
+	defer globalTransportMutex.Unlock()
+
+	return updateGlobalTransportLocked(nil)
 }
 
 // initializeGlobalTransportWithCertData initializes the global transport with provided certificate data

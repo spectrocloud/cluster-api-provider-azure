@@ -70,7 +70,7 @@ type ClusterScopeParams struct {
 // NewClusterScope creates a new Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
 func NewClusterScope(ctx context.Context, params ClusterScopeParams) (*ClusterScope, error) {
-	ctx, _, done := tele.StartSpanWithLogger(ctx, "azure.clusterScope.NewClusterScope")
+	ctx, log, done := tele.StartSpanWithLogger(ctx, "azure.clusterScope.NewClusterScope")
 	defer done()
 
 	if params.Cluster == nil {
@@ -78,6 +78,12 @@ func NewClusterScope(ctx context.Context, params ClusterScopeParams) (*ClusterSc
 	}
 	if params.AzureCluster == nil {
 		return nil, errors.New("failed to generate new scope from nil AzureCluster")
+	}
+
+	// Initialize Azure environment and certificates from ConfigMaps in cluster namespace
+	if err := InitializeAzureConfigForCluster(ctx, params.Client, params.AzureCluster.Namespace, params.AzureCluster.Spec.AzureEnvironment); err != nil {
+		// Log but don't fail - continue with default configuration
+		log.V(1).Info("Failed to initialize custom Azure configuration, using defaults", "error", err.Error())
 	}
 
 	credentialsProvider, err := NewAzureCredentialsProvider(ctx, params.CredentialCache, params.Client, params.AzureCluster.Spec.IdentityRef, params.AzureCluster.Namespace)
