@@ -23,9 +23,6 @@ import (
 )
 
 const (
-	// Deprecated: Use ConfigMaps instead
-	AzureEnvironentFolderEnvName = "AZURE_ENVIRONMENT_FOLDER_CAPZ"
-
 	// ConfigMap names for Azure secret cloud configuration
 	AzureEnvConfigMapName  = "azure-capz-env-config"
 	AzureCertConfigMapName = "azure-capz-cert-config"
@@ -51,12 +48,6 @@ func init() {
 	defer done()
 
 	log.Info("Azure secret cloud init completed - ConfigMap initialization will be performed during controller setup")
-
-	// Check for deprecated environment variable
-	if path := os.Getenv(AzureEnvironentFolderEnvName); path != "" {
-		log.Info("DEPRECATED: AZURE_ENVIRONMENT_FOLDER_CAPZ is deprecated, use ConfigMaps instead")
-		fmt.Printf("CAPZ: WARNING - AZURE_ENVIRONMENT_FOLDER_CAPZ is deprecated. Please use ConfigMaps instead.\n")
-	}
 }
 
 // InitializeAzureConfigForCluster initializes Azure environment and certificates from ConfigMaps

@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/secret"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/scope"
@@ -133,24 +134,25 @@ func (r *azureManagedControlPlaneService) reconcileKubeconfig(ctx context.Contex
 		}
 
 		// PATCH POINT: Inject custom CA certificate data into kubeconfig before storing in secret
-		fmt.Printf("=== DEBUG: AMCP reconcileKubeconfig() - Processing kubeconfig %d (admin=0, user=1) ===\n", i)
-		fmt.Printf("DEBUG: AMCP - Original kubeconfig size: %d bytes\n", len(kubeConfigData))
+		logger := log.FromContext(ctx)
+		logger.V(4).Info("Processing kubeconfig", "index", i, "type", map[int]string{0: "admin", 1: "user"}[i])
+		logger.V(4).Info("Original kubeconfig size", "bytes", len(kubeConfigData))
 
 		if customCACert := getCustomCACertificateForAMCP(r.scope.ClusterName()); customCACert != nil {
-			fmt.Printf("DEBUG: AMCP - Custom CA certificate found (%d bytes), proceeding with COMBINATION\n", len(customCACert))
+			logger.V(4).Info("Custom CA certificate found", "size_bytes", len(customCACert))
 
 			// Parse kubeconfig
 			kubeconfig, err := clientcmd.Load(kubeConfigData)
 			if err != nil {
-				fmt.Printf("DEBUG: AMCP - ERROR: Failed to parse kubeconfig: %v\n", err)
+				logger.V(4).Error(err, "Failed to parse kubeconfig")
 			} else {
 				patchedCount := 0
 				for clusterName, clusterInfo := range kubeconfig.Clusters {
-					fmt.Printf("DEBUG: AMCP - Processing cluster '%s'\n", clusterName)
-					fmt.Printf("DEBUG: AMCP - Original CA data length: %d bytes\n", len(clusterInfo.CertificateAuthorityData))
+					logger.V(4).Info("Processing cluster", "name", clusterName)
+					logger.V(4).Info("Original CA data length", "bytes", len(clusterInfo.CertificateAuthorityData))
 
 					if clusterInfo.CertificateAuthorityData != nil && len(clusterInfo.CertificateAuthorityData) > 0 {
-						fmt.Printf("DEBUG: AMCP - Combining original CA with custom CA\n")
+						logger.V(4).Info("Combining original CA with custom CA")
 						// Combine: original + newline + custom CA
 						combinedCA := make([]byte, 0, len(clusterInfo.CertificateAuthorityData)+1+len(customCACert))
 						combinedCA = append(combinedCA, clusterInfo.CertificateAuthorityData...)
@@ -163,28 +165,30 @@ func (r *azureManagedControlPlaneService) reconcileKubeconfig(ctx context.Contex
 						combinedCA = append(combinedCA, customCACert...)
 						clusterInfo.CertificateAuthorityData = combinedCA
 
-						fmt.Printf("DEBUG: AMCP - Combined CA data length: %d bytes (original: %d + custom: %d)\n",
-							len(combinedCA), len(clusterInfo.CertificateAuthorityData)-len(customCACert)-1, len(customCACert))
+						logger.V(4).Info("Combined CA data",
+							"total_bytes", len(combinedCA),
+							"original_bytes", len(clusterInfo.CertificateAuthorityData)-len(customCACert)-1,
+							"custom_bytes", len(customCACert))
 					} else {
-						fmt.Printf("DEBUG: AMCP - No original CA data, using only custom CA\n")
+						logger.V(4).Info("No original CA data, using only custom CA")
 						// No original CA, just use custom
 						clusterInfo.CertificateAuthorityData = customCACert
-						fmt.Printf("DEBUG: AMCP - Set CA data length: %d bytes\n", len(clusterInfo.CertificateAuthorityData))
+						logger.V(4).Info("Set CA data length", "bytes", len(clusterInfo.CertificateAuthorityData))
 					}
 					patchedCount++
 				}
-				fmt.Printf("DEBUG: AMCP - Combined CA certificates in %d clusters total\n", patchedCount)
+				logger.V(4).Info("Combined CA certificates", "clusters_patched", patchedCount)
 
 				// Write back the modified kubeconfig
 				if patchedKubeconfig, err := clientcmd.Write(*kubeconfig); err != nil {
-					fmt.Printf("DEBUG: AMCP - ERROR: Failed to write patched kubeconfig: %v\n", err)
+					logger.V(4).Error(err, "Failed to write patched kubeconfig")
 				} else {
 					kubeConfigData = patchedKubeconfig
-					fmt.Printf("DEBUG: AMCP - Successfully wrote combined kubeconfig (%d bytes)\n", len(kubeConfigData))
+					logger.V(4).Info("Successfully wrote combined kubeconfig", "bytes", len(kubeConfigData))
 				}
 			}
 		} else {
-			fmt.Printf("DEBUG: AMCP - No custom CA certificate found, keeping original kubeconfig\n")
+			logger.V(4).Info("No custom CA certificate found, keeping original kubeconfig")
 		}
 
 		kubeConfigSecret := r.scope.MakeEmptyKubeConfigSecret()
@@ -210,7 +214,7 @@ func (r *azureManagedControlPlaneService) reconcileKubeconfig(ctx context.Contex
 			return errors.Wrap(err, "failed to reconcile kubeconfig secret for cluster")
 		}
 
-		fmt.Printf("DEBUG: AMCP - Successfully stored kubeconfig secret '%s' with CA injection\n", kubeConfigSecret.Name)
+		logger.V(4).Info("Successfully stored kubeconfig secret with CA injection", "secret_name", kubeConfigSecret.Name)
 	}
 
 	// store cluster-info for the cluster with the admin kubeconfig.
@@ -243,35 +247,37 @@ func (r *azureManagedControlPlaneService) reconcileKubeconfig(ctx context.Contex
 // This function leverages the same certificate that is used for Azure authentication
 // by checking the global AzSecretCertPool that gets populated during Azure client initialization
 func getCustomCACertificateForAMCP(clusterName string) []byte {
-	fmt.Printf("=== DEBUG: AMCP getCustomCACertificateForAMCP() called for cluster: %s ===\n", clusterName)
+	logger := log.FromContext(context.Background()) // Changed to context.Background() to avoid context leak
+	logger.V(4).Info("getCustomCACertificateForAMCP called", "cluster_name", clusterName)
 
 	// Debug the condition checks
 	isConfigured := azure.IsAzSecretCertConfigured()
 	poolNotNil := azure.AzSecretCertPool != nil
 	dataLength := len(azure.AzSecretCertData)
 
-	fmt.Printf("DEBUG: AMCP - azure.IsAzSecretCertConfigured() = %v\n", isConfigured)
-	fmt.Printf("DEBUG: AMCP - azure.AzSecretCertPool != nil = %v\n", poolNotNil)
-	fmt.Printf("DEBUG: AMCP - len(azure.AzSecretCertData) = %d\n", dataLength)
+	logger.V(4).Info("Condition checks",
+		"is_configured", isConfigured,
+		"pool_not_nil", poolNotNil,
+		"data_length", dataLength)
 
 	// Check if we have a certificate in the global AzSecretCertPool
 	// This is the same certificate pool used for Azure authentication
 	if azure.IsAzSecretCertConfigured() && azure.AzSecretCertPool != nil {
-		fmt.Printf("DEBUG: AMCP - Passed first condition check (IsConfigured && PoolNotNil)\n")
+		logger.V(4).Info("Passed first condition check (IsConfigured && PoolNotNil)")
 		// Return the raw certificate data stored in AzSecretCertData
 		// This contains the original PEM data that was used to populate the certificate pool
 		if len(azure.AzSecretCertData) > 0 {
-			fmt.Printf("DEBUG: AMCP - Found certificate data, returning %d bytes\n", len(azure.AzSecretCertData))
-			fmt.Printf("DEBUG: AMCP - Certificate data preview (first 100 chars): %s...\n",
+			logger.V(4).Info("Found certificate data, returning", "bytes", len(azure.AzSecretCertData))
+			logger.V(4).Info("Certificate data preview (first 100 chars)", "preview",
 				string(azure.AzSecretCertData[:int(math.Min(100, float64(len(azure.AzSecretCertData))))]))
 			return azure.AzSecretCertData
 		} else {
-			fmt.Printf("DEBUG: AMCP - Certificate data is empty, returning nil\n")
+			logger.V(4).Info("Certificate data is empty, returning nil")
 		}
 	} else {
-		fmt.Printf("DEBUG: AMCP - Failed condition check - IsConfigured: %v, PoolNotNil: %v\n", isConfigured, poolNotNil)
+		logger.V(4).Info("Failed condition check - IsConfigured: false, PoolNotNil: false")
 	}
 
-	fmt.Printf("DEBUG: AMCP - getCustomCACertificateForAMCP() returning nil\n")
+	logger.V(4).Info("getCustomCACertificateForAMCP returning nil")
 	return nil
 }

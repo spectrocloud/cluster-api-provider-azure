@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/go-logr/logr"
 	infrav1alpha "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/pkg/mutators"
@@ -326,16 +327,16 @@ func (r *AzureASOManagedControlPlaneReconciler) reconcileKubeconfig(ctx context.
 
 		// PATCH POINT: Inject custom CA certificate data here
 		// This allows patching CA certificates for AAD-enabled clusters with local accounts disabled
-		fmt.Printf("=== DEBUG: ASO Controller CA injection for cluster: %s ===\n", cluster.Name)
-		if customCACert := getCustomCACertificateForCluster(cluster.Name); customCACert != nil {
-			fmt.Printf("DEBUG: ASO - Custom CA certificate found (%d bytes), proceeding with COMBINATION\n", len(customCACert))
+		log.V(4).Info("ASO Controller CA injection", "cluster", cluster.Name)
+		if customCACert := getCustomCACertificateForCluster(cluster.Name, log); customCACert != nil {
+			log.V(4).Info("Custom CA certificate found", "size", len(customCACert))
 			patchedCount := 0
 			for clusterName, clusterInfo := range kubeconfig.Clusters {
-				fmt.Printf("DEBUG: ASO - Processing cluster '%s'\n", clusterName)
-				fmt.Printf("DEBUG: ASO - Original CA data length: %d bytes\n", len(clusterInfo.CertificateAuthorityData))
+				log.V(4).Info("Processing cluster", "name", clusterName)
+				log.V(4).Info("Original CA data", "size", len(clusterInfo.CertificateAuthorityData))
 
 				if clusterInfo.CertificateAuthorityData != nil && len(clusterInfo.CertificateAuthorityData) > 0 {
-					fmt.Printf("DEBUG: ASO - Combining original CA with custom CA\n")
+					log.V(4).Info("Combining original CA with custom CA")
 					// Combine: original + newline + custom CA
 					combinedCA := make([]byte, 0, len(clusterInfo.CertificateAuthorityData)+1+len(customCACert))
 					combinedCA = append(combinedCA, clusterInfo.CertificateAuthorityData...)
@@ -348,19 +349,21 @@ func (r *AzureASOManagedControlPlaneReconciler) reconcileKubeconfig(ctx context.
 					combinedCA = append(combinedCA, customCACert...)
 					clusterInfo.CertificateAuthorityData = combinedCA
 
-					fmt.Printf("DEBUG: ASO - Combined CA data length: %d bytes (original: %d + custom: %d)\n",
-						len(combinedCA), len(clusterInfo.CertificateAuthorityData)-len(customCACert)-1, len(customCACert))
+					log.V(4).Info("Combined CA data",
+						"totalSize", len(combinedCA),
+						"originalSize", len(clusterInfo.CertificateAuthorityData)-len(customCACert)-1,
+						"customSize", len(customCACert))
 				} else {
-					fmt.Printf("DEBUG: ASO - No original CA data, using only custom CA\n")
+					log.V(4).Info("No original CA data, using only custom CA")
 					// No original CA, just use custom
 					clusterInfo.CertificateAuthorityData = customCACert
-					fmt.Printf("DEBUG: ASO - Set CA data length: %d bytes\n", len(clusterInfo.CertificateAuthorityData))
+					log.V(4).Info("Set CA data", "size", len(clusterInfo.CertificateAuthorityData))
 				}
 				patchedCount++
 			}
-			fmt.Printf("DEBUG: ASO - Combined CA certificates in %d clusters total\n", patchedCount)
+			log.V(4).Info("CA certificates combined", "patchedClusters", patchedCount)
 		} else {
-			fmt.Printf("DEBUG: ASO - No custom CA certificate found, keeping original kubeconfig\n")
+			log.V(4).Info("No custom CA certificate found, keeping original kubeconfig")
 		}
 
 		kubeconfigData, err = clientcmd.Write(*kubeconfig)
@@ -397,37 +400,36 @@ func (r *AzureASOManagedControlPlaneReconciler) reconcileKubeconfig(ctx context.
 // getCustomCACertificateForCluster returns custom CA certificate data for a specific cluster
 // This function leverages the same certificate that is used for Azure authentication
 // by checking the global AzSecretCertPool that gets populated during Azure client initialization
-func getCustomCACertificateForCluster(clusterName string) []byte {
-	fmt.Printf("=== DEBUG: ASO getCustomCACertificateForCluster() called for cluster: %s ===\n", clusterName)
+func getCustomCACertificateForCluster(clusterName string, log logr.Logger) []byte {
+	log.V(4).Info("ASO getCustomCACertificateForCluster() called for cluster", "clusterName", clusterName)
 
 	// Debug the condition checks
 	isConfigured := azure.IsAzSecretCertConfigured()
 	poolNotNil := azure.AzSecretCertPool != nil
 	dataLength := len(azure.AzSecretCertData)
 
-	fmt.Printf("DEBUG: ASO - azure.IsAzSecretCertConfigured() = %v\n", isConfigured)
-	fmt.Printf("DEBUG: ASO - azure.AzSecretCertPool != nil = %v\n", poolNotNil)
-	fmt.Printf("DEBUG: ASO - len(azure.AzSecretCertData) = %d\n", dataLength)
+	log.V(4).Info("ASO - azure.IsAzSecretCertConfigured()", "isConfigured", isConfigured)
+	log.V(4).Info("ASO - azure.AzSecretCertPool != nil", "poolNotNil", poolNotNil)
+	log.V(4).Info("ASO - len(azure.AzSecretCertData)", "dataLength", dataLength)
 
 	// Check if we have a certificate in the global AzSecretCertPool
 	// This is the same certificate pool used for Azure authentication
 	if azure.IsAzSecretCertConfigured() && azure.AzSecretCertPool != nil {
-		fmt.Printf("DEBUG: ASO - Passed first condition check (IsConfigured && PoolNotNil)\n")
+		log.V(4).Info("Passed first condition check (IsConfigured && PoolNotNil)")
 		// Return the raw certificate data stored in AzSecretCertData
 		// This contains the original PEM data that was used to populate the certificate pool
 		if len(azure.AzSecretCertData) > 0 {
-			fmt.Printf("DEBUG: ASO - Found certificate data, returning %d bytes\n", len(azure.AzSecretCertData))
-			fmt.Printf("DEBUG: ASO - Certificate data preview (first 100 chars): %s...\n",
-				string(azure.AzSecretCertData[:int(math.Min(100, float64(len(azure.AzSecretCertData))))]))
+			log.V(4).Info("Found certificate data, returning", "size", len(azure.AzSecretCertData))
+			log.V(4).Info("Certificate data preview (first 100 chars)", "preview", string(azure.AzSecretCertData[:int(math.Min(100, float64(len(azure.AzSecretCertData))))]))
 			return azure.AzSecretCertData
 		} else {
-			fmt.Printf("DEBUG: ASO - Certificate data is empty, returning nil\n")
+			log.V(4).Info("Certificate data is empty, returning nil")
 		}
 	} else {
-		fmt.Printf("DEBUG: ASO - Failed condition check - IsConfigured: %v, PoolNotNil: %v\n", isConfigured, poolNotNil)
+		log.V(4).Info("Failed condition check - IsConfigured", "isConfigured", isConfigured, "PoolNotNil", poolNotNil)
 	}
 
-	fmt.Printf("DEBUG: ASO - getCustomCACertificateForCluster() returning nil\n")
+	log.V(4).Info("ASO - getCustomCACertificateForCluster() returning nil")
 	return nil
 }
 

@@ -61,7 +61,9 @@ func (s *Service) reconcileLinks(ctx context.Context, links []azure.ResourceSpec
 			continue
 		}
 
-		// Enhanced logic: check all zones with the same name across all resource groups
+		// Enhanced logic: check all zones with the same name across all resource groups to prevent duplicate VNet links.
+		// This prevents DNS resolution conflicts by ensuring a VNet is not linked to multiple private DNS zones
+		// with the same name, even if they exist in different resource groups.
 		zoneName := linkSpec.OwnerResourceName()
 		vnetID := azure.VNetID(linkSpec.(LinkSpec).SubscriptionID, linkSpec.(LinkSpec).VNetResourceGroup, linkSpec.(LinkSpec).VNetName)
 		zones, err := s.zonesClient.ListAllZonesByName(ctx, zoneName)

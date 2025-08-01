@@ -158,7 +158,7 @@ func (s *ClusterScope) PublicIPSpecs() []azure.ResourceSpecGetter {
 
 	// Public IP specs for control plane outbound lb
 	var controlPlaneOutboundIPSpecs []azure.ResourceSpecGetter
-	if s.ControlPlaneOutboundLB() != nil {
+	if s.IsAPIServerPrivate() && s.ControlPlaneOutboundLB() != nil {
 		for _, ip := range s.ControlPlaneOutboundLB().FrontendIPs {
 			publicIPSpecs = append(publicIPSpecs, &publicips.PublicIPSpec{
 				Name:             ip.PublicIP.Name,
@@ -282,10 +282,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 				// or if the LB is of the type internal, save the only IP allowed for the frontend LB
 				if frontendIP.PublicIP != nil || frontendLB.Type == infrav1.Internal {
 					frontendLB.FrontendIPConfigs = []infrav1.FrontendIP{frontendIP}
-					// Log the IP configuration being used
-					if frontendLB.Type == infrav1.Internal && frontendIP.PrivateIPAddress != "" {
-						fmt.Printf("[CAPZ-DEBUG] Internal LB FrontendIP config - Name: %s, PrivateIP: %s\n", frontendIP.Name, frontendIP.PrivateIPAddress)
-					}
 					break
 				}
 			}

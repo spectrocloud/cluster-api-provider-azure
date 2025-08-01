@@ -376,30 +376,6 @@ func TestParameters(t *testing.T) {
 			Spec: asocontainerservicev1.ManagedCluster_Spec{
 				DnsPrefix:               ptr.To("set by the user"),
 				EnablePodSecurityPolicy: ptr.To(true), // set by the user
-
-func getSampleManagedCluster() containerservice.ManagedCluster {
-	return containerservice.ManagedCluster{
-		ManagedClusterProperties: &containerservice.ManagedClusterProperties{
-			KubernetesVersion: to.StringPtr("v1.22.0"),
-			AgentPoolProfiles: &[]containerservice.ManagedClusterAgentPoolProfile{
-				converters.AgentPoolToManagedClusterAgentPoolProfile(azure.AgentPoolSpec{
-					Name:          "test-agentpool-0",
-					Mode:          string(infrav1exp.NodePoolModeSystem),
-					ResourceGroup: "test-rg",
-					Replicas:      int32(2),
-				}),
-				converters.AgentPoolToManagedClusterAgentPoolProfile(azure.AgentPoolSpec{
-					Name:              "test-agentpool-1",
-					Mode:              string(infrav1exp.NodePoolModeUser),
-					ResourceGroup:     "test-rg",
-					Replicas:          int32(4),
-					Cluster:           "test-managedcluster",
-					SKU:               "test_SKU",
-					Version:           to.StringPtr("v1.22.0"),
-					VnetSubnetID:      "fake/subnet/id",
-					MaxPods:           to.Int32Ptr(int32(32)),
-					AvailabilityZones: []string{"1", "2"},
-				}),
 			},
 			Status: asocontainerservicev1.ManagedCluster_STATUS{
 				AgentPoolProfiles: []asocontainerservicev1.ManagedClusterAgentPoolProfile_STATUS{},
@@ -418,6 +394,35 @@ func getSampleManagedCluster() containerservice.ManagedCluster {
 		g.Expect(actual.Spec.NetworkProfile.DnsServiceIP).To(Equal(ptr.To("123.200.198.99")))
 		g.Expect(actual.Spec.NetworkProfile.ServiceCidr).To(Equal(ptr.To("123.200.198.0/10")))
 	})
+}
+
+func getSampleManagedCluster() asocontainerservicev1.ManagedCluster {
+	return asocontainerservicev1.ManagedCluster{
+		Spec: asocontainerservicev1.ManagedCluster_Spec{
+			KubernetesVersion: ptr.To("v1.22.0"),
+			AgentPoolProfiles: []asocontainerservicev1.ManagedClusterAgentPoolProfile{
+				{
+					Name:              ptr.To("test-agentpool-0"),
+					Mode:              ptr.To(asocontainerservicev1.AgentPoolMode("System")),
+					Count:             ptr.To(2),
+					EnableAutoScaling: ptr.To(false),
+					Type:              ptr.To(asocontainerservicev1.AgentPoolType_VirtualMachineScaleSets),
+				},
+				{
+					Name:              ptr.To("test-agentpool-1"),
+					Mode:              ptr.To(asocontainerservicev1.AgentPoolMode("User")),
+					Count:             ptr.To(4),
+					EnableAutoScaling: ptr.To(false),
+					Type:              ptr.To(asocontainerservicev1.AgentPoolType_VirtualMachineScaleSets),
+					VnetSubnetReference: &genruntime.ResourceReference{
+						ARMID: "fake/subnet/id",
+					},
+					MaxPods:           ptr.To(32),
+					AvailabilityZones: []string{"1", "2"},
+				},
+			},
+		},
+	}
 }
 
 func TestOIDCIssuerURLConfigMap(t *testing.T) {
