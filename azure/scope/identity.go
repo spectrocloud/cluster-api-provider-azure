@@ -40,6 +40,9 @@ import (
 // AzureSecretKey is the value for they client secret key.
 const AzureSecretKey = "clientSecret"
 
+// AzureSecretCertKey is the key for the Azure Secret certificate in the Secret.
+const AzureSecretCertKey = "azureSecretCert"
+
 // CredentialsProvider defines the behavior for azure identity based credential providers.
 type CredentialsProvider interface {
 	GetClientID() string
@@ -91,16 +94,26 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 
 	tracingProvider := azotel.NewTracingProvider(otel.GetTracerProvider(), nil)
 
+	// Create credentials using the global transport system
+	// Certificate handling is done at initialization time in azure_secret_cloud.go
+	log.Info("Using global transport system for Azure credential configuration")
+
 	switch p.Identity.Spec.Type {
 	case infrav1.WorkloadIdentity:
-		cred, authErr = p.cache.GetOrStoreWorkloadIdentity(&azidentity.WorkloadIdentityCredentialOptions{
+		options := &azidentity.WorkloadIdentityCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
 			},
 			TenantID:      p.Identity.Spec.TenantID,
 			ClientID:      p.Identity.Spec.ClientID,
 			TokenFilePath: GetProjectedTokenPath(),
-		})
+		}
+
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&options.ClientOptions)
+		log.Info("Using centralized transport for WorkloadIdentityCredential")
+
+		cred, authErr = p.cache.GetOrStoreWorkloadIdentity(options)
 
 	case infrav1.ManualServicePrincipal:
 		log.Info("Identity type ManualServicePrincipal is deprecated and will be removed in a future release. See https://capz.sigs.k8s.io/topics/identities to find a supported identity type.")
@@ -110,6 +123,7 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get client secret")
 		}
+
 		options := azidentity.ClientSecretCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
@@ -124,6 +138,16 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 				},
 			},
 		}
+
+		// Always disable instance discovery for custom environments
+		// This is safe for standard Azure environments too
+		options.DisableInstanceDiscovery = true
+		log.Info("Disabled instance discovery for credential compatibility")
+
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&options.ClientOptions)
+		log.Info("Using centralized transport for ClientSecretCredential")
+
 		cred, authErr = p.cache.GetOrStoreClientSecret(p.GetTenantID(), p.Identity.Spec.ClientID, clientSecret, &options)
 
 	case infrav1.ServicePrincipalCertificate:
@@ -141,19 +165,54 @@ func (p *AzureCredentialsProvider) GetTokenCredential(ctx context.Context, resou
 			}
 			certsContent = []byte(clientSecret)
 		}
-		cred, authErr = p.cache.GetOrStoreClientCert(p.GetTenantID(), p.Identity.Spec.ClientID, certsContent, nil, &azidentity.ClientCertificateCredentialOptions{
+
+		certOptions := &azidentity.ClientCertificateCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
+				Cloud: cloud.Configuration{
+					ActiveDirectoryAuthorityHost: activeDirectoryEndpoint,
+					Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+						cloud.ResourceManager: {
+							Audience: tokenAudience,
+							Endpoint: resourceManagerEndpoint,
+						},
+					},
+				},
 			},
-		})
+		}
+
+		// Always disable instance discovery for custom environments
+		// This is safe for standard Azure environments too
+		certOptions.DisableInstanceDiscovery = true
+		log.Info("Disabled instance discovery for certificate credential compatibility")
+
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&certOptions.ClientOptions)
+		log.Info("Using centralized transport for ClientCertificateCredential")
+
+		cred, authErr = p.cache.GetOrStoreClientCert(p.GetTenantID(), p.Identity.Spec.ClientID, certsContent, nil, certOptions)
 
 	case infrav1.UserAssignedMSI:
 		options := azidentity.ManagedIdentityCredentialOptions{
 			ClientOptions: azcore.ClientOptions{
 				TracingProvider: tracingProvider,
+				Cloud: cloud.Configuration{
+					ActiveDirectoryAuthorityHost: activeDirectoryEndpoint,
+					Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+						cloud.ResourceManager: {
+							Audience: tokenAudience,
+							Endpoint: resourceManagerEndpoint,
+						},
+					},
+				},
 			},
 			ID: azidentity.ClientID(p.Identity.Spec.ClientID),
 		}
+
+		// Use centralized transport configuration
+		ConfigureAzIdentityOptions(&options.ClientOptions)
+		log.Info("Using centralized transport for ManagedIdentityCredential")
+
 		cred, authErr = p.cache.GetOrStoreManagedIdentity(&options)
 
 	default:

@@ -47,6 +47,8 @@ type Service struct {
 	zoneReconciler     async.Reconciler
 	vnetLinkReconciler async.Reconciler
 	recordReconciler   async.Reconciler
+	vnetLinkClient     *azureVirtualNetworkLinksClient
+	zonesClient        *azureZonesClient
 }
 
 // New creates a new private dns service.
@@ -76,6 +78,8 @@ func New(scope Scope) (*Service, error) {
 			armprivatedns.VirtualNetworkLinksClientDeleteResponse](scope, vnetLinkClient, vnetLinkClient),
 		recordReconciler: async.New[armprivatedns.RecordSetsClientCreateOrUpdateResponse,
 			armprivatedns.RecordSetsClientDeleteResponse](scope, recordSetsClient, recordSetsClient),
+		vnetLinkClient: vnetLinkClient,
+		zonesClient:    zoneClient,
 	}, nil
 }
 

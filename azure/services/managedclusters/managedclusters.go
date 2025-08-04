@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/secret"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
@@ -142,33 +143,52 @@ func postCreateOrUpdateResourceHook(ctx context.Context, scope ManagedClusterSco
   The user needs to ensure to provide service principal with admin AAD privileges.
 */
 func reconcileKubeconfig(ctx context.Context, scope ManagedClusterScope, namespace string) (adminKubeConfigData []byte, userKubeConfigData []byte, err error) {
+	logger := log.FromContext(ctx)
+	logger.V(1).Info("reconcileKubeconfig called", "cluster", scope.ClusterName())
+	logger.V(1).Info("kubeconfig reconciliation details", "namespace", namespace, "isAADEnabled", scope.IsAADEnabled(), "areLocalAccountsDisabled", scope.AreLocalAccountsDisabled())
+
 	if scope.IsAADEnabled() {
+		logger.V(1).Info("AAD is enabled, getting user kubeconfig data")
 		if userKubeConfigData, err = getUserKubeconfigData(ctx, scope, namespace); err != nil {
+			logger.Error(err, "failed to get user kubeconfig")
 			return nil, nil, errors.Wrap(err, "error while trying to get user kubeconfig")
 		}
+		logger.V(1).Info("got user kubeconfig data", "bytes", len(userKubeConfigData))
 	}
 
 	if scope.AreLocalAccountsDisabled() {
+		logger.V(1).Info("local accounts disabled, using user kubeconfig with token path")
 		userKubeconfigWithToken, err := getUserKubeConfigWithToken(ctx, userKubeConfigData, scope)
 		if err != nil {
+			logger.Error(err, "failed to get user kubeconfig with token")
 			return nil, nil, errors.Wrap(err, "error while trying to get user kubeconfig with token")
 		}
+		logger.V(1).Info("successfully got user kubeconfig with token", "bytes", len(userKubeconfigWithToken))
 		return userKubeconfigWithToken, userKubeConfigData, nil
 	}
 
+	logger.V(1).Info("using admin kubeconfig path (local accounts enabled)")
 	asoSecret := &corev1.Secret{}
+	secretName := adminKubeconfigSecretName(scope.ClusterName())
+	logger.V(1).Info("looking for ASO admin kubeconfig secret", "namespace", namespace, "secretName", secretName)
+
 	err = scope.GetClient().Get(
 		ctx,
 		client.ObjectKey{
 			Namespace: namespace,
-			Name:      adminKubeconfigSecretName(scope.ClusterName()),
+			Name:      secretName,
 		},
 		asoSecret,
 	)
 	if err != nil {
+		logger.Error(err, "failed to get ASO admin kubeconfig secret")
 		return nil, nil, errors.Wrap(err, "failed to get ASO admin kubeconfig secret")
 	}
+
 	adminKubeConfigData = asoSecret.Data[secret.KubeconfigDataName]
+	logger.V(1).Info("retrieved admin kubeconfig from ASO secret", "bytes", len(adminKubeConfigData))
+
+	logger.V(1).Info("reconcileKubeconfig completed", "adminBytes", len(adminKubeConfigData), "userBytes", len(userKubeConfigData))
 	return adminKubeConfigData, userKubeConfigData, nil
 }
 
@@ -204,6 +224,7 @@ func getUserKubeConfigWithToken(ctx context.Context, userKubeConfigData []byte, 
 		auth.Token = token.Token
 		auth.Exec = nil
 	}
+
 	kubeconfig, err := clientcmd.Write(*config)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while trying to marshal new user kubeconfig with token")

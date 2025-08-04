@@ -17,6 +17,7 @@ limitations under the License.
 package azure
 
 import (
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -27,6 +28,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/sdk/tracing/azotel"
+	azureautorest "github.com/Azure/go-autorest/autorest/azure"
 	"go.opentelemetry.io/otel"
 
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
@@ -44,6 +46,8 @@ const (
 	ChinaCloudName = "AzureChinaCloud"
 	// USGovernmentCloudName is the name of the Azure US Government cloud.
 	USGovernmentCloudName = "AzureUSGovernmentCloud"
+	// AzSecretCloudName is the name of the Azure US Secret cloud.
+	AzSecretCloudName = "AzureUSSecretCloud"
 )
 
 const (
@@ -109,6 +113,27 @@ const (
 	CustomHeaderPrefix = "infrastructure.cluster.x-k8s.io/custom-header-"
 )
 
+// Cloud service names
+const (
+	MicrosoftGraphAPI = cloud.ServiceName("MicrosoftGraphAPI")
+	GalleryURL        = cloud.ServiceName("GalleryURL")
+	AzureStorageURL   = cloud.ServiceName("AzureStorageURL")
+)
+
+// Remove AzureSecretConfig as it's now loaded dynamically
+
+// AzSecretCertPool holds the certificate pool for custom Azure environments
+// This will be populated at runtime when custom certificates are detected
+var AzSecretCertPool *x509.CertPool
+
+// AzSecretCertData holds the raw certificate data for custom Azure environments
+// This will be populated at runtime when custom certificates are detected
+var AzSecretCertData []byte
+
+// GlobalHTTPClient holds the global HTTP client for custom Azure environments
+// This will be populated by the scope package to avoid import cycles
+var GlobalHTTPClient *http.Client
+
 var (
 	// LinuxBootstrapExtensionCommand is the command the VM bootstrap extension will execute to verify Linux nodes bootstrap completes successfully.
 	LinuxBootstrapExtensionCommand = fmt.Sprintf("for i in $(seq 1 %d); do test -f %s && break; if [ $i -eq %d ]; then exit 1; else sleep %d; fi; done", bootstrapExtensionRetries, bootstrapSentinelFile, bootstrapExtensionRetries, bootstrapExtensionSleep)
@@ -116,6 +141,11 @@ var (
 	WindowsBootstrapExtensionCommand = fmt.Sprintf("powershell.exe -Command \"for ($i = 0; $i -lt %d; $i++) {if (Test-Path '%s') {exit 0} else {Start-Sleep -Seconds %d}} exit -2\"",
 		bootstrapExtensionRetries, bootstrapSentinelFile, bootstrapExtensionSleep)
 )
+
+// IsAzSecretCertConfigured returns true if the AzSecret certificate pool has been configured
+func IsAzSecretCertConfigured() bool {
+	return AzSecretCertPool != nil
+}
 
 // GenerateBackendAddressPoolName generates a load balancer backend address pool name.
 func GenerateBackendAddressPoolName(lbName string) string {
@@ -360,6 +390,9 @@ func UserAgent() string {
 }
 
 // ARMClientOptions returns default ARM client options for CAPZ SDK v2 requests.
+//
+// For custom cloud environments, it automatically converts dynamically loaded
+// environments to the new SDK v2 format.
 func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (*arm.ClientOptions, error) {
 	opts := &arm.ClientOptions{}
 
@@ -373,8 +406,20 @@ func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (
 	case "":
 		// No cloud name provided, so leave at defaults.
 	default:
-		return nil, fmt.Errorf("invalid cloud name %q", azureEnvironment)
+		// For custom environments, try to get the environment configuration
+		// from the dynamically loaded environments
+		cloudConfig, err := getCloudConfigurationFromEnvironment(azureEnvironment)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cloud name %q: %w", azureEnvironment, err)
+		}
+		opts.Cloud = cloudConfig
 	}
+
+	// Use centralized transport configuration
+	if GlobalHTTPClient != nil {
+		opts.ClientOptions.Transport = GlobalHTTPClient
+	}
+
 	opts.PerCallPolicies = []policy.Policy{
 		correlationIDPolicy{},
 		userAgentPolicy{},
@@ -385,6 +430,39 @@ func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (
 	opts.TracingProvider = azotel.NewTracingProvider(otel.GetTracerProvider(), nil)
 
 	return opts, nil
+}
+
+// getCloudConfigurationFromEnvironment converts a dynamically loaded environment
+// to the new Azure SDK v2 cloud configuration format
+// Must have this, since we are using the new SDK v2.
+func getCloudConfigurationFromEnvironment(environmentName string) (cloud.Configuration, error) {
+	env, err := azureautorest.EnvironmentFromName(environmentName)
+	if err != nil {
+		return cloud.Configuration{}, fmt.Errorf("environment %q not found: %w", environmentName, err)
+	}
+
+	// Convert from old SDK v1 format to new SDK v2 format
+	return cloud.Configuration{
+		ActiveDirectoryAuthorityHost: env.ActiveDirectoryEndpoint,
+		Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+			cloud.ResourceManager: {
+				Endpoint: env.ResourceManagerEndpoint,
+				Audience: env.TokenAudience,
+			},
+			MicrosoftGraphAPI: {
+				Endpoint: env.GraphEndpoint,
+				Audience: env.GraphEndpoint,
+			},
+			GalleryURL: {
+				Endpoint: env.GalleryEndpoint,
+				Audience: env.GalleryEndpoint,
+			},
+			AzureStorageURL: {
+				Endpoint: fmt.Sprintf("https://%s", env.StorageEndpointSuffix),
+				Audience: fmt.Sprintf("https://%s", env.StorageEndpointSuffix),
+			},
+		},
+	}, nil
 }
 
 // correlationIDPolicy adds the "x-ms-correlation-request-id" header to requests.
@@ -436,4 +514,10 @@ func GetNormalizedKubernetesName(name string) string {
 	// Remove leading and trailing hyphens
 	name = strings.Trim(name, "-")
 	return name
+}
+
+// GetGlobalHTTPClient returns the global HTTP client for custom Azure environments
+// This is a wrapper to avoid import cycles by using a global variable approach
+func GetGlobalHTTPClient() *http.Client {
+	return GlobalHTTPClient
 }

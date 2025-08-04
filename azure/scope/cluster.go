@@ -70,7 +70,7 @@ type ClusterScopeParams struct {
 // NewClusterScope creates a new Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
 func NewClusterScope(ctx context.Context, params ClusterScopeParams) (*ClusterScope, error) {
-	ctx, _, done := tele.StartSpanWithLogger(ctx, "azure.clusterScope.NewClusterScope")
+	ctx, log, done := tele.StartSpanWithLogger(ctx, "azure.clusterScope.NewClusterScope")
 	defer done()
 
 	if params.Cluster == nil {
@@ -78,6 +78,12 @@ func NewClusterScope(ctx context.Context, params ClusterScopeParams) (*ClusterSc
 	}
 	if params.AzureCluster == nil {
 		return nil, errors.New("failed to generate new scope from nil AzureCluster")
+	}
+
+	// Initialize Azure environment and certificates from ConfigMaps in cluster namespace
+	if err := InitializeAzureConfigForCluster(ctx, params.Client, params.AzureCluster.Namespace, params.AzureCluster.Spec.AzureEnvironment); err != nil {
+		// Log but don't fail - continue with default configuration
+		log.V(1).Info("Failed to initialize custom Azure configuration, using defaults", "error", err.Error())
 	}
 
 	credentialsProvider, err := NewAzureCredentialsProvider(ctx, params.CredentialCache, params.Client, params.AzureCluster.Spec.IdentityRef, params.AzureCluster.Namespace)
@@ -150,24 +156,22 @@ func (s *ClusterScope) ASOOwner() client.Object {
 func (s *ClusterScope) PublicIPSpecs() []azure.ResourceSpecGetter {
 	var publicIPSpecs []azure.ResourceSpecGetter
 
-	// Public IP specs for control plane lb
+	// Public IP specs for control plane outbound lb
 	var controlPlaneOutboundIPSpecs []azure.ResourceSpecGetter
-	if s.IsAPIServerPrivate() {
-		// Public IP specs for control plane outbound lb
-		if s.ControlPlaneOutboundLB() != nil {
-			for _, ip := range s.ControlPlaneOutboundLB().FrontendIPs {
-				controlPlaneOutboundIPSpecs = append(controlPlaneOutboundIPSpecs, &publicips.PublicIPSpec{
-					Name:             ip.PublicIP.Name,
-					ResourceGroup:    s.ResourceGroup(),
-					ClusterName:      s.ClusterName(),
-					DNSName:          "",    // Set to default value
-					IsIPv6:           false, // Set to default value
-					Location:         s.Location(),
-					ExtendedLocation: s.ExtendedLocation(),
-					FailureDomains:   s.FailureDomains(),
-					AdditionalTags:   s.AdditionalTags(),
-				})
-			}
+	if s.IsAPIServerPrivate() && s.ControlPlaneOutboundLB() != nil {
+		for _, ip := range s.ControlPlaneOutboundLB().FrontendIPs {
+			publicIPSpecs = append(publicIPSpecs, &publicips.PublicIPSpec{
+				Name:             ip.PublicIP.Name,
+				ResourceGroup:    s.ResourceGroup(),
+				ClusterName:      s.ClusterName(),
+				DNSName:          "",    // Set to default value
+				IsIPv6:           false, // Set to default value
+				Location:         s.Location(),
+				ExtendedLocation: s.ExtendedLocation(),
+				FailureDomains:   s.FailureDomains(),
+				AdditionalTags:   s.AdditionalTags(),
+				IPTags:           ip.PublicIP.IPTags,
+			})
 		}
 	} else {
 		if s.ControlPlaneEnabled() {
@@ -202,6 +206,7 @@ func (s *ClusterScope) PublicIPSpecs() []azure.ResourceSpecGetter {
 				ExtendedLocation: s.ExtendedLocation(),
 				FailureDomains:   s.FailureDomains(),
 				AdditionalTags:   s.AdditionalTags(),
+				IPTags:           ip.PublicIP.IPTags,
 			})
 		}
 	}
@@ -560,6 +565,13 @@ func (s *ClusterScope) VNetSpec() azure.ASOResourceSpecGetter[*asonetworkv1api20
 
 // PrivateDNSSpec returns the private dns zone spec.
 func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, linkSpec, recordSpec []azure.ResourceSpecGetter) {
+	// Check for bypass annotation
+	if s.AzureCluster.Annotations != nil {
+		if bypass, exists := s.AzureCluster.Annotations[azure.DisablePrivateDNSAnnotation]; exists && bypass == "true" {
+			return nil, nil, nil
+		}
+	}
+
 	if s.IsAPIServerPrivate() {
 		resourceGroup := s.ResourceGroup()
 		if s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneResourceGroup != "" {
@@ -793,11 +805,17 @@ func (s *ClusterScope) IsAPIServerPrivate() bool {
 
 // APIServerPublicIP returns the API Server public IP.
 func (s *ClusterScope) APIServerPublicIP() *infrav1.PublicIPSpec {
+	if s.APIServerLB() == nil || len(s.APIServerLB().FrontendIPs) == 0 || s.APIServerLB().FrontendIPs[0].PublicIP == nil {
+		return nil
+	}
 	return s.APIServerLB().FrontendIPs[0].PublicIP
 }
 
 // APIServerPrivateIP returns the API Server private IP.
 func (s *ClusterScope) APIServerPrivateIP() string {
+	if s.APIServerLB() == nil || len(s.APIServerLB().FrontendIPs) == 0 {
+		return ""
+	}
 	return s.APIServerLB().FrontendIPs[0].PrivateIPAddress
 }
 

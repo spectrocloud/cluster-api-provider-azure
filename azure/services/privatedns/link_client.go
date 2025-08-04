@@ -120,3 +120,22 @@ func (avc *azureVirtualNetworkLinksClient) DeleteAsync(ctx context.Context, spec
 	// if the operation completed, return a nil poller.
 	return nil, err
 }
+
+// ListByZone lists all virtual network links for a given private DNS zone.
+func (avc *azureVirtualNetworkLinksClient) ListByZone(ctx context.Context, resourceGroup, zoneName string) ([]*armprivatedns.VirtualNetworkLink, error) {
+	ctx, _, done := tele.StartSpanWithLogger(ctx, "privatedns.azureVirtualNetworkLinksClient.ListByZone")
+	defer done()
+
+	var links []*armprivatedns.VirtualNetworkLink
+	pager := avc.vnetlinks.NewListPager(resourceGroup, zoneName, nil)
+	for pager.More() {
+		resp, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to list virtual network links for private DNS zone")
+		}
+		for _, link := range resp.Value {
+			links = append(links, link)
+		}
+	}
+	return links, nil
+}

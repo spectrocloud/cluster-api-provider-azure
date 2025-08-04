@@ -328,6 +328,14 @@ func main() {
 
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.UserAgent = "cluster-api-provider-azure-manager"
+
+	// Configure longer timeouts for cluster connections only for Azure Secret cloud
+	if os.Getenv("AZURE_ENVIRONMENT") == azure.AzSecretCloudName {
+		restConfig.Timeout = 30 * time.Second
+		restConfig.QPS = 20
+		restConfig.Burst = 30
+	}
+
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                     scheme,
 		LeaderElection:             enableLeaderElection,

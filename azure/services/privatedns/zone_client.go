@@ -120,3 +120,24 @@ func (azc *azureZonesClient) DeleteAsync(ctx context.Context, spec azure.Resourc
 	// if the operation completed, return a nil poller.
 	return nil, err
 }
+
+// ListAllZonesByName lists all private DNS zones with the given name across all resource groups.
+func (azc *azureZonesClient) ListAllZonesByName(ctx context.Context, zoneName string) ([]*armprivatedns.PrivateZone, error) {
+	ctx, _, done := tele.StartSpanWithLogger(ctx, "privatedns.azureZonesClient.ListAllZonesByName")
+	defer done()
+
+	var zones []*armprivatedns.PrivateZone
+	pager := azc.privatezones.NewListPager(nil)
+	for pager.More() {
+		resp, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to list private DNS zones")
+		}
+		for _, zone := range resp.Value {
+			if zone.Name != nil && *zone.Name == zoneName {
+				zones = append(zones, zone)
+			}
+		}
+	}
+	return zones, nil
+}
