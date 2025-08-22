@@ -885,7 +885,16 @@ func (s *ClusterScope) Namespace() string {
 
 // Location returns the cluster location.
 func (s *ClusterScope) Location() string {
-	return azureutil.NormalizeAzureRegion(s.AzureCluster.Spec.Location)
+	// Only apply region normalization if both conditions are met:
+	// 1. We're in AzureUSSecretCloud environment AND
+	// 2. Resource manager endpoint contains .scombine.scloud suffix
+	if s.AzureCluster.Spec.AzureEnvironment == "AzureUSSecretCloud" &&
+		strings.Contains(s.ResourceManagerEndpoint, ".scombine.scloud") {
+		return azureutil.NormalizeAzureRegion(s.AzureCluster.Spec.Location)
+	}
+
+	// Otherwise, return the original location unchanged
+	return s.AzureCluster.Spec.Location
 }
 
 // AvailabilitySetEnabled informs machines that they should be part of an Availability Set.

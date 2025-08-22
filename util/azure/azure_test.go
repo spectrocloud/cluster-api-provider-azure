@@ -269,3 +269,8 @@ func TestNormalizeAzureRegion(t *testing.T) {
 		})
 	}
 }
+
+// Note: The conditional logic for when to apply region normalization is now
+// handled in the individual Location() methods in each scope, based on:
+// 1. AzureEnvironment == "AzureUSSecretCloud"
+// 2. ResourceManagerEndpoint contains ".scombine.scloud"

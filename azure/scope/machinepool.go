@@ -210,7 +210,7 @@ func (m *MachinePoolScope) ScaleSetSpec(ctx context.Context) azure.ResourceSpecG
 		NetworkInterfaces:            m.AzureMachinePool.Spec.Template.NetworkInterfaces,
 		IPv6Enabled:                  m.IsIPv6Enabled(),
 		OrchestrationMode:            m.AzureMachinePool.Spec.OrchestrationMode,
-		Location:                     azureutil.NormalizeAzureRegion(m.AzureMachinePool.Spec.Location),
+		Location:                     m.Location(),
 		SubscriptionID:               m.SubscriptionID(),
 		HasReplicasExternallyManaged: m.HasReplicasExternallyManaged(ctx),
 		ClusterName:                  m.ClusterName(),
@@ -237,6 +237,20 @@ func (m *MachinePoolScope) ScaleSetSpec(ctx context.Context) azure.ResourceSpecG
 	}
 
 	return spec
+}
+
+// Location returns the machine pool location.
+func (m *MachinePoolScope) Location() string {
+	// Only apply region normalization if both conditions are met:
+	// 1. We're in AzureUSSecretCloud environment AND
+	// 2. Resource manager endpoint contains .scombine.scloud suffix
+	if m.CloudEnvironment() == "AzureUSSecretCloud" &&
+		strings.Contains(m.BaseURI(), ".scombine.scloud") {
+		return azureutil.NormalizeAzureRegion(m.AzureMachinePool.Spec.Location)
+	}
+
+	// Otherwise, return the original location unchanged
+	return m.AzureMachinePool.Spec.Location
 }
 
 // Name returns the Azure Machine Pool Name.

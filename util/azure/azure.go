@@ -102,8 +102,6 @@ var regionMapping = map[string]string{
 
 // NormalizeAzureRegion translates custom region names to standard Azure region names.
 // If the region is not in the mapping, it returns the original region name.
-// This function is useful for environments like Azure Stack Edge, Azure Government,
-// or other deployments where custom region names are used.
 func NormalizeAzureRegion(region string) string {
 	if normalizedRegion, exists := regionMapping[region]; exists {
 		return normalizedRegion
