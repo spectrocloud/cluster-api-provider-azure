@@ -232,3 +232,40 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeAzureRegion(t *testing.T) {
+	tests := []struct {
+		name           string
+		inputRegion    string
+		expectedRegion string
+	}{
+		{
+			name:           "mapped region - ussec to eastus2",
+			inputRegion:    "ussec",
+			expectedRegion: "eastus2",
+		},
+		{
+			name:           "unmapped region - standard region passes through",
+			inputRegion:    "westus",
+			expectedRegion: "westus",
+		},
+		{
+			name:           "unmapped region - non-standard region passes through",
+			inputRegion:    "customregion",
+			expectedRegion: "customregion",
+		},
+		{
+			name:           "empty region",
+			inputRegion:    "",
+			expectedRegion: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			result := NormalizeAzureRegion(tt.inputRegion)
+			g.Expect(result).To(Equal(tt.expectedRegion))
+		})
+	}
+}

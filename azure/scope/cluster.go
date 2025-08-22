@@ -52,6 +52,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/virtualnetworks"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/vnetpeerings"
 	"sigs.k8s.io/cluster-api-provider-azure/feature"
+	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
@@ -884,7 +885,7 @@ func (s *ClusterScope) Namespace() string {
 
 // Location returns the cluster location.
 func (s *ClusterScope) Location() string {
-	return s.AzureCluster.Spec.Location
+	return azureutil.NormalizeAzureRegion(s.AzureCluster.Spec.Location)
 }
 
 // AvailabilitySetEnabled informs machines that they should be part of an Availability Set.
