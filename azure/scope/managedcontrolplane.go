@@ -184,7 +184,17 @@ func (s *ManagedControlPlaneScope) Location() string {
 	if s.ControlPlane == nil {
 		return ""
 	}
-	return azureutil.NormalizeAzureRegion(s.ControlPlane.Spec.Location)
+
+	// Only apply region normalization if both conditions are met:
+	// 1. We're in AzureUSSecretCloud environment AND
+	// 2. Resource manager endpoint contains .scombine.scloud suffix
+	if s.ControlPlane.Spec.AzureEnvironment == "AzureUSSecretCloud" &&
+		strings.Contains(s.ResourceManagerEndpoint, ".scombine.scloud") {
+		return azureutil.NormalizeAzureRegion(s.ControlPlane.Spec.Location)
+	}
+
+	// Otherwise, return the original location unchanged
+	return s.ControlPlane.Spec.Location
 }
 
 // ExtendedLocation has not been implemented for AzureManagedControlPlane.
