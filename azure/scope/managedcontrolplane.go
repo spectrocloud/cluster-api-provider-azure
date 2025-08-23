@@ -55,6 +55,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/privateendpoints"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/subnets"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/virtualnetworks"
+	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
@@ -183,6 +184,16 @@ func (s *ManagedControlPlaneScope) Location() string {
 	if s.ControlPlane == nil {
 		return ""
 	}
+
+	// Only apply region normalization if both conditions are met:
+	// 1. We're in AzureUSSecretCloud environment AND
+	// 2. Resource manager endpoint contains .scombine.scloud suffix
+	if s.ControlPlane.Spec.AzureEnvironment == "AzureUSSecretCloud" &&
+		strings.Contains(s.ResourceManagerEndpoint, ".scombine.scloud") {
+		return azureutil.NormalizeAzureRegion(s.ControlPlane.Spec.Location)
+	}
+
+	// Otherwise, return the original location unchanged
 	return s.ControlPlane.Spec.Location
 }
 
@@ -592,7 +603,7 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		ResourceGroup:     s.ControlPlane.Spec.ResourceGroupName,
 		NodeResourceGroup: s.ControlPlane.Spec.NodeResourceGroupName,
 		ClusterName:       s.ClusterName(),
-		Location:          s.ControlPlane.Spec.Location,
+		Location:          s.Location(),
 		Tags:              s.ControlPlane.Spec.AdditionalTags,
 		Version:           strings.TrimPrefix(s.ControlPlane.Spec.Version, "v"),
 		DNSServiceIP:      s.ControlPlane.Spec.DNSServiceIP,
