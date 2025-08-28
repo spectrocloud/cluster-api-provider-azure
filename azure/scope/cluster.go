@@ -174,7 +174,7 @@ func (s *ClusterScope) PublicIPSpecs() []azure.ResourceSpecGetter {
 				IPTags:           ip.PublicIP.IPTags,
 			})
 		}
-	} else {
+	} else if !s.IsAPIServerPrivate() || s.AzureCluster.Spec.AzureEnvironment == azure.AzSecretCloudName {
 		if s.ControlPlaneEnabled() {
 			controlPlaneOutboundIPSpecs = []azure.ResourceSpecGetter{
 				&publicips.PublicIPSpec{
