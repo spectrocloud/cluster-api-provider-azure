@@ -188,6 +188,7 @@ func updateGlobalTransportLocked(certData []byte) error {
 	// Create global transport with certificate pool
 	globalTransport = &http.Transport{
 		TLSClientConfig: &tls.Config{
+			MinVersion:         tls.VersionTLS12,
 			RootCAs:            globalCertPool,
 			InsecureSkipVerify: false,
 		},
