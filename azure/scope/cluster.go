@@ -1201,7 +1201,7 @@ func (s *ClusterScope) Location() string {
 	// Only apply region normalization if both conditions are met:
 	// 1. We're in AzureUSSecretCloud environment AND
 	// 2. Resource manager endpoint contains .scombine.scloud suffix
-	if s.AzureCluster.Spec.AzureEnvironment == "AzureUSSecretCloud" &&
+	if s.isAzureSecretCloudEnvironment() &&
 		strings.Contains(s.ResourceManagerEndpoint, ".scombine.scloud") {
 		return azureutil.NormalizeAzureRegion(s.AzureCluster.Spec.Location)
 	}
