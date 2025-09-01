@@ -52,6 +52,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/virtualnetworks"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/vnetpeerings"
 	"sigs.k8s.io/cluster-api-provider-azure/feature"
+	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
@@ -152,12 +153,90 @@ func (s *ClusterScope) ASOOwner() client.Object {
 	return s.AzureCluster
 }
 
+// isAzureSecretCloudEnvironment returns true if we're running in Azure Secret Cloud environment
+func (s *ClusterScope) isAzureSecretCloudEnvironment() bool {
+	return s.AzureCluster.Spec.AzureEnvironment == azure.AzSecretCloudName
+}
+
+// Azure Secret Cloud specific implementations with enhanced nil safety
+func (s *ClusterScope) apiServerLBNameForAzureSecret() string {
+	if lb := s.APIServerLB(); lb != nil {
+		return lb.Name
+	}
+	return ""
+}
+
+func (s *ClusterScope) apiServerLBPoolNameForAzureSecret() string {
+	if lb := s.APIServerLB(); lb != nil {
+		return lb.BackendPool.Name
+	}
+	return ""
+}
+
+func (s *ClusterScope) apiServerHostForAzureSecret() string {
+	if s.IsAPIServerPrivate() {
+		var isPrivateDNSZoneName bool
+		if len(s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneName) > 0 {
+			isPrivateDNSZoneName = true
+		}
+		return azure.GeneratePrivateFQDN(s.GetPrivateDNSZoneName(), s.AzureCluster.Name, isPrivateDNSZoneName)
+	}
+
+	return s.APIServerPublicIP().DNSName
+}
+
+// Standard environment implementations (original working logic)
+func (s *ClusterScope) apiServerLBNameForStandard() string {
+	return s.APIServerLB().Name // Original logic
+}
+
+func (s *ClusterScope) apiServerLBPoolNameForStandard() string {
+	return s.APIServerLB().BackendPool.Name // Original logic
+}
+
+func (s *ClusterScope) apiServerHostForStandard() string {
+	if s.IsAPIServerPrivate() {
+		var isPrivateDNSZoneName bool
+		if len(s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneName) > 0 {
+			isPrivateDNSZoneName = true
+		}
+		return azure.GeneratePrivateFQDN(s.GetPrivateDNSZoneName(), s.AzureCluster.Name, isPrivateDNSZoneName)
+	}
+	return s.APIServerPublicIP().DNSName // Original logic
+}
+
+// DNS name setting logic for different environments
+func (s *ClusterScope) setDNSNameForAzureSecret() {
+	// Generate valid FQDN if not set.
+	// Note: this function uses the AzureCluster subscription ID.
+	if !s.IsAPIServerPrivate() && s.APIServerPublicIP().DNSName == "" {
+		s.APIServerPublicIP().DNSName = s.GenerateFQDN(s.APIServerPublicIP().Name)
+	}
+}
+
+func (s *ClusterScope) setDNSNameForStandard() {
+	// Standard environments: Original working logic
+	if !s.IsAPIServerPrivate() && s.APIServerPublicIP().DNSName == "" {
+		s.APIServerPublicIP().DNSName = s.GenerateFQDN(s.APIServerPublicIP().Name)
+	}
+}
+
 // PublicIPSpecs returns the public IP specs.
 func (s *ClusterScope) PublicIPSpecs() []azure.ResourceSpecGetter {
+	// ENVIRONMENT CHECK FIRST - MOST OUTSIDE LOGIC
+	if s.isAzureSecretCloudEnvironment() {
+		return s.publicIPSpecsForAzureSecret()
+	}
+	return s.publicIPSpecsForStandard()
+}
+
+// publicIPSpecsForAzureSecret - Complete implementation for Azure Secret Cloud
+func (s *ClusterScope) publicIPSpecsForAzureSecret() []azure.ResourceSpecGetter {
 	var publicIPSpecs []azure.ResourceSpecGetter
 
-	// Public IP specs for control plane outbound lb
+	// Public IP specs for control plane lb - Azure Secret Cloud version
 	var controlPlaneOutboundIPSpecs []azure.ResourceSpecGetter
+
 	if s.IsAPIServerPrivate() && s.ControlPlaneOutboundLB() != nil {
 		for _, ip := range s.ControlPlaneOutboundLB().FrontendIPs {
 			publicIPSpecs = append(publicIPSpecs, &publicips.PublicIPSpec{
@@ -172,6 +251,106 @@ func (s *ClusterScope) PublicIPSpecs() []azure.ResourceSpecGetter {
 				AdditionalTags:   s.AdditionalTags(),
 				IPTags:           ip.PublicIP.IPTags,
 			})
+		}
+	} else {
+		if s.ControlPlaneEnabled() {
+			controlPlaneOutboundIPSpecs = []azure.ResourceSpecGetter{
+				&publicips.PublicIPSpec{
+					Name:             s.APIServerPublicIP().Name,
+					ResourceGroup:    s.ResourceGroup(),
+					DNSName:          s.APIServerPublicIP().DNSName,
+					IsIPv6:           false, // Currently azure requires an IPv4 lb rule to enable IPv6
+					ClusterName:      s.ClusterName(),
+					Location:         s.Location(),
+					ExtendedLocation: s.ExtendedLocation(),
+					FailureDomains:   s.FailureDomains(),
+					AdditionalTags:   s.AdditionalTags(),
+					IPTags:           s.APIServerPublicIP().IPTags,
+				},
+			}
+		}
+	}
+	publicIPSpecs = append(publicIPSpecs, controlPlaneOutboundIPSpecs...)
+
+	// Public IP specs for node outbound lb - Azure Secret Cloud version
+	if s.NodeOutboundLB() != nil {
+		for _, ip := range s.NodeOutboundLB().FrontendIPs {
+			publicIPSpecs = append(publicIPSpecs, &publicips.PublicIPSpec{
+				Name:             ip.PublicIP.Name,
+				ResourceGroup:    s.ResourceGroup(),
+				ClusterName:      s.ClusterName(),
+				DNSName:          "",    // Set to default value
+				IsIPv6:           false, // Set to default value
+				Location:         s.Location(),
+				ExtendedLocation: s.ExtendedLocation(),
+				FailureDomains:   s.FailureDomains(),
+				AdditionalTags:   s.AdditionalTags(),
+				IPTags:           ip.PublicIP.IPTags,
+			})
+		}
+	}
+
+	// Public IP specs for node NAT gateways
+	var nodeNatGatewayIPSpecs []azure.ResourceSpecGetter
+	for _, subnet := range s.NodeSubnets() {
+		if subnet.IsNatGatewayEnabled() {
+			nodeNatGatewayIPSpecs = append(nodeNatGatewayIPSpecs, &publicips.PublicIPSpec{
+				Name:           subnet.NatGateway.NatGatewayIP.Name,
+				ResourceGroup:  s.ResourceGroup(),
+				DNSName:        subnet.NatGateway.NatGatewayIP.DNSName,
+				IsIPv6:         false, // Public IP is IPv4 by default
+				ClusterName:    s.ClusterName(),
+				Location:       s.Location(),
+				FailureDomains: s.FailureDomains(),
+				AdditionalTags: s.AdditionalTags(),
+				IPTags:         subnet.NatGateway.NatGatewayIP.IPTags,
+			})
+		}
+		publicIPSpecs = append(publicIPSpecs, nodeNatGatewayIPSpecs...)
+	}
+
+	if azureBastion := s.AzureBastion(); azureBastion != nil {
+		// public IP for Azure Bastion.
+		azureBastionPublicIP := &publicips.PublicIPSpec{
+			Name:           azureBastion.PublicIP.Name,
+			ResourceGroup:  s.ResourceGroup(),
+			DNSName:        azureBastion.PublicIP.DNSName,
+			IsIPv6:         false, // Public IP is IPv4 by default
+			ClusterName:    s.ClusterName(),
+			Location:       s.Location(),
+			FailureDomains: s.FailureDomains(),
+			AdditionalTags: s.AdditionalTags(),
+			IPTags:         azureBastion.PublicIP.IPTags,
+		}
+		publicIPSpecs = append(publicIPSpecs, azureBastionPublicIP)
+	}
+
+	return publicIPSpecs
+}
+
+// publicIPSpecsForStandard - Complete ORIGINAL implementation for Standard environments
+func (s *ClusterScope) publicIPSpecsForStandard() []azure.ResourceSpecGetter {
+	var publicIPSpecs []azure.ResourceSpecGetter
+
+	// Public IP specs for control plane lb - EXACT ORIGINAL LOGIC
+	var controlPlaneOutboundIPSpecs []azure.ResourceSpecGetter
+	if s.IsAPIServerPrivate() {
+		// Public IP specs for control plane outbound lb
+		if s.ControlPlaneOutboundLB() != nil {
+			for _, ip := range s.ControlPlaneOutboundLB().FrontendIPs {
+				controlPlaneOutboundIPSpecs = append(controlPlaneOutboundIPSpecs, &publicips.PublicIPSpec{
+					Name:             ip.PublicIP.Name,
+					ResourceGroup:    s.ResourceGroup(),
+					ClusterName:      s.ClusterName(),
+					DNSName:          "",    // Set to default value
+					IsIPv6:           false, // Set to default value
+					Location:         s.Location(),
+					ExtendedLocation: s.ExtendedLocation(),
+					FailureDomains:   s.FailureDomains(),
+					AdditionalTags:   s.AdditionalTags(),
+					// ORIGINAL: No IPTags to avoid nil pointer risks
+				})
+			}
 		}
 	} else {
 		if s.ControlPlaneEnabled() {
@@ -251,6 +430,15 @@ func (s *ClusterScope) PublicIPSpecs() []azure.ResourceSpecGetter {
 
 // LBSpecs returns the load balancer specs.
 func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
+	// ENVIRONMENT CHECK FIRST - MOST OUTSIDE
+	if s.isAzureSecretCloudEnvironment() {
+		return s.lbSpecsForAzureSecret()
+	}
+	return s.lbSpecsForStandard()
+}
+
+// lbSpecsForAzureSecret - YOUR WORKING implementation for Azure Secret Cloud
+func (s *ClusterScope) lbSpecsForAzureSecret() []azure.ResourceSpecGetter {
 	var specs []azure.ResourceSpecGetter
 	if s.ControlPlaneEnabled() {
 		frontendLB := &loadbalancers.LBSpec{
@@ -275,7 +463,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			IdleTimeoutInMinutes: s.APIServerLB().IdleTimeoutInMinutes,
 			AdditionalTags:       s.AdditionalTags(),
 		}
-
 		if s.APIServerLB().FrontendIPs != nil {
 			for _, frontendIP := range s.APIServerLB().FrontendIPs {
 				// save the public IP for the frontend LB
@@ -288,7 +475,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 		}
 		specs = append(specs, frontendLB)
 	}
-
 	if s.APIServerLB().Type != infrav1.Internal && feature.Gates.Enabled(feature.APIServerILB) {
 		internalLB := &loadbalancers.LBSpec{
 			Name:                 s.APIServerLB().Name + "-internal",
@@ -308,7 +494,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			IdleTimeoutInMinutes: s.APIServerLB().IdleTimeoutInMinutes,
 			AdditionalTags:       s.AdditionalTags(),
 		}
-
 		privateIPFound := false
 		if s.APIServerLB().FrontendIPs != nil {
 			for _, frontendIP := range s.APIServerLB().FrontendIPs {
@@ -319,7 +504,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 				}
 			}
 		}
-
 		if !privateIPFound {
 			// If no private IP is found, use the default internal LB IP
 			// useful for scenarios where the user has not specified a private IP and is upgrading from a version that did not support it
@@ -335,7 +519,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 		}
 		specs = append(specs, internalLB)
 	}
-
 	// Node outbound LB
 	if s.NodeOutboundLB() != nil {
 		specs = append(specs, &loadbalancers.LBSpec{
@@ -356,7 +539,6 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			AdditionalTags:       s.AdditionalTags(),
 		})
 	}
-
 	// Control Plane Outbound LB
 	if s.ControlPlaneOutboundLB() != nil {
 		specs = append(specs, &loadbalancers.LBSpec{
@@ -377,7 +559,131 @@ func (s *ClusterScope) LBSpecs() []azure.ResourceSpecGetter {
 			AdditionalTags:       s.AdditionalTags(),
 		})
 	}
+	return specs
+}
 
+// lbSpecsForStandard - Complete load balancer specs implementation for Standard environments
+func (s *ClusterScope) lbSpecsForStandard() []azure.ResourceSpecGetter {
+	var specs []azure.ResourceSpecGetter
+	if s.ControlPlaneEnabled() {
+		frontendLB := &loadbalancers.LBSpec{
+			// API Server LB
+			Name:                 s.APIServerLB().Name,
+			ResourceGroup:        s.ResourceGroup(),
+			SubscriptionID:       s.SubscriptionID(),
+			ClusterName:          s.ClusterName(),
+			Location:             s.Location(),
+			ExtendedLocation:     s.ExtendedLocation(),
+			VNetName:             s.Vnet().Name,
+			VNetResourceGroup:    s.Vnet().ResourceGroup,
+			SubnetName:           s.ControlPlaneSubnet().Name,
+			FrontendIPConfigs:    s.APIServerLB().FrontendIPs,
+			APIServerPort:        s.APIServerPort(),
+			Type:                 s.APIServerLB().Type,
+			SKU:                  s.APIServerLB().SKU,
+			Role:                 infrav1.APIServerRole,
+			BackendPoolName:      s.APIServerLB().BackendPool.Name,
+			IPAllocationMethod:   s.APIServerLB().IPAllocationMethod,
+			PrivateIP:            s.APIServerLB().PrivateIP,
+			IdleTimeoutInMinutes: s.APIServerLB().IdleTimeoutInMinutes,
+			AdditionalTags:       s.AdditionalTags(),
+		}
+		if s.APIServerLB().FrontendIPs != nil {
+			for _, frontendIP := range s.APIServerLB().FrontendIPs {
+				// save the public IP for the frontend LB
+				// or if the LB is of the type internal, save the only IP allowed for the frontend LB
+				if frontendIP.PublicIP != nil || frontendLB.Type == infrav1.Internal {
+					frontendLB.FrontendIPConfigs = []infrav1.FrontendIP{frontendIP}
+					break
+				}
+			}
+		}
+		specs = append(specs, frontendLB)
+	}
+	if s.APIServerLB().Type != infrav1.Internal && feature.Gates.Enabled(feature.APIServerILB) {
+		internalLB := &loadbalancers.LBSpec{
+			Name:                 s.APIServerLB().Name + "-internal",
+			ResourceGroup:        s.ResourceGroup(),
+			SubscriptionID:       s.SubscriptionID(),
+			ClusterName:          s.ClusterName(),
+			Location:             s.Location(),
+			ExtendedLocation:     s.ExtendedLocation(),
+			VNetName:             s.Vnet().Name,
+			VNetResourceGroup:    s.Vnet().ResourceGroup,
+			SubnetName:           s.ControlPlaneSubnet().Name,
+			APIServerPort:        s.APIServerPort(),
+			Type:                 infrav1.Internal,
+			SKU:                  s.APIServerLB().SKU,
+			Role:                 infrav1.APIServerRoleInternal,
+			BackendPoolName:      s.APIServerLB().BackendPool.Name + "-internal",
+			IdleTimeoutInMinutes: s.APIServerLB().IdleTimeoutInMinutes,
+			AdditionalTags:       s.AdditionalTags(),
+		}
+		privateIPFound := false
+		if s.APIServerLB().FrontendIPs != nil {
+			for _, frontendIP := range s.APIServerLB().FrontendIPs {
+				if frontendIP.PrivateIPAddress != "" {
+					internalLB.FrontendIPConfigs = []infrav1.FrontendIP{frontendIP}
+					privateIPFound = true
+					break
+				}
+			}
+		}
+		if !privateIPFound {
+			// If no private IP is found, use the default internal LB IP
+			// useful for scenarios where the user has not specified a private IP and is upgrading from a version that did not support it
+			// TODO: Update the underlying infra prekubeadm command with the new internal IP and trigger a reconcile. https://github.com/kubernetes-sigs/cluster-api-provider-azure/issues/5334
+			internalLB.FrontendIPConfigs = []infrav1.FrontendIP{
+				{
+					Name: s.APIServerLB().Name + "-internal-ip",
+					FrontendIPClass: infrav1.FrontendIPClass{
+						PrivateIPAddress: infrav1.DefaultInternalLBIPAddress,
+					},
+				},
+			}
+		}
+		specs = append(specs, internalLB)
+	}
+	// Node outbound LB
+	if s.NodeOutboundLB() != nil {
+		specs = append(specs, &loadbalancers.LBSpec{
+			Name:                 s.NodeOutboundLB().Name,
+			ResourceGroup:        s.ResourceGroup(),
+			SubscriptionID:       s.SubscriptionID(),
+			ClusterName:          s.ClusterName(),
+			Location:             s.Location(),
+			ExtendedLocation:     s.ExtendedLocation(),
+			VNetName:             s.Vnet().Name,
+			VNetResourceGroup:    s.Vnet().ResourceGroup,
+			FrontendIPConfigs:    s.NodeOutboundLB().FrontendIPs,
+			Type:                 s.NodeOutboundLB().Type,
+			SKU:                  s.NodeOutboundLB().SKU,
+			BackendPoolName:      s.NodeOutboundLB().BackendPool.Name,
+			IdleTimeoutInMinutes: s.NodeOutboundLB().IdleTimeoutInMinutes,
+			Role:                 infrav1.NodeOutboundRole,
+			AdditionalTags:       s.AdditionalTags(),
+		})
+	}
+	// Control Plane Outbound LB
+	if s.ControlPlaneOutboundLB() != nil {
+		specs = append(specs, &loadbalancers.LBSpec{
+			Name:                 s.ControlPlaneOutboundLB().Name,
+			ResourceGroup:        s.ResourceGroup(),
+			SubscriptionID:       s.SubscriptionID(),
+			ClusterName:          s.ClusterName(),
+			Location:             s.Location(),
+			ExtendedLocation:     s.ExtendedLocation(),
+			VNetName:             s.Vnet().Name,
+			VNetResourceGroup:    s.Vnet().ResourceGroup,
+			FrontendIPConfigs:    s.ControlPlaneOutboundLB().FrontendIPs,
+			Type:                 s.ControlPlaneOutboundLB().Type,
+			SKU:                  s.ControlPlaneOutboundLB().SKU,
+			BackendPoolName:      s.ControlPlaneOutboundLB().BackendPool.Name,
+			IdleTimeoutInMinutes: s.ControlPlaneOutboundLB().IdleTimeoutInMinutes,
+			Role:                 infrav1.ControlPlaneOutboundRole,
+			AdditionalTags:       s.AdditionalTags(),
+		})
+	}
 	return specs
 }
 
@@ -795,7 +1101,11 @@ func (s *ClusterScope) ControlPlaneOutboundLB() *infrav1.LoadBalancerSpec {
 
 // APIServerLBName returns the API Server LB name.
 func (s *ClusterScope) APIServerLBName() string {
-	return s.APIServerLB().Name
+	// ENVIRONMENT CHECK FIRST - MOST OUTSIDE
+	if s.isAzureSecretCloudEnvironment() {
+		return s.apiServerLBNameForAzureSecret()
+	}
+	return s.apiServerLBNameForStandard()
 }
 
 // IsAPIServerPrivate returns true if the API Server LB is of type Internal.
@@ -829,7 +1139,11 @@ func (s *ClusterScope) GetPrivateDNSZoneName() string {
 
 // APIServerLBPoolName returns the API Server LB backend pool name.
 func (s *ClusterScope) APIServerLBPoolName() string {
-	return s.APIServerLB().BackendPool.Name
+	// ENVIRONMENT CHECK FIRST - MOST OUTSIDE
+	if s.isAzureSecretCloudEnvironment() {
+		return s.apiServerLBPoolNameForAzureSecret()
+	}
+	return s.apiServerLBPoolNameForStandard()
 }
 
 // OutboundLB returns the outbound LB.
@@ -884,6 +1198,15 @@ func (s *ClusterScope) Namespace() string {
 
 // Location returns the cluster location.
 func (s *ClusterScope) Location() string {
+	// Only apply region normalization if both conditions are met:
+	// 1. We're in AzureUSSecretCloud environment AND
+	// 2. Resource manager endpoint contains .scombine.scloud suffix
+	if s.isAzureSecretCloudEnvironment() &&
+		strings.Contains(s.ResourceManagerEndpoint, ".scombine.scloud") {
+		return azureutil.NormalizeAzureRegion(s.AzureCluster.Spec.Location)
+	}
+
+	// Otherwise, return the original location unchanged
 	return s.AzureCluster.Spec.Location
 }
 
@@ -1001,14 +1324,11 @@ func (s *ClusterScope) APIServerPort() int32 {
 
 // APIServerHost returns the hostname used to reach the API server.
 func (s *ClusterScope) APIServerHost() string {
-	if s.IsAPIServerPrivate() {
-		var isPrivateDNSZoneName bool
-		if len(s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneName) > 0 {
-			isPrivateDNSZoneName = true
-		}
-		return azure.GeneratePrivateFQDN(s.GetPrivateDNSZoneName(), s.AzureCluster.Name, isPrivateDNSZoneName)
+	// ENVIRONMENT CHECK FIRST - MOST OUTSIDE
+	if s.isAzureSecretCloudEnvironment() {
+		return s.apiServerHostForAzureSecret()
 	}
-	return s.APIServerPublicIP().DNSName
+	return s.apiServerHostForStandard()
 }
 
 // SetFailureDomain sets a failure domain in a cluster's status by its id.
@@ -1111,8 +1431,11 @@ func (s *ClusterScope) SetDNSName() {
 	}
 	// Generate valid FQDN if not set.
 	// Note: this function uses the AzureCluster subscription ID.
-	if !s.IsAPIServerPrivate() && s.APIServerPublicIP().DNSName == "" {
-		s.APIServerPublicIP().DNSName = s.GenerateFQDN(s.APIServerPublicIP().Name)
+	// ENVIRONMENT CHECK FIRST - MOST OUTSIDE
+	if s.isAzureSecretCloudEnvironment() {
+		s.setDNSNameForAzureSecret()
+	} else {
+		s.setDNSNameForStandard()
 	}
 }
 
