@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -36,15 +37,15 @@ func (c *AzureClusterIdentity) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 // +kubebuilder:webhook:verbs=create;update,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azureclusteridentity,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=azureclusteridentities,versions=v1beta1,name=validation.azureclusteridentity.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
-var _ webhook.Validator = &AzureClusterIdentity{}
+var _ webhook.CustomValidator = &AzureClusterIdentity{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (c *AzureClusterIdentity) ValidateCreate() (admission.Warnings, error) {
+func (c *AzureClusterIdentity) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return c.validateClusterIdentity()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (c *AzureClusterIdentity) ValidateUpdate(oldRaw runtime.Object) (admission.Warnings, error) {
+func (c *AzureClusterIdentity) ValidateUpdate(ctx context.Context, oldRaw runtime.Object, newRaw runtime.Object) (admission.Warnings, error) {
 	var allErrs field.ErrorList
 	old := oldRaw.(*AzureClusterIdentity)
 	if err := webhookutils.ValidateImmutable(
@@ -60,6 +61,6 @@ func (c *AzureClusterIdentity) ValidateUpdate(oldRaw runtime.Object) (admission.
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (c *AzureClusterIdentity) ValidateDelete() (admission.Warnings, error) {
+func (c *AzureClusterIdentity) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return nil, nil
 }
