@@ -41,6 +41,8 @@ var (
 	globalHTTPClient *http.Client
 	// Mutex to protect concurrent access to global transport resources
 	globalTransportMutex sync.RWMutex
+	// Mutex to protect concurrent access to Azure environment map
+	azureEnvironmentMutex sync.Mutex
 )
 
 func init() {
@@ -131,7 +133,11 @@ func processAzureEnvironmentJSON(envJSON string) error {
 		return errors.Wrap(err, "failed to parse Azure environment JSON")
 	}
 
+	//Protect concurrent access to Azure environment map
+	azureEnvironmentMutex.Lock()
 	azure.SetEnvironment(env.Name, env)
+	azureEnvironmentMutex.Unlock()
+
 	fmt.Printf("CAPZ: Loaded Azure environment: %s\n", env.Name)
 	return nil
 }
