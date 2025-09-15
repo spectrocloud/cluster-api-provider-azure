@@ -1,178 +1,176 @@
 namespace: capi-webhook-system
 
-namePrefix: capz-
+#namePrefix: capz-
 
-resources:
-- ../../config/default/namespace.yaml
-- ../../config/default/aad-pod-identity-deployment.yaml
-- ../../config/crd
-- ../../config/webhook
-- ../../config/manager
-- ../../config/certmanager
-- ./aso
+# Labels to add to all resources and selectors.
+commonLabels:
+  cluster.x-k8s.io/provider: aso-infrastructure-azure
 
-configurations:
-- ../../config/default/kustomizeconfig.yaml
+components:
+- ../../../config/aso
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 labels:
 - includeSelectors: true
   pairs:
-    cluster.x-k8s.io/provider: infrastructure-azure
+    cluster.x-k8s.io/provider: aso-infrastructure-azure
+
 patches:
-- path: patch_cluster_role.yaml
+- path: ../patch_namespace.yaml
+  target:
+    kind: Namespace
+    name: system
+    version: v1
+- path: ../patch_cluster_role.yaml
   target:
     group: rbac.authorization.k8s.io
     kind: ClusterRole
     name: capz-aad-pod-id-nmi-role
     version: v1
-- path: patch_namespace.yaml
+- path: ../patch_namespace.yaml
   target:
     kind: Namespace
     name: system
     version: v1
-- path: patch_service_account.yaml
+- path: ../patch_service_account.yaml
   target:
     group: apps
     kind: Deployment
     name: controller-manager
     namespace: system
     version: v1
-- path: patch_service_account.yaml
+- path: ../patch_service_account.yaml
   target:
     group: apps
     kind: DaemonSet
     name: capz-nmi
     namespace: capi-webhook-system
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azureclusteridentities.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azureclusters.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azuremachines.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azuremachinetemplates.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azuremachinepools.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azuremachinepoolmachines.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azuremanagedclusters.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io
     version: v1
-- path: patch_crd_webhook_namespace.yaml
+- path: ../patch_crd_webhook_namespace.yaml
   target:
     group: apiextensions.k8s.io
     kind: CustomResourceDefinition
     name: azuremanagedmachinepools.infrastructure.cluster.x-k8s.io
     version: v1
-- path: ../../config/default/manager_image_patch.yaml
-  target:
-    group: apps
-    kind: Deployment
-    name: controller-manager
-    version: v1
-- path: ../../config/default/manager_pull_policy.yaml
-  target:
-    group: apps
-    kind: Deployment
-    name: controller-manager
-    version: v1
-- path: ../../config/default/manager_webhook_patch.yaml
-  target:
-    group: apps
-    kind: Deployment
-    name: controller-manager
-    version: v1
-- path: ../../config/default/mutatingwebhookcainjection_patch.yaml
-  target:
-    group: admissionregistration.k8s.io
-    kind: MutatingWebhookConfiguration
-    name: mutating-webhook-configuration
-    version: v1
-- path: ../../config/default/validatingwebhookcainjection_patch.yaml
-  target:
-    group: admissionregistration.k8s.io
-    kind: ValidatingWebhookConfiguration
-    name: validating-webhook-configuration
-    version: v1
-- path: patch_namespace_object.yaml
-  target:
-    kind: Namespace
-    name: capi-webhook-system
-- path: patch_nmi_cluster_role_binding.yaml
+- path: ../patch_nmi_cluster_role_binding.yaml
   target:
     group: rbac.authorization.k8s.io
     kind: ClusterRoleBinding
     name: capz-aad-pod-id-nmi-binding
     version: v1
+- path: ../../../config/default/manager_image_patch.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
+- path: ../../../config/default/manager_pull_policy.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
+- path: ../../../config/default/manager_webhook_patch.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: controller-manager
+    version: v1
+- path: ../../../config/default/mutatingwebhookcainjection_patch.yaml
+  target:
+    group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+    name: mutating-webhook-configuration
+    version: v1
+- path: ../../../config/default/validatingwebhookcainjection_patch.yaml
+  target:
+    group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+    version: v1
+
 
 replacements:
-- source:
-    fieldPath: metadata.namespace
-    kind: Certificate
-    name: serving-cert
-  targets:
-  - fieldPaths:
-    - metadata.annotations."cert-manager.io/inject-ca-from"
-    options:
-      delimiter: /
-    select:
-      kind: MutatingWebhookConfiguration
-      name: webhook
-- source:
-    kind: Certificate
-    name: serving-cert
-  targets:
-  - fieldPaths:
-    - metadata.annotations."cert-manager.io/inject-ca-from"
-    options:
-      delimiter: /
-      index: 1
-    select:
-      kind: MutatingWebhookConfiguration
-      name: webhook
-- source:
-    fieldPath: metadata.namespace
-    kind: Service
-    name: webhook-service
-  targets:
-  - fieldPaths:
-    - metadata.annotations."cert-manager.io/inject-ca-from"
-    select:
-      kind: MutatingWebhookConfiguration
-      name: webhook
+#- source:
+#    fieldPath: metadata.namespace
+#    kind: Certificate
+#    name: serving-cert
+#  targets:
+#  - fieldPaths:
+#    - metadata.annotations."cert-manager.io/inject-ca-from"
+#    options:
+#      delimiter: /
+#    select:
+#      kind: MutatingWebhookConfiguration
+#      name: webhook
+#- source:
+#    kind: Certificate
+#    name: serving-cert
+#  targets:
+#  - fieldPaths:
+#    - metadata.annotations."cert-manager.io/inject-ca-from"
+#    options:
+#      delimiter: /
+#      index: 1
+#    select:
+#      kind: MutatingWebhookConfiguration
+#      name: webhook
+#- source:
+#    fieldPath: metadata.namespace
+#    kind: Service
+#    name: webhook-service
+#  targets:
+#  - fieldPaths:
+#    - metadata.annotations."cert-manager.io/inject-ca-from"
+#    select:
+#      kind: MutatingWebhookConfiguration
+#      name: webhook
