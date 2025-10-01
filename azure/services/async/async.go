@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
@@ -130,7 +131,7 @@ func (s *Service[C, D]) CreateOrUpdateResource(ctx context.Context, spec azure.R
 	return result, nil
 }
 
-// DeleteResource deletes a resource asynchronously.
+// DeleteResource deletes a resource asynchronously with idempotent DELETE pattern.
 func (s *Service[C, D]) DeleteResource(ctx context.Context, spec azure.ResourceSpecGetter, serviceName string) (err error) {
 	ctx, log, done := tele.StartSpanWithLogger(ctx, "async.Service.DeleteResource")
 	defer done()
@@ -150,7 +151,7 @@ func (s *Service[C, D]) DeleteResource(ctx context.Context, spec azure.ResourceS
 		resumeToken = t
 	}
 
-	// Delete the resource.
+	// Attempt to delete the resource.
 	log.V(2).Info("deleting resource", "service", serviceName, "resource", resourceName, "resourceGroup", rgName)
 	poller, err := s.Deleter.DeleteAsync(ctx, spec, resumeToken)
 	if poller != nil && azure.IsContextDeadlineExceededOrCanceledError(err) {
@@ -162,16 +163,139 @@ func (s *Service[C, D]) DeleteResource(ctx context.Context, spec azure.ResourceS
 		return azure.WithTransientError(azure.NewOperationNotDoneError(future), requeueTime(s.Scope))
 	}
 
-	// Once the operation is done, delete the long-running operation state. Even if the operation ended with
-	// an error, clear out any lingering state to try the operation again.
+	// Once the operation is done, delete the long-running operation state.
 	s.Scope.DeleteLongRunningOperationState(resourceName, serviceName, futureType)
 
-	if err != nil && !azure.ResourceNotFound(err) {
-		return errors.Wrapf(err, "failed to delete resource %s/%s (service: %s)", rgName, resourceName, serviceName)
+	// Handle DELETE result with idempotent pattern
+	if err != nil {
+		// If DELETE failed, verify existence to determine if operation was actually successful
+		log.V(2).Info("delete operation reported error, verifying resource existence",
+			"service", serviceName, "resource", resourceName, "resourceGroup", rgName, "error", err.Error())
+
+		return s.handleDeleteWithVerification(ctx, spec, serviceName, log, err)
 	}
 
 	log.V(2).Info("successfully deleted resource", "service", serviceName, "resource", resourceName, "resourceGroup", rgName)
 	return nil
+}
+
+// handleDeleteWithVerification implements the idempotent DELETE pattern:
+// 1. Check if resource exists (GET request)
+// 2. If 404 (not found) → DELETE was successful, continue
+// 3. If 200/204 (exists) → Resource still exists, do bounded re-check
+// 4. Only surface error if resource still exists after bounded check
+func (s *Service[C, D]) handleDeleteWithVerification(ctx context.Context, spec azure.ResourceSpecGetter, serviceName string, log logr.Logger, originalErr error) error {
+	resourceName := spec.ResourceName()
+	rgName := spec.ResourceGroupName()
+
+	log.V(2).Info("verifying resource existence after failed delete",
+		"service", serviceName, "resource", resourceName, "resourceGroup", rgName)
+
+	// Check if resource still exists
+	exists, err := s.checkResourceExists(ctx, spec, serviceName, log)
+	if err != nil {
+		// If we can't determine existence, return the original error
+		log.V(2).Info("could not verify resource existence, returning original error",
+			"service", serviceName, "resource", resourceName, "error", err.Error())
+		return originalErr
+	}
+
+	if !exists {
+		// Resource doesn't exist (404) → DELETE was successful
+		log.V(2).Info("resource confirmed deleted (404 on GET) - treating delete as successful",
+			"service", serviceName, "resource", resourceName, "resourceGroup", rgName)
+		return nil
+	}
+
+	// Resource still exists (200/204) → Do bounded re-check
+	log.V(2).Info("resource still exists after delete failure, starting bounded re-check",
+		"service", serviceName, "resource", resourceName, "resourceGroup", rgName)
+
+	return s.boundedRecheck(ctx, spec, serviceName, log, originalErr)
+}
+
+// checkResourceExists performs a GET request to check if resource exists
+// Returns: (exists bool, error)
+func (s *Service[C, D]) checkResourceExists(ctx context.Context, spec azure.ResourceSpecGetter, serviceName string, log logr.Logger) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second) // Short timeout for verification
+	defer cancel()
+
+	log.V(4).Info("checking resource existence", "service", serviceName, "resource", spec.ResourceName())
+
+	_, err := s.Creator.Get(ctx, spec)
+	if err != nil {
+		if azure.ResourceNotFound(err) {
+			log.V(4).Info("resource does not exist (404)", "service", serviceName, "resource", spec.ResourceName())
+			return false, nil // Resource doesn't exist
+		}
+		// Other errors (500, network issues, etc.)
+		log.V(4).Info("error checking resource existence", "service", serviceName, "resource", spec.ResourceName(), "error", err.Error())
+		return false, err // Can't determine existence
+	}
+
+	log.V(4).Info("resource exists (200/204)", "service", serviceName, "resource", spec.ResourceName())
+	return true, nil // Resource exists
+}
+
+// boundedRecheck performs 8 rounds of 5-second checks (40 seconds total)
+// Only surfaces error if resource still exists after all checks
+func (s *Service[C, D]) boundedRecheck(ctx context.Context, spec azure.ResourceSpecGetter, serviceName string, log logr.Logger, originalErr error) error {
+	resourceName := spec.ResourceName()
+	rgName := spec.ResourceGroupName()
+
+	const (
+		checkInterval = 5 * time.Second
+		maxRounds     = 8
+		totalTime     = maxRounds * checkInterval // 40 seconds
+	)
+
+	log.V(2).Info("starting bounded re-check for resource deletion",
+		"service", serviceName, "resource", resourceName, "resourceGroup", rgName,
+		"checkInterval", checkInterval, "maxRounds", maxRounds, "totalTime", totalTime)
+
+	for round := 1; round <= maxRounds; round++ {
+		log.V(3).Info("bounded re-check round",
+			"service", serviceName, "resource", resourceName, "round", round, "maxRounds", maxRounds)
+
+		exists, err := s.checkResourceExists(ctx, spec, serviceName, log)
+		if err != nil {
+			// If we can't check existence, continue to next round unless it's the final round
+			if round == maxRounds {
+				log.V(2).Info("final round failed to check existence, treating as deletion failure",
+					"service", serviceName, "resource", resourceName, "round", round, "error", err.Error())
+				return originalErr
+			}
+
+			log.V(3).Info("existence check failed, continuing to next round",
+				"service", serviceName, "resource", resourceName, "round", round, "error", err.Error())
+			time.Sleep(checkInterval)
+			continue
+		}
+
+		if !exists {
+			// Resource is gone! DELETE was successful
+			log.V(2).Info("resource confirmed deleted during bounded re-check",
+				"service", serviceName, "resource", resourceName, "resourceGroup", rgName,
+				"round", round, "elapsedTime", time.Duration(round)*checkInterval)
+			return nil
+		}
+
+		// Resource still exists
+		if round == maxRounds {
+			// Final round - resource still exists, surface the original error
+			log.V(2).Info("resource still exists after bounded re-check, surfacing original error",
+				"service", serviceName, "resource", resourceName, "resourceGroup", rgName,
+				"rounds", maxRounds, "totalTime", totalTime)
+			return originalErr
+		}
+
+		log.V(3).Info("resource still exists, continuing to next round",
+			"service", serviceName, "resource", resourceName, "round", round)
+		time.Sleep(checkInterval)
+	}
+
+	// This should never be reached, but just in case
+	return originalErr
 }
 
 // requeueTime returns the time to wait before requeuing a reconciliation.
