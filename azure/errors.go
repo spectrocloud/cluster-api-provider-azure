@@ -157,3 +157,15 @@ func IsContextDeadlineExceededOrCanceledError(err error) bool {
 	}
 	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }
+
+// IsTransientServerError checks if the error is a transient server error.
+// This helps identify errors that might indicate successful operation despite error response.
+func IsTransientServerError(err error) bool {
+	var rerr *azcore.ResponseError
+	if errors.As(err, &rerr) {
+		// 500, 502, 503, 504 are typically transient
+		return rerr.StatusCode == 500 || rerr.StatusCode == 502 ||
+			rerr.StatusCode == 503 || rerr.StatusCode == 504
+	}
+	return false
+}
