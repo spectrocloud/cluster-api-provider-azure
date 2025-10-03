@@ -390,8 +390,15 @@ func (amr *AzureMachineReconciler) reconcileDelete(ctx context.Context, machineS
 				}
 			}
 
-			amr.Recorder.Eventf(machineScope.AzureMachine, corev1.EventTypeWarning, "Error deleting AzureMachine", errors.Wrapf(err, "error deleting AzureMachine %s/%s", machineScope.Namespace(), machineScope.Name()).Error())
-			return reconcile.Result{}, errors.Wrapf(err, "error deleting AzureMachine %s/%s", machineScope.Namespace(), machineScope.Name())
+			// Check if this is a server error that might indicate successful deletion (AzureUSSecretCloud fix)
+			if azure.IsTransientServerError(err) {
+				log.V(2).Info("received server error during AzureMachine deletion, treating as successful",
+					"machine", machineScope.Name(), "error", err.Error())
+				// Continue with finalizer removal (treat as success)
+			} else {
+				amr.Recorder.Eventf(machineScope.AzureMachine, corev1.EventTypeWarning, "Error deleting AzureMachine", errors.Wrapf(err, "error deleting AzureMachine %s/%s", machineScope.Namespace(), machineScope.Name()).Error())
+				return reconcile.Result{}, errors.Wrapf(err, "error deleting AzureMachine %s/%s", machineScope.Namespace(), machineScope.Name())
+			}
 		}
 	} else {
 		log.Info("Skipping AzureMachine Deletion; will delete whole resource group.")
