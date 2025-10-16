@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
+	"fmt"
 	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,27 +35,43 @@ import (
 func (c *AzureCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(c).
+		WithDefaulter(c). // registers webhook.CustomDefaulter
+		WithValidator(c). // registers webhook.CustomValidator
 		Complete()
 }
 
 // +kubebuilder:webhook:verbs=create;update,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azurecluster,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=azureclusters,versions=v1beta1,name=validation.azurecluster.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 // +kubebuilder:webhook:verbs=create;update,path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-azurecluster,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=azureclusters,versions=v1beta1,name=default.azurecluster.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
-var _ webhook.Validator = &AzureCluster{}
-var _ webhook.Defaulter = &AzureCluster{}
+var _ webhook.CustomValidator = &AzureCluster{}
+var _ webhook.CustomDefaulter = &AzureCluster{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type.
-func (c *AzureCluster) Default() {
+func (c *AzureCluster) Default(ctx context.Context, obj runtime.Object) error {
+	c, ok := obj.(*AzureCluster)
+	if !ok {
+		return fmt.Errorf("expected *AzureCluster, got %T", obj)
+	}
 	c.setDefaults()
+	return nil
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (c *AzureCluster) ValidateCreate() (admission.Warnings, error) {
+func (c *AzureCluster) ValidateCreate(ctx context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
+	c, ok := obj.(*AzureCluster)
+	if !ok {
+		return nil, fmt.Errorf("expected *AzureCluster, got %T", obj)
+	}
 	return c.validateCluster(nil)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (c *AzureCluster) ValidateUpdate(oldRaw runtime.Object) (admission.Warnings, error) {
+func (c *AzureCluster) ValidateUpdate(ctx context.Context, oldRaw runtime.Object, newRaw runtime.Object) (warnings admission.Warnings, err error) {
+	c, ok := newRaw.(*AzureCluster)
+	if !ok {
+		return nil, fmt.Errorf("expected *AzureCluster, got %T", newRaw)
+	}
+
 	var allErrs field.ErrorList
 	old := oldRaw.(*AzureCluster)
 
@@ -196,6 +214,6 @@ func (c *AzureCluster) validateSubnetUpdate(old *AzureCluster) field.ErrorList {
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (c *AzureCluster) ValidateDelete() (admission.Warnings, error) {
+func (c *AzureCluster) ValidateDelete(ctx context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
 	return nil, nil
 }

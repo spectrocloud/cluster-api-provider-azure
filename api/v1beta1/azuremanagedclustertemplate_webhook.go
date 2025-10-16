@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -27,24 +28,25 @@ import (
 func (r *AzureManagedClusterTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
+		WithValidator(r). // registers webhook.CustomValidator
 		Complete()
 }
 
 // +kubebuilder:webhook:verbs=update,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedclustertemplate,mutating=false,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=azuremanagedclustertemplates,versions=v1beta1,name=validation.azuremanagedclustertemplates.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
-var _ webhook.Validator = &AzureManagedClusterTemplate{}
+var _ webhook.CustomValidator = &AzureManagedClusterTemplate{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (r *AzureManagedClusterTemplate) ValidateCreate() (admission.Warnings, error) {
+func (r *AzureManagedClusterTemplate) ValidateCreate(ctx context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
 	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (r *AzureManagedClusterTemplate) ValidateUpdate(_ runtime.Object) (admission.Warnings, error) {
+func (r *AzureManagedClusterTemplate) ValidateUpdate(ctx context.Context, oldObj runtime.Object, newObj runtime.Object) (warnings admission.Warnings, err error) {
 	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (r *AzureManagedClusterTemplate) ValidateDelete() (admission.Warnings, error) {
+func (r *AzureManagedClusterTemplate) ValidateDelete(ctx context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
 	return nil, nil
 }
