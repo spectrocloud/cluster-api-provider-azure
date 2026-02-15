@@ -784,6 +784,10 @@ func (s *ManagedControlPlaneScope) ManagedClusterSpec() azure.ASOResourceSpecGet
 		}
 	}
 
+	if s.ControlPlane.Spec.DiskEncryptionSetID != nil {
+		managedClusterSpec.DiskEncryptionSetID = *s.ControlPlane.Spec.DiskEncryptionSetID
+	}
+
 	return &managedClusterSpec
 }
 

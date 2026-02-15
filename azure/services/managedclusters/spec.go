@@ -20,6 +20,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"sort"
+
 	asocontainerservicev1 "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20231001"
 	asocontainerservicev1preview "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20231102preview"
 	asocontainerservicev1hub "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20240901/storage"
@@ -29,10 +32,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-	"net"
 	"sigs.k8s.io/cluster-api/util/secret"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
-	"sort"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
@@ -155,6 +156,9 @@ type ManagedClusterSpec struct {
 
 	// SecurityProfile defines the security profile for the cluster.
 	SecurityProfile *ManagedClusterSecurityProfile
+
+	// DiskEncryptionSetID is the ID of the disk encryption set to use for enabling encryption at rest.
+	DiskEncryptionSetID string
 
 	// Patches are extra patches to be applied to the ASO resource.
 	Patches []string
@@ -711,6 +715,8 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 		managedCluster.Spec.SecurityProfile = securityProfile
 	}
 
+	s.configureDiskEncryptionSet(managedCluster)
+
 	// Only include AgentPoolProfiles during initial cluster creation. Agent pools are managed solely by the
 	// AzureManagedMachinePool controller thereafter.
 	var prevAgentPoolProfiles []asocontainerservicev1hub.ManagedClusterAgentPoolProfile
@@ -831,6 +837,17 @@ func (s *ManagedClusterSpec) Parameters(ctx context.Context, existingObj genrunt
 	}
 
 	return stable, nil
+}
+
+// configureDiskEncryptionSet configures the disk encryption set for the managed cluster.
+func (s *ManagedClusterSpec) configureDiskEncryptionSet(managedCluster *asocontainerservicev1hub.ManagedCluster) {
+	if s.DiskEncryptionSetID == "" {
+		return
+	}
+
+	managedCluster.Spec.DiskEncryptionSetReference = &genruntime.ResourceReference{
+		ARMID: s.DiskEncryptionSetID,
+	}
 }
 
 // GetLoadBalancerProfile returns an asocontainerservicev1.ManagedClusterLoadBalancerProfile from the

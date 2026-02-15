@@ -256,6 +256,17 @@ type AzureManagedControlPlaneClassSpec struct {
 	// UserAssignedIdentities is a list of standalone Azure identities provided by the user to assign the cluster
 	// +optional
 	UserAssignedIdentities []UserAssignedIdentity `json:"userAssignedIdentities,omitempty"`
+
+	// DiskEncryptionSetID is the ID of the disk encryption set to use for enabling encryption at rest
+	// for the cluster OS disks.
+	// Format: "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Compute/diskEncryptionSets/{encryptionSetName}"
+	// See also [AKS doc].
+	//
+	// [AKS doc]: https://learn.microsoft.com/en-us/azure/aks/azure-disk-customer-managed-keys
+	// Immutable.
+	// +kubebuilder:validation:Pattern=`(?i)^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Compute/diskEncryptionSets/[^/]+$`
+	// +optional
+	DiskEncryptionSetID *string `json:"diskEncryptionSetID,omitempty"`
 }
 
 // ManagedClusterAutoUpgradeProfile defines the auto upgrade profile for a managed cluster.
