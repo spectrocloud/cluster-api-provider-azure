@@ -1,0 +1,3 @@
+- op: add
+  path: "/webhooks/12/rules/0/operations/0"
+  value: CREATE

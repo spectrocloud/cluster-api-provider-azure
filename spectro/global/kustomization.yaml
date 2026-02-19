@@ -9,6 +9,7 @@ resources:
 - ../../config/webhook
 - ../../config/manager
 - ../../config/certmanager
+- webhook_rbac.yaml
 
 
 components:
@@ -28,12 +29,17 @@ patches:
   target:
     group: rbac.authorization.k8s.io
     kind: ClusterRole
-    name: capz-aad-pod-id-nmi-role
+    name: aad-pod-id-nmi-role
     version: v1
 - path: patch_namespace.yaml
   target:
     kind: Namespace
     name: system
+    version: v1
+- path: patch_aso_controller_settings.yaml
+  target:
+    kind: Secret
+    name: aso-controller-settings
     version: v1
 - path: patch_service_account.yaml
   target:
@@ -46,8 +52,7 @@ patches:
   target:
     group: apps
     kind: DaemonSet
-    name: capz-nmi
-    namespace: capi-webhook-system
+    name: nmi
     version: v1
 - path: patch_crd_webhook_namespace.yaml
   target:
@@ -107,7 +112,7 @@ patches:
   target:
     group: rbac.authorization.k8s.io
     kind: ClusterRoleBinding
-    name: capz-aad-pod-id-nmi-binding
+    name: aad-pod-id-nmi-binding
     version: v1
 - path: ../../config/default/manager_image_patch.yaml
   target:
@@ -139,40 +144,160 @@ patches:
     kind: ValidatingWebhookConfiguration
     name: validating-webhook-configuration
     version: v1
+- path: patch_aso_metrics_service.yaml
+  target:
+    kind: Service
+    name: azureserviceoperator-controller-manager-metrics-service
+    version: v1
+- path: patch_aso_metrics_service.yaml
+  target:
+    kind: Service
+    name: azureserviceoperator-webhook-service
+    version: v1
+- path: patch_aso_controller_manager.yaml
+  target:
+    kind: Deployment
+    name: azureserviceoperator-controller-manager
+    version: v1
+- path: patch_aso_webhook_annotations.yaml
+  target:
+    group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+    name: azureserviceoperator-mutating-webhook-configuration
+    version: v1
+- path: patch_azuremanagedmachinepool_webhook_operations.yaml
+  target:
+    group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+    version: v1
+- path: patch_aso_webhook_annotations.yaml
+  target:
+    group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    name: azureserviceoperator-validating-webhook-configuration
+    version: v1
 
+patchesJson6902:
+  - target:
+      version: v1
+      kind: Service
+      name: azureserviceoperator-controller-manager-metrics-service
+    patch: |-
+      - op: remove
+        path: /metadata/labels/cluster.x-k8s.io~1provider
+      - op: remove
+        path: /spec/selector/cluster.x-k8s.io~1provider
+
+  - target:
+      version: v1
+      kind: Service
+      name: azureserviceoperator-webhook-service
+    patch: |-
+      - op: remove
+        path: /metadata/labels/cluster.x-k8s.io~1provider
+      - op: remove
+        path: /spec/selector/cluster.x-k8s.io~1provider
+
+  - target:
+        version: v1
+        kind: Deployment
+        name: azureserviceoperator-controller-manager
+    patch: |-
+      - op: remove
+        path: /metadata/labels/cluster.x-k8s.io~1provider
+      - op: remove
+        path: /spec/selector/matchLabels/cluster.x-k8s.io~1provider
+      - op: remove
+        path: /spec/template/metadata/labels/cluster.x-k8s.io~1provider
 
 replacements:
-- source:
+- source: # CERTIFICATE_NAMESPACE for all non-ASO resources with cert-manager annotation
     fieldPath: metadata.namespace
     kind: Certificate
     name: serving-cert
   targets:
   - fieldPaths:
-    - metadata.annotations."cert-manager.io/inject-ca-from"
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
     options:
       delimiter: /
     select:
-      kind: MutatingWebhookConfiguration
-      name: webhook
-- source:
+      annotationSelector: cert-manager.io/inject-ca-from
+    reject:
+    - labelSelector: app.kubernetes.io/name=azure-service-operator
+    - kind: MutatingWebhookConfiguration
+      name: azureserviceoperator-mutating-webhook-configuration
+    - kind: ValidatingWebhookConfiguration
+      name: azureserviceoperator-validating-webhook-configuration
+- source: # CERTIFICATE_NAME for all non-ASO resources with cert-manager annotation
     kind: Certificate
     name: serving-cert
   targets:
   - fieldPaths:
-    - metadata.annotations."cert-manager.io/inject-ca-from"
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
     options:
       delimiter: /
       index: 1
     select:
-      kind: MutatingWebhookConfiguration
-      name: webhook
-- source:
+      annotationSelector: cert-manager.io/inject-ca-from
+    reject:
+    - labelSelector: app.kubernetes.io/name=azure-service-operator
+    - kind: MutatingWebhookConfiguration
+      name: azureserviceoperator-mutating-webhook-configuration
+    - kind: ValidatingWebhookConfiguration
+      name: azureserviceoperator-validating-webhook-configuration
+- source: # CERTIFICATE_NAMESPACE for ASO resources
     fieldPath: metadata.namespace
-    kind: Service
-    name: webhook-service
+    kind: Certificate
+    name: azureserviceoperator-serving-cert
   targets:
   - fieldPaths:
-    - metadata.annotations."cert-manager.io/inject-ca-from"
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: /
     select:
-      kind: MutatingWebhookConfiguration
-      name: webhook
+      annotationSelector: cert-manager.io/inject-ca-from
+      labelSelector: app.kubernetes.io/name=azure-service-operator
+- source: # CERTIFICATE_NAME for ASO resources
+    kind: Certificate
+    name: azureserviceoperator-serving-cert
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: /
+      index: 1
+    select:
+      annotationSelector: cert-manager.io/inject-ca-from
+      labelSelector: app.kubernetes.io/name=azure-service-operator
+- source: # Update DNS names namespace in ASO certificate
+    fieldPath: metadata.namespace
+    kind: Service
+    name: azureserviceoperator-webhook-service
+  targets:
+  - fieldPaths:
+    - spec.dnsNames.0
+    - spec.dnsNames.1
+    options:
+      delimiter: .
+      index: 1
+    select:
+      group: cert-manager.io
+      kind: Certificate
+      name: azureserviceoperator-serving-cert
+      version: v1
+- source: # Update DNS names service name in ASO certificate
+    kind: Service
+    name: azureserviceoperator-webhook-service
+  targets:
+  - fieldPaths:
+    - spec.dnsNames.0
+    - spec.dnsNames.1
+    options:
+      delimiter: .
+      index: 0
+    select:
+      group: cert-manager.io
+      kind: Certificate
+      name: azureserviceoperator-serving-cert
+      version: v1

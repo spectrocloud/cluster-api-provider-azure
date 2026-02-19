@@ -6,6 +6,7 @@ namePrefix: capz-
 
 resources:
 - ../../config/manager
+- ../../config/rbac
 
 
 
@@ -16,13 +17,6 @@ labels:
   pairs:
     cluster.x-k8s.io/provider: infrastructure-azure
 patches:
-- path: patch_service_account.yaml
-  target:
-    group: apps
-    kind: Deployment
-    name: controller-manager
-    namespace: system
-    version: v1
 - path: patch_healthcheck.yaml
   target:
     group: apps
