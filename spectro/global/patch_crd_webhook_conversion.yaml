@@ -1,0 +1,13 @@
+- op: add
+  path: "/spec/conversion"
+  value:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        service:
+          name: capz-webhook-service
+          namespace: capi-webhook-system
+          path: /convert
+      conversionReviewVersions:
+        - v1
+        - v1beta1

@@ -1,0 +1,27 @@
+- op: replace
+  path: "/metadata/labels"
+  value:
+    app.kubernetes.io/name: azure-service-operator
+    app.kubernetes.io/version: v2.9.0
+    control-plane: controller-manager
+    component: azure-service-operator
+- op: replace
+  path: "/spec/selector/matchLabels"
+  value:
+    control-plane: controller-manager
+    component: azure-service-operator
+- op: replace
+  path: "/spec/template/metadata/labels"
+  value:
+    aadpodidbinding: aso-manager-binding
+    app.kubernetes.io/name: azure-service-operator
+    app.kubernetes.io/version: v2.9.0
+    component: azure-service-operator
+    control-plane: controller-manager
+- op: add
+  path: "/spec/template/spec/tolerations"
+  value:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/master
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/control-plane

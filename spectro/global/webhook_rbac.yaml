@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+    control-plane: capz-controller-manager
+  name: webhook
+  namespace: capi-webhook-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhook-role
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+rules:
+  - apiGroups:
+      - cluster.x-k8s.io
+    resources:
+      - clusters
+      - machinepools
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - infrastructure.cluster.x-k8s.io
+    resources:
+      - azureclusters
+      - azuremanagedmachinepools
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: webhook-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capz-webhook-role
+subjects:
+- kind: ServiceAccount
+  name: webhook
+  namespace: capi-webhook-system

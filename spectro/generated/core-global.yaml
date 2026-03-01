@@ -70,10 +70,11 @@ spec:
                   in the API schema to permit resource admission.
                 properties:
                   host:
-                    description: The hostname on which the API server is serving.
+                    description: host is the hostname on which the API server is serving.
+                    maxLength: 512
                     type: string
                   port:
-                    description: The port on which the API server is serving.
+                    description: port is the port on which the API server is serving.
                     format: int32
                     type: integer
                 required:
@@ -292,10 +293,11 @@ spec:
                   cluster's API server.
                 properties:
                   host:
-                    description: The hostname on which the API server is serving.
+                    description: host is the hostname on which the API server is serving.
+                    maxLength: 512
                     type: string
                   port:
-                    description: The port on which the API server is serving.
+                    description: port is the port on which the API server is serving.
                     format: int32
                     type: integer
                 required:
@@ -666,12 +668,12 @@ spec:
           namespace: capi-webhook-system
           path: /convert
       conversionReviewVersions:
-        - v1
-        - v1beta1
+      - v1
+      - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
-      - cluster-api
+    - cluster-api
     kind: AzureClusterIdentity
     listKind: AzureClusterIdentityList
     plural: azureclusteridentities
@@ -846,27 +848,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -876,6 +883,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -1466,10 +1475,11 @@ spec:
                   this when creating an AzureCluster as CAPZ will set this for you. However, if it is set, CAPZ will not change it.
                 properties:
                   host:
-                    description: The hostname on which the API server is serving.
+                    description: host is the hostname on which the API server is serving.
+                    maxLength: 512
                     type: string
                   port:
-                    description: The port on which the API server is serving.
+                    description: port is the port on which the API server is serving.
                     format: int32
                     type: integer
                 required:
@@ -1642,6 +1652,8 @@ spec:
                         type: string
                       name:
                         type: string
+                      privateIP:
+                        type: string
                       sku:
                         description: SKU defines an Azure load balancer SKU.
                         type: string
@@ -1727,6 +1739,8 @@ spec:
                         type: string
                       name:
                         type: string
+                      privateIP:
+                        type: string
                       sku:
                         description: SKU defines an Azure load balancer SKU.
                         type: string
@@ -1811,6 +1825,8 @@ spec:
                         type: string
                       name:
                         type: string
+                      privateIP:
+                        type: string
                       sku:
                         description: SKU defines an Azure load balancer SKU.
                         type: string
@@ -1821,6 +1837,11 @@ spec:
                   privateDNSZoneName:
                     description: PrivateDNSZoneName defines the zone name for the
                       Azure Private DNS.
+                    type: string
+                  privateDNSZoneResourceGroup:
+                    description: |-
+                      PrivateDNSZoneResourceGroup defines the resource group to be used for Azure Private DNS Zone.
+                      If not specified, the resource group of the cluster will be used to create the Azure Private DNS Zone.
                     type: string
                   subnets:
                     description: Subnets is the configuration for the control-plane
@@ -2254,27 +2275,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -2284,6 +2310,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -2911,6 +2939,8 @@ spec:
                                 type: integer
                               ipAllocationMethod:
                                 type: string
+                              privateIP:
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -2931,6 +2961,8 @@ spec:
                                 type: integer
                               ipAllocationMethod:
                                 type: string
+                              privateIP:
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -2950,6 +2982,8 @@ spec:
                                 type: integer
                               ipAllocationMethod:
                                 type: string
+                              privateIP:
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -2961,6 +2995,11 @@ spec:
                           privateDNSZoneName:
                             description: PrivateDNSZoneName defines the zone name
                               for the Azure Private DNS.
+                            type: string
+                          privateDNSZoneResourceGroup:
+                            description: |-
+                              PrivateDNSZoneResourceGroup defines the resource group to be used for Azure Private DNS Zone.
+                              If not specified, the resource group of the cluster will be used to create the Azure Private DNS Zone.
                             type: string
                           subnets:
                             description: Subnets is the configuration for the control-plane
@@ -3614,27 +3653,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -3644,6 +3688,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -4600,27 +4646,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -4630,6 +4681,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -5715,27 +5768,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -5745,6 +5803,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -5940,7 +6000,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          Map of string keys and values that can be used to organize and categorize
+                          labels is a map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
@@ -6687,10 +6747,11 @@ spec:
                   in the API schema to permit resource admission.
                 properties:
                   host:
-                    description: The hostname on which the API server is serving.
+                    description: host is the hostname on which the API server is serving.
+                    maxLength: 512
                     type: string
                   port:
-                    description: The port on which the API server is serving.
+                    description: port is the port on which the API server is serving.
                     format: int32
                     type: integer
                 required:
@@ -7113,10 +7174,11 @@ spec:
                   Immutable, populated by the AKS API at create.
                 properties:
                   host:
-                    description: The hostname on which the API server is serving.
+                    description: host is the hostname on which the API server is serving.
+                    maxLength: 512
                     type: string
                   port:
-                    description: The port on which the API server is serving.
+                    description: port is the port on which the API server is serving.
                     format: int32
                     type: integer
                 required:
@@ -7758,27 +7820,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -7788,6 +7855,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -9442,27 +9511,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -9472,6 +9546,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -66025,6 +66101,15 @@ metadata:
   name: capz-azureserviceoperator-default
   namespace: capi-webhook-system
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+    control-plane: capz-controller-manager
+  name: capz-webhook
+  namespace: capi-webhook-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -66079,52 +66164,52 @@ metadata:
     cluster.x-k8s.io/provider: infrastructure-azure
   name: capz-aad-pod-id-nmi-role
 rules:
-  - apiGroups:
-      - cluster.x-k8s.io
-    resources:
-      - clusters
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - infrastructure.cluster.x-k8s.io
-    resources:
-      - azuremanagedclusters
-      - azuremanagedcontrolplanes
-      - azuremanagedmachinepools
-      - azureclusters
-    verbs:
-      - '*'
-  - apiGroups:
-      - apiextensions.k8s.io
-    resources:
-      - customresourcedefinitions
-    verbs:
-      - get
-      - list
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - secrets
-    verbs:
-      - get
-  - apiGroups:
-      - aadpodidentity.k8s.io
-    resources:
-      - azureidentitybindings
-      - azureidentities
-      - azurepodidentityexceptions
-    verbs:
-      - '*'
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - azuremanagedclusters
+  - azuremanagedcontrolplanes
+  - azuremanagedmachinepools
+  - azureclusters
+  verbs:
+  - '*'
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - aadpodidentity.k8s.io
+  resources:
+  - azureidentitybindings
+  - azureidentities
+  - azurepodidentityexceptions
+  verbs:
+  - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -70534,6 +70619,32 @@ rules:
   - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-webhook-role
+rules:
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  - machinepools
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - azureclusters
+  - azuremanagedmachinepools
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
@@ -70610,6 +70721,21 @@ subjects:
   name: capz-azureserviceoperator-default
   namespace: capi-webhook-system
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-webhook-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capz-webhook-role
+subjects:
+- kind: ServiceAccount
+  name: capz-webhook
+  namespace: capi-webhook-system
+---
 apiVersion: v1
 kind: Secret
 metadata:
@@ -70634,7 +70760,7 @@ metadata:
   labels:
     app.kubernetes.io/name: azure-service-operator
     app.kubernetes.io/version: v2.9.0
-    cluster.x-k8s.io/provider: infrastructure-azure
+    component: azure-service-operator
     control-plane: controller-manager
   name: capz-azureserviceoperator-controller-manager-metrics-service
   namespace: capi-webhook-system
@@ -70643,7 +70769,7 @@ spec:
   - name: metrics
     port: 8443
   selector:
-    cluster.x-k8s.io/provider: infrastructure-azure
+    component: azure-service-operator
     control-plane: controller-manager
 ---
 apiVersion: v1
@@ -70652,7 +70778,8 @@ metadata:
   labels:
     app.kubernetes.io/name: azure-service-operator
     app.kubernetes.io/version: v2.9.0
-    cluster.x-k8s.io/provider: infrastructure-azure
+    component: azure-service-operator
+    control-plane: controller-manager
   name: azureserviceoperator-webhook-service
   namespace: capi-webhook-system
 spec:
@@ -70660,7 +70787,7 @@ spec:
   - port: 443
     targetPort: 9443
   selector:
-    cluster.x-k8s.io/provider: infrastructure-azure
+    component: azure-service-operator
     control-plane: controller-manager
 ---
 apiVersion: v1
@@ -70683,7 +70810,7 @@ metadata:
   labels:
     app.kubernetes.io/name: azure-service-operator
     app.kubernetes.io/version: v2.9.0
-    cluster.x-k8s.io/provider: infrastructure-azure
+    component: azure-service-operator
     control-plane: controller-manager
   name: capz-azureserviceoperator-controller-manager
   namespace: capi-webhook-system
@@ -70691,7 +70818,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      cluster.x-k8s.io/provider: infrastructure-azure
+      component: azure-service-operator
       control-plane: controller-manager
   template:
     metadata:
@@ -70701,7 +70828,7 @@ spec:
         aadpodidbinding: aso-manager-binding
         app.kubernetes.io/name: azure-service-operator
         app.kubernetes.io/version: v2.9.0
-        cluster.x-k8s.io/provider: infrastructure-azure
+        component: azure-service-operator
         control-plane: controller-manager
     spec:
       containers:
@@ -70932,7 +71059,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: gcr.io/spectro-dev-public/vishu/cluster-api-azure-controller-amd64:v1.18.0-spectro-4.0.0-dev
+        image: gcr.io/spectro-dev-public/shubham/release/cluster-api-azure-controller:v1.3.2-spectro-4.0.0-dev
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -71095,7 +71222,6 @@ spec:
   dnsNames:
   - azureserviceoperator-webhook-service.capi-webhook-system.svc
   - azureserviceoperator-webhook-service.capi-webhook-system.svc.cluster.local
-  - capz-webhook-service.capi-webhook-system.svc
   issuerRef:
     kind: Issuer
     name: capz-azureserviceoperator-selfsigned-issuer
@@ -71113,8 +71239,8 @@ metadata:
   namespace: capi-webhook-system
 spec:
   dnsNames:
-    - capz-webhook-service.capi-webhook-system.svc
-    - capz-webhook-service.capi-webhook-system.svc.cluster.local
+  - capz-webhook-service.capi-webhook-system.svc
+  - capz-webhook-service.capi-webhook-system.svc.cluster.local
   issuerRef:
     kind: Issuer
     name: capz-selfsigned-issuer
