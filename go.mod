@@ -1,6 +1,8 @@
 module sigs.k8s.io/cluster-api-provider-azure
 
-go 1.23.8
+go 1.24.0
+
+toolchain go1.24.3
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
@@ -21,7 +23,7 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.13
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/go-logr/logr v1.4.2
+	github.com/go-logr/logr v1.4.3
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
@@ -32,12 +34,12 @@ require (
 	github.com/pkg/sftp v1.13.7
 	github.com/prometheus/client_golang v1.22.0
 	github.com/spf13/pflag v1.0.6
-	go.opentelemetry.io/otel v1.35.0
+	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.56.0
-	go.opentelemetry.io/otel/sdk v1.35.0
-	go.opentelemetry.io/otel/sdk/metric v1.35.0
-	go.opentelemetry.io/otel/trace v1.35.0
+	go.opentelemetry.io/otel/sdk v1.40.0
+	go.opentelemetry.io/otel/sdk/metric v1.40.0
+	go.opentelemetry.io/otel/trace v1.40.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.37.0
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
@@ -86,7 +88,7 @@ require (
 	github.com/rotisserie/eris v0.5.4 // indirect
 	github.com/samber/lo v1.49.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	k8s.io/apiserver v0.32.3 // indirect
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.29 // indirect
@@ -122,7 +124,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cloudflare/circl v1.6.1 // indirect
+	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -198,14 +200,14 @@ require (
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.35.0 // indirect
-	go.opentelemetry.io/otel/metric v1.35.0 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
 	golang.org/x/sync v0.13.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
