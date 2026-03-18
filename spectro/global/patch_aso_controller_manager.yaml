@@ -25,3 +25,6 @@
       key: node-role.kubernetes.io/master
     - effect: NoSchedule
       key: node-role.kubernetes.io/control-plane
+- op: add
+  path: "/spec/template/spec/containers/0/args/-"
+  value: "--crd-management=none"
