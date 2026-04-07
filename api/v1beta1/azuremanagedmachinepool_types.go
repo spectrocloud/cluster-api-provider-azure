@@ -38,6 +38,19 @@ const (
 // NodePoolMode enumerates the values for agent pool mode.
 type NodePoolMode string
 
+// OsSKU specifies the OS SKU used by the agent pool.
+// See https://learn.microsoft.com/rest/api/aks/agent-pools/create-or-update?tabs=HTTP#ossku
+type OsSKU string
+
+const (
+	// OsSKUUbuntu is the default Linux SKU.
+	OsSKUUbuntu OsSKU = "Ubuntu"
+	// OsSKUAzureLinux is the Azure Linux container-optimized distro.
+	OsSKUAzureLinux OsSKU = "AzureLinux"
+	// OsSKUWindows2022 uses Windows Server 2022. Unsupported for system node pools.
+	OsSKUWindows2022 OsSKU = "Windows2022"
+)
+
 // CPUManagerPolicy enumerates the values for KubeletConfig.CPUManagerPolicy.
 type CPUManagerPolicy string
 

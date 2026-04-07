@@ -92,6 +92,8 @@ func (mw *azureManagedMachinePoolWebhook) ValidateCreate(_ context.Context, obj 
 
 	var errs []error
 
+	errs = append(errs, m.validateOsSKU())
+
 	errs = append(errs, validateMaxPods(
 		m.Spec.MaxPods,
 		field.NewPath("spec", "maxPods")))
@@ -167,6 +169,13 @@ func (mw *azureManagedMachinePoolWebhook) ValidateUpdate(_ context.Context, oldO
 		field.NewPath("spec", "osType"),
 		old.Spec.OSType,
 		m.Spec.OSType); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	if err := webhookutils.ValidateImmutable(
+		field.NewPath("spec", "osSKU"),
+		old.Spec.OsSKU,
+		m.Spec.OsSKU); err != nil {
 		allErrs = append(allErrs, err)
 	}
 
@@ -372,6 +381,40 @@ func validateOSType(mode string, osType *string, fldPath *field.Path) error {
 		}
 	}
 
+	return nil
+}
+
+func (m *AzureManagedMachinePool) validateOsSKU() error {
+	if m.Spec.OsSKU == nil {
+		return nil
+	}
+	osType := ptr.Deref(m.Spec.OSType, LinuxOS)
+	osSKU := *m.Spec.OsSKU
+	linuxSKUs := map[OsSKU]bool{
+		OsSKUUbuntu:     true,
+		OsSKUAzureLinux: true,
+	}
+	windowsSKUs := map[OsSKU]bool{
+		OsSKUWindows2022: true,
+	}
+
+	if m.Spec.Mode == string(NodePoolModeSystem) && windowsSKUs[osSKU] {
+		return field.Forbidden(
+			field.NewPath("spec", "osSKU"),
+			fmt.Sprintf("OsSKU %q is not supported for system node pools. Windows SKUs (Windows2022) can only be used with user node pools", osSKU))
+	}
+	if osType == LinuxOS && windowsSKUs[osSKU] {
+		return field.Invalid(
+			field.NewPath("spec", "osSKU"),
+			osSKU,
+			fmt.Sprintf("OsSKU %q is not compatible with OSType 'Linux'. Allowed Linux SKUs: Ubuntu, AzureLinux", osSKU))
+	}
+	if osType == WindowsOS && linuxSKUs[osSKU] {
+		return field.Invalid(
+			field.NewPath("spec", "osSKU"),
+			osSKU,
+			fmt.Sprintf("OsSKU %q is not compatible with OSType 'Windows'. Allowed Windows SKUs: Windows2022", osSKU))
+	}
 	return nil
 }
 

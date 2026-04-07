@@ -540,6 +540,16 @@ spec:
                 - Ephemeral
                 - Managed
                 type: string
+              osSKU:
+                description: "OsSKU specifies the OS SKU of the node pool. The default
+                  is 'Ubuntu' if OSType is 'Linux'. The default is 'Windows2022'
+                  if OSType is 'Windows'. Immutable. See also [AKS doc]. \n [AKS
+                  doc]: https://learn.microsoft.com/rest/api/aks/agent-pools/create-or-update?tabs=HTTP#ossku"
+                enum:
+                - Ubuntu
+                - AzureLinux
+                - Windows2022
+                type: string
               osType:
                 default: Linux
                 description: |-

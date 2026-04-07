@@ -159,6 +159,54 @@ func TestAzureManagedMachinePoolUpdatingWebhook(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "Cannot change OsSKU of the agentpool",
+			new: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(LinuxOS),
+						OsSKU:  osSKUPtr(OsSKUUbuntu),
+						Mode:   "User",
+						SKU:    "StandardD2S_V3",
+					},
+				},
+			},
+			old: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(LinuxOS),
+						OsSKU:  osSKUPtr(OsSKUAzureLinux),
+						Mode:   "User",
+						SKU:    "StandardD2S_V3",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Can keep OsSKU unchanged on update",
+			new: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(LinuxOS),
+						OsSKU:  osSKUPtr(OsSKUAzureLinux),
+						Mode:   "User",
+						SKU:    "StandardD2S_V3",
+					},
+				},
+			},
+			old: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(LinuxOS),
+						OsSKU:  osSKUPtr(OsSKUAzureLinux),
+						Mode:   "User",
+						SKU:    "StandardD2S_V3",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "Cannot change OSDiskSizeGB of the agentpool",
 			new: &AzureManagedMachinePool{
 				Spec: AzureManagedMachinePoolSpec{
@@ -1028,6 +1076,118 @@ func TestAzureManagedMachinePool_ValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid OsSKU AzureLinux with Linux OSType",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(LinuxOS),
+						OsSKU:  osSKUPtr(OsSKUAzureLinux),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid OsSKU Ubuntu with default (nil) OSType",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OsSKU: osSKUPtr(OsSKUUbuntu),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid OsSKU Windows2022 with Windows OSType on user pool",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						Mode:   string(NodePoolModeUser),
+						OSType: ptr.To(WindowsOS),
+						OsSKU:  osSKUPtr(OsSKUWindows2022),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid nil OsSKU",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(LinuxOS),
+						OsSKU:  nil,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid OsSKU Windows2022 with Linux OSType",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(LinuxOS),
+						OsSKU:  osSKUPtr(OsSKUWindows2022),
+					},
+				},
+			},
+			wantErr:  true,
+			errorLen: 1,
+		},
+		{
+			name: "invalid OsSKU Windows2022 with default (nil) OSType defaults to Linux",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OsSKU: osSKUPtr(OsSKUWindows2022),
+					},
+				},
+			},
+			wantErr:  true,
+			errorLen: 1,
+		},
+		{
+			name: "invalid OsSKU AzureLinux with Windows OSType",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(WindowsOS),
+						OsSKU:  osSKUPtr(OsSKUAzureLinux),
+					},
+				},
+			},
+			wantErr:  true,
+			errorLen: 1,
+		},
+		{
+			name: "invalid OsSKU Ubuntu with Windows OSType",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						OSType: ptr.To(WindowsOS),
+						OsSKU:  osSKUPtr(OsSKUUbuntu),
+					},
+				},
+			},
+			wantErr:  true,
+			errorLen: 1,
+		},
+		{
+			name: "invalid OsSKU Windows2022 on system node pool",
+			ammp: &AzureManagedMachinePool{
+				Spec: AzureManagedMachinePoolSpec{
+					AzureManagedMachinePoolClassSpec: AzureManagedMachinePoolClassSpec{
+						Mode:  string(NodePoolModeSystem),
+						OsSKU: osSKUPtr(OsSKUWindows2022),
+					},
+				},
+			},
+			wantErr:  true,
+			errorLen: 1,
+		},
+		{
 			name: "KubeletConfig CPUCfsQuotaPeriod needs 'ms' suffix",
 			ammp: &AzureManagedMachinePool{
 				Spec: AzureManagedMachinePoolSpec{
@@ -1460,4 +1620,8 @@ func getAzureManagedMachinePoolWithChanges(changes ...func(*AzureManagedMachineP
 		change(ammp)
 	}
 	return ammp
+}
+
+func osSKUPtr(s OsSKU) *OsSKU {
+	return &s
 }

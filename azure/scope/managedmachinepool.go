@@ -177,6 +177,7 @@ func buildAgentPoolSpec(managedControlPlane *infrav1.AzureManagedControlPlane,
 		Replicas:      int(replicas),
 		Version:       normalizedVersion,
 		OSType:        managedMachinePool.Spec.OSType,
+		OsSKU:         osSKUToStringPtr(managedMachinePool.Spec.OsSKU),
 		VnetSubnetID: azure.SubnetID(
 			managedControlPlane.Spec.SubscriptionID,
 			managedControlPlane.Spec.VirtualNetwork.ResourceGroup,
@@ -383,4 +384,12 @@ func (s *ManagedMachinePoolScope) UpdateCAPIMachinePoolReplicas(ctx context.Cont
 // UpdateCAPIMachinePoolAnnotations updates the associated MachinePool annotation.
 func (s *ManagedMachinePoolScope) UpdateCAPIMachinePoolAnnotations(ctx context.Context, key, value string) {
 	s.MachinePool.Annotations[key] = value
+}
+
+func osSKUToStringPtr(sku *infrav1.OsSKU) *string {
+	if sku == nil {
+		return nil
+	}
+	s := string(*sku)
+	return &s
 }
