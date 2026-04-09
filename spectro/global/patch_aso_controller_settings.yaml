@@ -1,0 +1,11 @@
+- op: replace
+  path: "/stringData"
+  value:
+    AZURE_AUTHORITY_HOST: ""
+    AZURE_CLIENT_ID: ""
+    AZURE_RESOURCE_MANAGER_AUDIENCE: ""
+    AZURE_RESOURCE_MANAGER_ENDPOINT: ""
+    AZURE_SUBSCRIPTION_ID: ""
+    AZURE_SYNC_PERIOD: 1h
+    AZURE_TENANT_ID: ""
+    AZURE_USER_AGENT_SUFFIX: cluster-api-provider-azure/main

@@ -1,3 +1,354 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-manager
+  namespace: capz-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-leader-election-role
+  namespace: capz-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster.x-k8s.io/aggregate-to-capz-manager: "true"
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-base-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+- apiGroups:
+  - bootstrap.cluster.x-k8s.io
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters/status
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machinepools
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machinepools/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machines
+  - machines/status
+  verbs:
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - containerservice.azure.com
+  resources:
+  - fleetsmembers
+  - managedclusters
+  - managedclustersagentpools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - containerservice.azure.com
+  resources:
+  - fleetsmembers/status
+  - managedclusters/status
+  - managedclustersagentpools/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - azureasomanagedclusters
+  - azureasomanagedcontrolplanes
+  - azureasomanagedmachinepools
+  - azureclusteridentities
+  - azureclusteridentities/status
+  - azureclusters
+  - azuremachinepoolmachines
+  - azuremachinepools
+  - azuremachines
+  - azuremanagedclusters
+  - azuremanagedcontrolplanes
+  - azuremanagedmachinepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - azureasomanagedclusters/finalizers
+  - azureasomanagedcontrolplanes/finalizers
+  - azureasomanagedmachinepools/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - azureasomanagedclusters/status
+  - azureasomanagedcontrolplanes/status
+  - azureasomanagedmachinepools/status
+  - azureclusters/status
+  - azuremachinepoolmachines/status
+  - azuremachinepools/status
+  - azuremachines/status
+  - azuremanagedclusters/status
+  - azuremanagedcontrolplanes/status
+  - azuremanagedmachinepools/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - azuremachinetemplates
+  - azuremachinetemplates/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kubernetesconfiguration.azure.com
+  resources:
+  - extensions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubernetesconfiguration.azure.com
+  resources:
+  - extensions/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - network.azure.com
+  resources:
+  - bastionhosts
+  - natgateways
+  - privateendpoints
+  - virtualnetworks
+  - virtualnetworkssubnets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - network.azure.com
+  resources:
+  - bastionhosts/status
+  - natgateways/status
+  - privateendpoints/status
+  - virtualnetworks/status
+  - virtualnetworkssubnets/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - resources.azure.com
+  resources:
+  - resourcegroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - resources.azure.com
+  resources:
+  - resourcegroups/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+---
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      cluster.x-k8s.io/aggregate-to-capz-manager: "true"
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-manager-role
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-leader-election-rolebinding
+  namespace: capz-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: capz-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: capz-manager
+  namespace: capz-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-azure
+  name: capz-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capz-manager-role
+subjects:
+- kind: ServiceAccount
+  name: capz-manager
+  namespace: capz-system
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

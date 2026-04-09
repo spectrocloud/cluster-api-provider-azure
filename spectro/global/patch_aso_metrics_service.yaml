@@ -1,0 +1,12 @@
+- op: replace
+  path: "/metadata/labels"
+  value:
+    app.kubernetes.io/name: azure-service-operator
+    app.kubernetes.io/version: v2.9.0
+    control-plane: controller-manager
+    component: azure-service-operator
+- op: replace
+  path: "/spec/selector"
+  value:
+      control-plane: controller-manager
+      component: azure-service-operator
