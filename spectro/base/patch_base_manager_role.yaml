@@ -1,0 +1,15 @@
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+- op: replace
+  path: "/rules/5/resources"
+  value:
+    - '*'

@@ -6,17 +6,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.16.1
   name: azureclustertemplates.infrastructure.cluster.x-k8s.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: capz-webhook-service
-          namespace: capi-webhook-system
-          path: /convert
-      conversionReviewVersions:
-        - v1
-        - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -543,6 +532,8 @@ spec:
                                 type: integer
                               ipAllocationMethod:
                                 type: string
+                              privateIP:
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -563,6 +554,8 @@ spec:
                                 type: integer
                               ipAllocationMethod:
                                 type: string
+                              privateIP:
+                                type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.
                                 type: string
@@ -581,6 +574,8 @@ spec:
                                 format: int32
                                 type: integer
                               ipAllocationMethod:
+                                type: string
+                              privateIP:
                                 type: string
                               sku:
                                 description: SKU defines an Azure load balancer SKU.

@@ -6,6 +6,7 @@ namePrefix: capz-
 
 resources:
 - ../../config/manager
+- ../../config/rbac
 
 
 
@@ -48,3 +49,11 @@ patches:
     kind: Deployment
     name: controller-manager
     version: v1
+
+patchesJson6902:
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: ClusterRole
+      name: base-manager-role
+    path: patch_base_manager_role.yaml
