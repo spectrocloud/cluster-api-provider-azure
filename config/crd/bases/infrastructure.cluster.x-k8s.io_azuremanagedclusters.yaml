@@ -6,17 +6,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.16.1
   name: azuremanagedclusters.infrastructure.cluster.x-k8s.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: capz-webhook-service
-          namespace: capi-webhook-system
-          path: /convert
-      conversionReviewVersions:
-        - v1
-        - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -75,10 +64,11 @@ spec:
                   in the API schema to permit resource admission.
                 properties:
                   host:
-                    description: The hostname on which the API server is serving.
+                    description: host is the hostname on which the API server is serving.
+                    maxLength: 512
                     type: string
                   port:
-                    description: The port on which the API server is serving.
+                    description: port is the port on which the API server is serving.
                     format: int32
                     type: integer
                 required:

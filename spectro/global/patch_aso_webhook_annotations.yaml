@@ -1,0 +1,4 @@
+- op: replace
+  path: "/metadata/annotations"
+  value:
+    cert-manager.io/inject-ca-from: capi-webhook-system/capz-azureserviceoperator-serving-cert

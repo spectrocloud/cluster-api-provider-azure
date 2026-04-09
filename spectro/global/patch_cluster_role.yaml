@@ -6,6 +6,8 @@
     resources:
       - azuremanagedclusters
       - azuremanagedcontrolplanes
+      - azuremanagedmachinepools
+      - azureclusters
     verbs:
       - '*'
 - op: add

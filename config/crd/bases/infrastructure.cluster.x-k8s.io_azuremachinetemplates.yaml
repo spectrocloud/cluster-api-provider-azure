@@ -6,17 +6,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.16.1
   name: azuremachinetemplates.infrastructure.cluster.x-k8s.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: capz-webhook-service
-          namespace: capi-webhook-system
-          path: /convert
-      conversionReviewVersions:
-        - v1
-        - v1beta1
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -94,7 +83,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          Map of string keys and values that can be used to organize and categorize
+                          labels is a map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
