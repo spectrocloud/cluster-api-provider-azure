@@ -45,18 +45,6 @@ COPY ./ ./
 ARG package=.
 ARG ARCH
 
-# Cache the go build into the the Go’s compiler cache folder so we take benefits of compiler caching across docker build calls
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg/mod \
-    if [ ${CRYPTO_LIB} ]; \
-    then \
-      GOARCH=${ARCH} go-build-fips.sh . ;\
-    else \
-      GOARCH=${ARCH} go-build-static.sh . ;\
-    fi
-
-
-# Do not force rebuild of up-to-date packages (do not use -a) and use the compiler cache folder
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     if [ ${CRYPTO_LIB} ]; \
@@ -65,6 +53,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     else \
       GOARCH=${ARCH} go-build-static.sh -a -o manager ${package} ;\
     fi
+
 RUN if [ "${CRYPTO_LIB}" ]; then assert-static.sh manager; fi
 RUN if [ "${CRYPTO_LIB}" ]; then assert-fips.sh manager; fi
 RUN scan-govulncheck.sh manager
