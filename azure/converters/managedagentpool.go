@@ -28,6 +28,7 @@ func AgentPoolToManagedClusterAgentPoolProfile(pool *asocontainerservicev1hub.Ma
 		Name:                        ptr.To(pool.AzureName()),
 		VmSize:                      properties.VmSize,
 		OsType:                      properties.OsType,
+		OsSKU:                       properties.OsSKU,
 		OsDiskSizeGB:                properties.OsDiskSizeGB,
 		Count:                       properties.Count,
 		Type:                        properties.Type,
