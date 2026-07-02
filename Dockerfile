@@ -27,8 +27,8 @@ ENV GOEXPERIMENT=${CRYPTO_LIB:+boringcrypto}
 FROM toolchain as builder
 WORKDIR /workspace
 
-RUN apk update
-RUN apk add git gcc g++ curl binutils-gold
+# RUN apk update
+# RUN apk add git gcc g++ curl binutils-gold
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
