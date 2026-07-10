@@ -1,4 +1,4 @@
-# CAPI reconcile — capz — 2026-07-10 — mode=plan
+# CAPI reconcile — cluster-api-provider-azure — 2026-07-10 — mode=plan
 
 | field | value |
 |--|--|
@@ -16,39 +16,39 @@
 
 | sha | decision | files (parity-check) | risk | confirm |
 |--|--|--|--|--|
-| `248e1eb1` | PICK-VERIFY | main.go  | REVIEW | yes |
-| `42eb65da` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azurecluste | REVIEW | yes |
-| `0cb06ceb` | MIXED | exp/api/v1beta1/azuremanagedcontrolplane_webhook.go spectro/ | REVIEW | yes |
-| `15a9f3a5` | MIXED | Makefile azure/types.go exp/api/v1beta1/azuremanagedcontrolp | REVIEW | yes |
-| `7b180e1d` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azuremanage | REVIEW | yes |
-| `debee817` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azuremanage | REVIEW | yes |
-| `16ca18d3` | PICK-VERIFY | azure/scope/cluster.go  | REVIEW | yes |
-| `1c224e7f` | MIXED | azure/services/managedclusters/spec.go config/crd/bases/infr | REVIEW | yes |
-| `5fb2ad0a` | MIXED | api/v1beta1/azurecluster_default.go api/v1beta1/azurecluster | REVIEW | yes |
-| `a8ff143f` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | REVIEW | yes |
-| `adb3f75a` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | REVIEW | yes |
-| `72906f59` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | REVIEW | yes |
-| `e176e7db` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | REVIEW | yes |
-| `8b5ab295` | PICK-VERIFY | azure/services/scalesets/scalesets.go util/azure/azure.go ut | REVIEW | yes |
-| `aece2202` | MIXED | api/v1beta1/types_class.go azure/scope/managedcontrolplane.g | REVIEW | yes |
-| `55d361d7` | MIXED | azure/services/managedclusters/spec.go config/crd/bases/infr | REVIEW | yes |
-| `e2975f92` | MIXED | azure/scope/managedcontrolplane.go azure/services/managedclu | REVIEW | yes |
-| `15ec55de` | MIXED | api/v1beta1/azuremanagedcontrolplane_types.go azure/scope/ma | REVIEW | yes |
-| `a06f259d` | MIXED | azure/scope/managedcontrolplane.go azure/scope/managedcontro | REVIEW | yes |
-| `82068390` | MIXED | azure/scope/managedcontrolplane.go azure/scope/managedcontro | REVIEW | yes |
-| `70464cd1` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azuremanage | REVIEW | yes |
-| `f51b1c5e` | MIXED | api/v1beta1/azurecluster_default.go api/v1beta1/zz_generated | REVIEW | yes |
-| `79c0d269` | MIXED | azure/services/managedclusters/mock_managedclusters/managedc | REVIEW | yes |
-| `aaba2a2e` | MIXED | config/capz/manager_webhook_patch.yaml config/certmanager/ce | REVIEW | yes |
-| `aa405349` | MIXED | exp/api/v1beta1/azuremanagedcontrolplane_default.go exp/api/ | REVIEW | yes |
-| `07619357` | MIXED | config/aso/crds.yaml config/aso/kustomization.yaml spectro/g | REVIEW | yes |
-| `363e2980` | PICK-VERIFY | azure/scope/machinepool.go azure/scope/managedcontrolplane.g | REVIEW | yes |
-| `c42079f9` | PICK-VERIFY | azure/errors.go azure/services/async/async.go  | REVIEW | yes |
-| `4f838de6` | PICK-VERIFY | azure/services/async/async.go controllers/azuremachine_contr | REVIEW | yes |
-| `9c0457e2` | PICK-VERIFY | azure/services/async/async.go  | REVIEW | yes |
-| `4693ac4e` | PICK-VERIFY | controllers/azuremachine_controller.go controllers/azuremach | REVIEW | yes |
-| `604a2909` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azureasoman | REVIEW | yes |
-| `24708cad` | MIXED | api/v1beta1/azuremanagedcontrolplane_types.go azure/scope/ma | REVIEW | yes |
+| `248e1eb1` | PICK-VERIFY | main.go  | High | yes |
+| `42eb65da` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azurecluste | Med | yes |
+| `0cb06ceb` | MIXED | exp/api/v1beta1/azuremanagedcontrolplane_webhook.go spectro/ | Med | yes |
+| `15a9f3a5` | MIXED | Makefile azure/types.go exp/api/v1beta1/azuremanagedcontrolp | Med | yes |
+| `7b180e1d` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azuremanage | Med | yes |
+| `debee817` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azuremanage | Med | yes |
+| `16ca18d3` | PICK-VERIFY | azure/scope/cluster.go  | Med | yes |
+| `1c224e7f` | MIXED | azure/services/managedclusters/spec.go config/crd/bases/infr | Med | yes |
+| `5fb2ad0a` | MIXED | api/v1beta1/azurecluster_default.go api/v1beta1/azurecluster | Med | yes |
+| `a8ff143f` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | Med | yes |
+| `adb3f75a` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | Low | yes |
+| `72906f59` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | Low | yes |
+| `e176e7db` | PICK-VERIFY | azure/defaults.go azure/scope/cluster.go  | Med | yes |
+| `8b5ab295` | PICK-VERIFY | azure/services/scalesets/scalesets.go util/azure/azure.go ut | Med | yes |
+| `aece2202` | MIXED | api/v1beta1/types_class.go azure/scope/managedcontrolplane.g | High | yes |
+| `55d361d7` | MIXED | azure/services/managedclusters/spec.go config/crd/bases/infr | Med | yes |
+| `e2975f92` | MIXED | azure/scope/managedcontrolplane.go azure/services/managedclu | High | yes |
+| `15ec55de` | MIXED | api/v1beta1/azuremanagedcontrolplane_types.go azure/scope/ma | Med | yes |
+| `a06f259d` | MIXED | azure/scope/managedcontrolplane.go azure/scope/managedcontro | Med | yes |
+| `82068390` | MIXED | azure/scope/managedcontrolplane.go azure/scope/managedcontro | High | yes |
+| `70464cd1` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azuremanage | Med | yes |
+| `f51b1c5e` | MIXED | api/v1beta1/azurecluster_default.go api/v1beta1/zz_generated | Med | yes |
+| `79c0d269` | MIXED | azure/services/managedclusters/mock_managedclusters/managedc | Med | yes |
+| `aaba2a2e` | MIXED | config/capz/manager_webhook_patch.yaml config/certmanager/ce | Med | yes |
+| `aa405349` | MIXED | exp/api/v1beta1/azuremanagedcontrolplane_default.go exp/api/ | Med | yes |
+| `07619357` | MIXED | config/aso/crds.yaml config/aso/kustomization.yaml spectro/g | Med | yes |
+| `363e2980` | PICK-VERIFY | azure/scope/machinepool.go azure/scope/managedcontrolplane.g | Med | yes |
+| `c42079f9` | PICK-VERIFY | azure/errors.go azure/services/async/async.go  | Med | yes |
+| `4f838de6` | PICK-VERIFY | azure/services/async/async.go controllers/azuremachine_contr | Med | yes |
+| `9c0457e2` | PICK-VERIFY | azure/services/async/async.go  | Low | yes |
+| `4693ac4e` | PICK-VERIFY | controllers/azuremachine_controller.go controllers/azuremach | Med | yes |
+| `604a2909` | MIXED | config/crd/bases/infrastructure.cluster.x-k8s.io_azureasoman | Med | yes |
+| `24708cad` | MIXED | api/v1beta1/azuremanagedcontrolplane_types.go azure/scope/ma | High | yes |
 
 ## Decisions (baseline=T · cumulative rehearsal)
 | # | sha | cat | subject | decision | reason |
@@ -110,7 +110,7 @@
 | 55 | `2c4e2633` | F4? | Fix for Webhook Validations & ManagedCluster Spec Updation | NEEDS-DECISION | conflict on: azure/services/managedclusters/spec.go internal/webhooks/azuremanagedcontrolplane_validation.go  |
 | 56 | `07619357` | MIXED | Manifest Changes | NEEDS-DECISION | mixed generated+code — split: regen the generated part, pick the code part (human) |
 | 57 | `9b1db285` | F2? | Removal of comments | NEEDS-DECISION | conflict on: internal/api/v1beta1/azurecluster_default.go  |
-| 58 | `5f44feb4` | M* | Vulnerability fix | NEEDS-DECISION | conflict on: go.mod go.sum  |
+| 58 | `5f44feb4` | M* | Vulnerability fix | SKIP | skip-list (explicit human decision) |
 | 59 | `034b0daf` | F2? | PEM-7501: Loaded custom azure environment from file | PICK | applies cleanly (fork-only) [confidence=heuristic] |
 | 60 | `e3c6f868` | F2? | Fix for webhook validation of AzureManagedControlPlane VNET Resource G | PICK | applies cleanly (fork-only) [confidence=heuristic] |
 | 61 | `b3215651` | F2? | PEM-7501: Changed to load all json files instead of a single file for  | PICK | applies cleanly (fork-only) [confidence=heuristic] |
@@ -151,20 +151,20 @@
 | 96 | `97122011` | M* | Update Go version in spectro-release workflow to 1.24.12 | PICK | applies cleanly (fork-only) [confidence=heuristic] |
 | 97 | `ae875a02` | M* | PCP-6027 Update go version in spectro release yaml (#132) | PICK | applies cleanly (fork-only) [confidence=heuristic] |
 | 98 | `06a12b7f` | M* | PCP-6027 Update go version in spectro release yaml (#133) | SKIP | empty on cumulative tree (duplicate — already applied by a prior pick) |
-| 99 | `79f5be32` | F4? | PCP-6137 Handle CAPZ vulenerability | NEEDS-DECISION | conflict on: go.mod go.sum  |
-| 100 | `d3e72af4` | F4? | PCP-6137 Handle CAPZ vulenerability | NEEDS-DECISION | conflict on: go.mod go.sum  |
+| 99 | `79f5be32` | F4? | PCP-6137 Handle CAPZ vulenerability | SKIP | skip-list (explicit human decision) |
+| 100 | `d3e72af4` | F4? | PCP-6137 Handle CAPZ vulenerability | SKIP | skip-list (explicit human decision) |
 | 101 | `fc3e22b4` | F4? | add autobackport | NEEDS-DECISION | conflict on: .gitignore  |
 | 102 | `604a2909` | MIXED | Fix Spectro Manifest Generation Script (#131) | NEEDS-DECISION | mixed generated+code — split: regen the generated part, pick the code part (human) |
 | 103 | `24708cad` | MIXED | PCP-6412: added enableAzureRBAC flag for aadProfile (#142) | NEEDS-DECISION | mixed generated+code — split: regen the generated part, pick the code part (human) |
 | 104 | `d0610cb2` | M* | PCP-6734 Update go version for build | NEEDS-DECISION | conflict on: Dockerfile go.mod go.sum  |
 | 105 | `364fe27b` | F4? | dockerfile: fixed duplicate builds (#147) (#149) | NEEDS-DECISION | conflict on: Dockerfile  |
-| 106 | `45c6fc69` | M* | PCP-6734 Fix go vulns | NEEDS-DECISION | conflict on: go.mod go.sum  |
-| 107 | `cb5b4b16` | M* | PCP-6787 Fix CVEs | NEEDS-DECISION | conflict on: go.mod go.sum  |
+| 106 | `45c6fc69` | M* | PCP-6734 Fix go vulns | SKIP | skip-list (explicit human decision) |
+| 107 | `cb5b4b16` | M* | PCP-6787 Fix CVEs | SKIP | skip-list (explicit human decision) |
 | 108 | `f1abc73a` | F4? | fix(converters): forward OsSKU to embedded ManagedCluster agent pool p | NEEDS-DECISION | conflict on: azure/converters/managedagentpool.go  |
 | 109 | `22c3de30` | M* | PCP-6959 : updated go version & packages to fix vulnerabilities | NEEDS-DECISION | conflict on: .github/workflows/spectro-release.yaml Makefile  |
 
 ## Summary
-- PICK=23 (PICK-VERIFY=12 · PICK-RESOLVE=0) · SKIP=12 · REGENERATE=1 · NEEDS-DECISION=73
-- INCOMPLETE: unresolved=73 · regen/verify-pending=1 · regression-watch=33 · commit-failures=0
+- PICK=23 (PICK-VERIFY=12 · PICK-RESOLVE=0) · SKIP=17 · REGENERATE=1 · NEEDS-DECISION=68
+- INCOMPLETE: unresolved=68 · regen/verify-pending=1 · regression-watch=33 · commit-failures=0
 - Branch NOT mergeable while INCOMPLETE>0 or any High regression unconfirmed.
 - Legend: PICK auto · PICK-VERIFY auto+verify · PICK-RESOLVE force+resolver · SKIP · NEEDS-DECISION human · REGEN make · MIXED split(human)
