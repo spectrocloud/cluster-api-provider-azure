@@ -1,1 +1,11 @@
 # ── INPUT (Gate-1, you edit) — SHAs to SKIP / drop. One SHA per line; '#' = comment. See ../README.md ──
+# M*/CVE/go-version noise — pure go.mod/go.sum/Dockerfile/workflow bumps, superseded by
+# target v1.13.3 (go 1.25.0) and reconstructed by the Patch-D build-green loop + Patch-G CVE gate
+# on the execute branch. Verified: each touches ONLY dependency/build files, no fork .go code.
+5f44feb4  # reviewer-applied: M* pure go.mod/go.sum vuln bump; superseded by target deps + CVE gate
+79f5be32  # reviewer-applied: M* PCP-6137 go.mod/go.sum CVE bump; superseded by target deps + CVE gate
+d3e72af4  # reviewer-applied: M* PCP-6137 go.mod/go.sum CVE bump; superseded by target deps + CVE gate
+d0610cb2  # reviewer-applied: M* PCP-6734 go-version bump (workflow/Dockerfile/go.mod); superseded by target go 1.25.0
+45c6fc69  # reviewer-applied: M* PCP-6734 go.mod/go.sum vuln bump; superseded by target deps + CVE gate
+cb5b4b16  # reviewer-applied: M* PCP-6787 go.mod/go.sum CVE bump; superseded by target deps + CVE gate
+22c3de30  # reviewer-applied: M* PCP-6959 go-version bump (workflow/Makefile/go.mod); superseded by target go 1.25.0
