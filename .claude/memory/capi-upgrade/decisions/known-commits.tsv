@@ -2,7 +2,7 @@
 # ad0f208f is titled "PEM-2613: Fix Cipher Suit issue" — despite the security-fix title it is NOT
 # CVE noise: it adds a TLS cipher-suite / MinVersion hardening block (crypto/tls TLSOptions) to
 # main.go. Pin it F4 so a future --skip-noise cannot mistake it for a droppable M* bump.
-ad0f208f	F4	-	# reviewer-applied: real fork TLS-hardening code in main.go — must carry, do NOT skip as noise
+ad0f208f	F4	SKIP	# reviewer-applied r3: folded into 248e1eb1 main.go unit — TLS block carried in the unit net-diff; go.mod/go.sum hunks are replay junk. NOT droppable noise.
 # ── reviewer-applied round-3: unit roots + re-targeted carries (see notes/parity/v1.26.0-parity.md) ──
 248e1eb1	F4	PICK-RESOLVE	# reviewer-applied: unit root — main.go split-pod net-diff incl. 5e819cea/f9cfc76b/ad0f208f; webhook-port default 0 is load-bearing
 a8ff143f	F4	PICK-RESOLVE	# reviewer-applied: unit root — private-DNS chain net (PEM-483/484); re-target moved defaults; resolve from current armnetwork state

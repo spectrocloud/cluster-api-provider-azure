@@ -70,3 +70,4 @@ eb14c310  # reviewer-applied: folded into ee19ef20 AzureSecret #117 unit
 f918f3cf  # reviewer-applied: folded into ee19ef20 unit (ConfigMap pivot — core of net)
 d13d31d0  # reviewer-applied: folded into ee19ef20 AzureSecret #117 unit
 c95a3413  # reviewer-applied: folded into ee19ef20 AzureSecret #117 unit
+e5e74b7c  # reviewer-applied r3: decoupling-only patch; content carried by e8b25112 location-mapping unit net-diff

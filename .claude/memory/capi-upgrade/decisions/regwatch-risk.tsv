@@ -45,3 +45,13 @@ b3a9f3b5	H	# frozen v1.18 ForStandard bodies — verbatim carry reverts 8 releas
 e8b25112	M	# location-mapping unit root — guarded, low blast radius, verify guard conditions survive
 aece2202	M	# OPEN Gate-1 question: PCP-1467 UAI plumbing is dead on fork (scope populates, spec never consumes) — wire or drop
 604a2909	M	# OPEN human call: AMCP/AMMP webhook removal is a hand-edit to GENERATED manifests.yaml; make generate restores — re-implement as kustomize delete-patch if intended
+# ── reviewer-applied round-3b: risks for auto-generated rows on flipped commits ──
+1a8918cf	M	# FIPS Dockerfile at S-tip; mechanical re-target, verify TAG bump at execute
+9972a7a1	M	# warning suppression re-applied in 3 azurejson controllers; behavior-neutral if missed but noisy
+034b0daf	L	# AzureSecret stepping stone; final state owned by ee19ef20 unit (H covers the unit)
+b3215651	L	# AzureSecret stepping stone; final state owned by ee19ef20 unit
+fb81b479	L	# log-statement fix; stepping stone, superseded within unit
+34c9590a	L	# path-reading fix; stepping stone, superseded within unit
+f1f1ebc2	M	# SetEnvironment race lock; concurrency change, verify against v1.26.0 controller startup
+fc3e22b4	L	# CI workflow + .gitignore union; no runtime surface
+364fe27b	L	# Dockerfile dedup at S-tip state; build-only
