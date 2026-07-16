@@ -679,6 +679,7 @@ func TestManagedControlPlaneScope_AADProfile(t *testing.T) {
 						AzureManagedControlPlaneClassSpec: infrav1.AzureManagedControlPlaneClassSpec{
 							AADProfile: &infrav1.AADProfile{
 								Managed:             true,
+								EnableAzureRBAC:     true,
 								AdminGroupObjectIDs: []string{"00000000-0000-0000-0000-000000000000"},
 							},
 						},
