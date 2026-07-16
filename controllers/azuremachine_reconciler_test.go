@@ -192,7 +192,11 @@ func TestAzureMachineServiceDelete(t *testing.T) {
 				gomock.InOrder(
 					three.Delete(gomockinternal.AContext()).Return(nil),
 					two.Delete(gomockinternal.AContext()).Return(errors.New("some error happened")),
-					two.Name().Return("test-service-two"))
+					// Fork PR-125: delete() now calls Name() once to check for the
+					// "virtualmachine" transient-server-error path (this service is not
+					// "virtualmachine", so the bounded VM-deletion verification is skipped),
+					// then again when wrapping the returned error.
+					two.Name().Return("test-service-two").Times(2))
 			},
 		},
 	}
