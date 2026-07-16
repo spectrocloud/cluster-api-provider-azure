@@ -135,8 +135,14 @@ func GeneratePrivateDNSZoneName(clusterName string) string {
 }
 
 // GeneratePrivateFQDN generates the FQDN for a private API Server based on the private DNS zone name.
-func GeneratePrivateFQDN(zoneName, clusterName string) string {
-	return fmt.Sprintf("%s.%s.%s", PrivateAPIServerHostname, clusterName, zoneName)
+// When the user supplies a custom private DNS zone (isPrivateDNSZoneName), the cluster name is embedded
+// (apiserver.<cluster>.<zone>) so multiple clusters can share one custom zone without record collisions;
+// the default generated zone already embeds the cluster name, so it keeps the plain apiserver.<zone> form.
+func GeneratePrivateFQDN(zoneName, clusterName string, isPrivateDNSZoneName bool) string {
+	if isPrivateDNSZoneName {
+		return fmt.Sprintf("%s.%s.%s", PrivateAPIServerHostname, clusterName, zoneName)
+	}
+	return fmt.Sprintf("%s.%s", PrivateAPIServerHostname, zoneName)
 }
 
 // GenerateVNetLinkName generates the name of a virtual network link name based on the vnet name.
