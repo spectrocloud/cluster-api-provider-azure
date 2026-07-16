@@ -6,12 +6,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.20.0
   name: azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          namespace: default
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -477,6 +471,10 @@ spec:
                 - managerName
                 - managerResourceGroup
                 type: object
+              fqdnSubdomain:
+                description: FqdnSubdomain - FQDN subdomain specified when creating
+                  private cluster with custom private dns zone.
+                type: string
               httpProxyConfig:
                 description: |-
                   HTTPProxyConfig is the HTTP proxy configuration for the cluster.

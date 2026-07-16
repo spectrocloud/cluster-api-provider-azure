@@ -6,12 +6,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.20.0
   name: azureclusters.infrastructure.cluster.x-k8s.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          namespace: default
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
@@ -774,7 +768,11 @@ spec:
                           the TCP idle connection.
                         format: int32
                         type: integer
+                      ipAllocationMethod:
+                        type: string
                       name:
+                        type: string
+                      privateIP:
                         type: string
                       sku:
                         description: SKU defines an Azure load balancer SKU.
@@ -869,7 +867,11 @@ spec:
                           the TCP idle connection.
                         format: int32
                         type: integer
+                      ipAllocationMethod:
+                        type: string
                       name:
+                        type: string
+                      privateIP:
                         type: string
                       sku:
                         description: SKU defines an Azure load balancer SKU.
@@ -963,7 +965,11 @@ spec:
                           the TCP idle connection.
                         format: int32
                         type: integer
+                      ipAllocationMethod:
+                        type: string
                       name:
+                        type: string
+                      privateIP:
                         type: string
                       sku:
                         description: SKU defines an Azure load balancer SKU.
