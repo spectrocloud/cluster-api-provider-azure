@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
@@ -38,6 +39,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cgrecord "k8s.io/client-go/tools/record"
+	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	bootstrapv1 "sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta2"
@@ -115,6 +117,9 @@ var (
 	timeouts                           reconciler.Timeouts
 	enableTracing                      bool
 	disableControllersOrWebhooks       []string
+	metricsAddr                        string
+	// tlsOptions carries the spectro (PEM-2613) TLS hardening baked in as defaults (not operator flags).
+	tlsOptions = TLSOptions{}
 )
 
 // InitFlags initializes all command-line flags.
@@ -221,6 +226,15 @@ func InitFlags(fs *pflag.FlagSet) {
 		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed..",
 	)
 
+	// spectro (f9cfc76b): palette deployment specs pass --metrics-bind-addr; the binary must accept it
+	// (upstream renamed it to --diagnostics-address). Mapped onto metricsOptions.BindAddress below.
+	fs.StringVar(
+		&metricsAddr,
+		"metrics-bind-addr",
+		"localhost:8080",
+		"The address the metric endpoint binds to.",
+	)
+
 	fs.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs/",
 		"The webhook certificate directory, where the server should find the TLS certificate and key.")
 
@@ -305,11 +319,22 @@ func main() {
 		BurstSize: 100,
 	})
 
-	tlsOptions, metricsOptions, err := flags.GetManagerOptions(managerOptions)
+	// spectro (PEM-2613): pin the webhook server's TLS to the CoreSec-audited posture (TLS1.2 only + 4
+	// ECDHE-GCM suites) as baked-in defaults. Discard upstream's flag-derived TLS overrides — palette
+	// deployments pass no TLS flags and would otherwise regress to unhardened defaults.
+	tlsOptionOverrides, err := GetTLSOptionOverrideFuncs(tlsOptions)
+	if err != nil {
+		setupLog.Error(err, "unable to add TLS settings to the webhook server")
+		os.Exit(1)
+	}
+
+	_, metricsOptions, err := flags.GetManagerOptions(managerOptions)
 	if err != nil {
 		setupLog.Error(err, "Unable to start manager: invalid flags")
 		os.Exit(1)
 	}
+
+	metricsOptions.BindAddress = metricsAddr
 
 	if deprecatedAzureBootrapConfigGVK != "" {
 		setupLog.Error(fmt.Errorf("bootstrap-config-gvk argument is deprecated and no longer needed"), "Deprecated argument")
@@ -362,7 +387,7 @@ func main() {
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port:    webhookPort,
 			CertDir: webhookCertDir,
-			TLSOpts: tlsOptions,
+			TLSOpts: tlsOptionOverrides,
 		}),
 		EventBroadcaster: broadcaster,
 	})
@@ -404,7 +429,44 @@ func main() {
 	}
 }
 
+// TLSOptions carries the spectro TLS hardening (PEM-2613) settings. An empty TLSMinVersion resolves to
+// the component-base default (TLS 1.2) via cliflag.TLSVersion.
+type TLSOptions struct {
+	TLSMinVersion   string
+	TLSCipherSuites []string
+}
+
+// GetTLSOptionOverrideFuncs returns a list of TLS configuration overrides to be used
+// by the webhook server. It pins MinVersion == MaxVersion (TLS 1.2) and restricts the
+// cipher suites to the CoreSec-audited ECDHE-GCM set.
+func GetTLSOptionOverrideFuncs(options TLSOptions) ([]func(*tls.Config), error) {
+	var tlsOptions []func(config *tls.Config)
+	tlsVersion, err := cliflag.TLSVersion(options.TLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	tlsOptions = append(tlsOptions, func(cfg *tls.Config) {
+		cfg.MinVersion = tlsVersion
+		cfg.CipherSuites = GetDefaultTLSCipherSuits()
+		cfg.MaxVersion = tlsVersion
+	})
+
+	return tlsOptions, nil
+}
+
+// GetDefaultTLSCipherSuits returns the exact ECDHE-GCM cipher-suite set required by the PEM-2613
+// security posture (only honored on TLS 1.2).
+func GetDefaultTLSCipherSuits() []uint16 {
+	return []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	}
+}
+
 func registerControllers(ctx context.Context, mgr manager.Manager) {
+	setupLog.V(0).Info("registerControllers")
 	credCache := azure.NewCredentialCache()
 
 	machineCache, err := coalescing.NewRequestCache(debouncingTimer)
@@ -653,6 +715,7 @@ func registerControllers(ctx context.Context, mgr manager.Manager) {
 }
 
 func registerWebhooks(mgr manager.Manager) {
+	setupLog.V(0).Info("registerWebhooks")
 	if err := (&webhooks.AzureClusterWebhook{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AzureCluster")
 		os.Exit(1)
