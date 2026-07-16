@@ -107,3 +107,20 @@ func FindParentMachinePoolWithRetryV1Beta1(ampName string, cli client.Client, ma
 func ParseResourceID(id string) (*arm.ResourceID, error) {
 	return arm.ParseResourceID(strings.TrimPrefix(id, ProviderIDPrefix))
 }
+
+// regionMapping contains mappings from custom region names to standard Azure region names.
+// This is useful for environments (e.g. the Sequoia AzureSecret emulator) where custom region
+// names are used that need to be translated to standard Azure region names for API calls.
+var regionMapping = map[string]string{
+	"ussec": "eastus2",
+	// Add other custom region mappings as needed
+}
+
+// NormalizeAzureRegion translates custom region names to standard Azure region names.
+// If the region is not in the mapping, it returns the original region name.
+func NormalizeAzureRegion(region string) string {
+	if normalizedRegion, exists := regionMapping[region]; exists {
+		return normalizedRegion
+	}
+	return region
+}

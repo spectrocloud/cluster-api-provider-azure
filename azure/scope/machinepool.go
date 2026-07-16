@@ -205,7 +205,7 @@ func (m *MachinePoolScope) ScaleSetSpec(ctx context.Context) azure.ResourceSpecG
 		NetworkInterfaces:            m.AzureMachinePool.Spec.Template.NetworkInterfaces,
 		IPv6Enabled:                  m.IsIPv6Enabled(),
 		OrchestrationMode:            m.AzureMachinePool.Spec.OrchestrationMode,
-		Location:                     m.AzureMachinePool.Spec.Location,
+		Location:                     m.Location(),
 		SubscriptionID:               m.SubscriptionID(),
 		HasReplicasExternallyManaged: m.HasReplicasExternallyManaged(ctx),
 		ClusterName:                  m.ClusterName(),

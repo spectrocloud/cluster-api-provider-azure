@@ -56,6 +56,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/privateendpoints"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/subnets"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/virtualnetworks"
+	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
@@ -183,6 +184,12 @@ func (s *ManagedControlPlaneScope) ClusterName() string {
 func (s *ManagedControlPlaneScope) Location() string {
 	if s.ControlPlane == nil {
 		return ""
+	}
+	// Only apply region normalization for the AzureUSSecretCloud emulator (AzureSecret support):
+	// cloud==AzureUSSecretCloud AND the resource manager endpoint carries the .scombine.scloud suffix.
+	if s.ControlPlane.Spec.AzureEnvironment == azure.AzSecretCloudName &&
+		strings.Contains(s.AzureClients.ResourceManagerEndpoint, ".scombine.scloud") {
+		return azureutil.NormalizeAzureRegion(s.ControlPlane.Spec.Location)
 	}
 	return s.ControlPlane.Spec.Location
 }

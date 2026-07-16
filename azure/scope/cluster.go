@@ -55,6 +55,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/vnetpeerings"
 	"sigs.k8s.io/cluster-api-provider-azure/feature"
 	apiinternal "sigs.k8s.io/cluster-api-provider-azure/internal/api/v1beta1"
+	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/util/futures"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
@@ -904,7 +905,20 @@ func (s *ClusterScope) Namespace() string {
 
 // Location returns the cluster location.
 func (s *ClusterScope) Location() string {
+	// Only apply region normalization if both conditions are met (AzureSecret emulator support):
+	//   1. we're in the AzureUSSecretCloud environment, AND
+	//   2. the resource manager endpoint carries the .scombine.scloud (Sequoia emulator) suffix.
+	// Real AzureSecret (or any cloud with a genuine "ussec" region) keeps the original location.
+	if s.isAzureSecretCloudEnvironment() &&
+		strings.Contains(s.ResourceManagerEndpoint, ".scombine.scloud") {
+		return azureutil.NormalizeAzureRegion(s.AzureCluster.Spec.Location)
+	}
 	return s.AzureCluster.Spec.Location
+}
+
+// isAzureSecretCloudEnvironment returns true if the scope's cluster targets the Azure Secret cloud.
+func (s *ClusterScope) isAzureSecretCloudEnvironment() bool {
+	return s.AzureCluster.Spec.AzureEnvironment == azure.AzSecretCloudName
 }
 
 // AvailabilitySetEnabled informs machines that they should be part of an Availability Set.
