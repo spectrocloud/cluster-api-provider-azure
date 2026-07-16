@@ -690,6 +690,7 @@ func TestAPIServerLBClassDefaults(t *testing.T) {
 								APIServerLB: infrav1.LoadBalancerClassSpec{
 									SKU:                  infrav1.SKUStandard,
 									Type:                 infrav1.Public,
+									IPAllocationMethod:   "Dynamic",
 									IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 								},
 							},
@@ -727,6 +728,7 @@ func TestAPIServerLBClassDefaults(t *testing.T) {
 								APIServerLB: infrav1.LoadBalancerClassSpec{
 									SKU:                  infrav1.SKUStandard,
 									Type:                 infrav1.Internal,
+									IPAllocationMethod:   "Dynamic",
 									IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 								},
 							},

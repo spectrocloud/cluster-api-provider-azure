@@ -1398,6 +1398,7 @@ func TestAPIServerLBDefaults(t *testing.T) {
 							LoadBalancerClassSpec: infrav1.LoadBalancerClassSpec{
 								SKU:                  infrav1.SKUStandard,
 								Type:                 infrav1.Public,
+								IPAllocationMethod:   "Dynamic",
 								IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 							},
 						},
@@ -1447,6 +1448,7 @@ func TestAPIServerLBDefaults(t *testing.T) {
 							LoadBalancerClassSpec: infrav1.LoadBalancerClassSpec{
 								SKU:                  infrav1.SKUStandard,
 								Type:                 infrav1.Public,
+								IPAllocationMethod:   "Dynamic",
 								IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 							},
 						},
@@ -1491,6 +1493,7 @@ func TestAPIServerLBDefaults(t *testing.T) {
 							LoadBalancerClassSpec: infrav1.LoadBalancerClassSpec{
 								SKU:                  infrav1.SKUStandard,
 								Type:                 infrav1.Internal,
+								IPAllocationMethod:   "Dynamic",
 								IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 							},
 							Name: "cluster-test-internal-lb",
@@ -1537,6 +1540,7 @@ func TestAPIServerLBDefaults(t *testing.T) {
 							LoadBalancerClassSpec: infrav1.LoadBalancerClassSpec{
 								SKU:                  infrav1.SKUStandard,
 								Type:                 infrav1.Internal,
+								IPAllocationMethod:   "Dynamic",
 								IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 							},
 							Name: "cluster-test-internal-lb",
@@ -1585,6 +1589,7 @@ func TestAPIServerLBDefaults(t *testing.T) {
 							LoadBalancerClassSpec: infrav1.LoadBalancerClassSpec{
 								SKU:                  infrav1.SKUStandard,
 								Type:                 infrav1.Internal,
+								IPAllocationMethod:   "Dynamic",
 								IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 							},
 							Name: "cluster-test-internal-lb",
@@ -1634,6 +1639,7 @@ func TestAPIServerLBDefaults(t *testing.T) {
 							LoadBalancerClassSpec: infrav1.LoadBalancerClassSpec{
 								SKU:                  infrav1.SKUStandard,
 								Type:                 infrav1.Internal,
+								IPAllocationMethod:   "Dynamic",
 								IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 							},
 							Name: "cluster-test-internal-lb",
@@ -1707,6 +1713,7 @@ func TestAPIServerLBDefaults(t *testing.T) {
 							LoadBalancerClassSpec: infrav1.LoadBalancerClassSpec{
 								SKU:                  infrav1.SKUStandard,
 								Type:                 infrav1.Public,
+								IPAllocationMethod:   "Dynamic",
 								IdleTimeoutInMinutes: ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes),
 							},
 						},
