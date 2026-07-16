@@ -46,4 +46,10 @@ const (
 	// See https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 	// for annotation formatting rules.
 	SecurityRuleLastAppliedAnnotation = "sigs.k8s.io/cluster-api-provider-azure-last-applied-security-rules"
+
+	// DisablePrivateDNSAnnotation is the key for the Azure Cluster object annotation
+	// which disables private DNS zone creation when set to "true".
+	// See https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+	// for annotation formatting rules.
+	DisablePrivateDNSAnnotation = "capz.io/disable-private-dns"
 )

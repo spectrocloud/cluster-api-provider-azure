@@ -17,6 +17,7 @@ limitations under the License.
 package azure
 
 import (
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -27,6 +28,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/sdk/tracing/azotel"
+	azureautorest "github.com/Azure/go-autorest/autorest/azure"
 	"go.opentelemetry.io/otel"
 
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
@@ -46,7 +48,42 @@ const (
 	USGovernmentCloudName = "AzureUSGovernmentCloud"
 	// GermanCloudName is the name of the Azure German cloud.
 	GermanCloudName = "AzureGermanCloud"
+	// AzSecretCloudName is the name of the Azure US Secret cloud.
+	AzSecretCloudName = "AzureUSSecretCloud"
 )
+
+// Cloud service names for custom (air-gapped) Azure environments.
+const (
+	// MicrosoftGraphAPI is the Microsoft Graph API service name.
+	MicrosoftGraphAPI = cloud.ServiceName("MicrosoftGraphAPI")
+	// GalleryURL is the compute gallery service name.
+	GalleryURL = cloud.ServiceName("GalleryURL")
+	// AzureStorageURL is the storage service name.
+	AzureStorageURL = cloud.ServiceName("AzureStorageURL")
+)
+
+// AzSecretCertPool holds the certificate pool for custom Azure environments.
+// This will be populated at runtime when custom certificates are detected.
+var AzSecretCertPool *x509.CertPool
+
+// AzSecretCertData holds the raw certificate data for custom Azure environments.
+// This will be populated at runtime when custom certificates are detected.
+var AzSecretCertData []byte
+
+// GlobalHTTPClient holds the global HTTP client for custom Azure environments.
+// This will be populated by the scope package to avoid import cycles.
+var GlobalHTTPClient *http.Client
+
+// IsAzSecretCertConfigured returns true if the AzSecret certificate pool has been configured.
+func IsAzSecretCertConfigured() bool {
+	return AzSecretCertPool != nil
+}
+
+// GetGlobalHTTPClient returns the global HTTP client for custom Azure environments.
+// This is a wrapper to avoid import cycles by using a global variable approach.
+func GetGlobalHTTPClient() *http.Client {
+	return GlobalHTTPClient
+}
 
 const (
 	// DefaultPublicGalleryName is the default Azure compute gallery.
@@ -338,8 +375,20 @@ func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (
 	case "":
 		// No cloud name provided, so leave at defaults.
 	default:
-		return nil, fmt.Errorf("invalid cloud name %q", azureEnvironment)
+		// For custom environments, try to get the environment configuration
+		// from the dynamically loaded environments.
+		cloudConfig, err := getCloudConfigurationFromEnvironment(azureEnvironment)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cloud name %q: %w", azureEnvironment, err)
+		}
+		opts.Cloud = cloudConfig
 	}
+
+	// Use centralized transport configuration for custom Azure environments.
+	if GlobalHTTPClient != nil {
+		opts.ClientOptions.Transport = GlobalHTTPClient
+	}
+
 	opts.PerCallPolicies = []policy.Policy{
 		correlationIDPolicy{},
 		userAgentPolicy{},
@@ -350,6 +399,39 @@ func ARMClientOptions(azureEnvironment string, extraPolicies ...policy.Policy) (
 	opts.TracingProvider = azotel.NewTracingProvider(otel.GetTracerProvider(), nil)
 
 	return opts, nil
+}
+
+// getCloudConfigurationFromEnvironment converts a dynamically loaded environment
+// to the new Azure SDK v2 cloud configuration format.
+// Must have this, since we are using the new SDK v2.
+func getCloudConfigurationFromEnvironment(environmentName string) (cloud.Configuration, error) {
+	env, err := azureautorest.EnvironmentFromName(environmentName)
+	if err != nil {
+		return cloud.Configuration{}, fmt.Errorf("environment %q not found: %w", environmentName, err)
+	}
+
+	// Convert from old SDK v1 format to new SDK v2 format.
+	return cloud.Configuration{
+		ActiveDirectoryAuthorityHost: env.ActiveDirectoryEndpoint,
+		Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+			cloud.ResourceManager: {
+				Endpoint: env.ResourceManagerEndpoint,
+				Audience: env.TokenAudience,
+			},
+			MicrosoftGraphAPI: {
+				Endpoint: env.GraphEndpoint,
+				Audience: env.GraphEndpoint,
+			},
+			GalleryURL: {
+				Endpoint: env.GalleryEndpoint,
+				Audience: env.GalleryEndpoint,
+			},
+			AzureStorageURL: {
+				Endpoint: fmt.Sprintf("https://%s", env.StorageEndpointSuffix),
+				Audience: fmt.Sprintf("https://%s", env.StorageEndpointSuffix),
+			},
+		},
+	}, nil
 }
 
 // correlationIDPolicy adds the "x-ms-correlation-request-id" header to requests.

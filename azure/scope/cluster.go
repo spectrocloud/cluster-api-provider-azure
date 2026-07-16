@@ -73,7 +73,7 @@ type ClusterScopeParams struct {
 // NewClusterScope creates a new Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
 func NewClusterScope(ctx context.Context, params ClusterScopeParams) (*ClusterScope, error) {
-	ctx, _, done := tele.StartSpanWithLogger(ctx, "azure.clusterScope.NewClusterScope")
+	ctx, log, done := tele.StartSpanWithLogger(ctx, "azure.clusterScope.NewClusterScope")
 	defer done()
 
 	if params.Cluster == nil {
@@ -81,6 +81,12 @@ func NewClusterScope(ctx context.Context, params ClusterScopeParams) (*ClusterSc
 	}
 	if params.AzureCluster == nil {
 		return nil, errors.New("failed to generate new scope from nil AzureCluster")
+	}
+
+	// Initialize Azure environment and certificates from ConfigMaps in the cluster namespace
+	// (AzureSecret / air-gapped custom cloud support). Non-fatal: fall back to defaults on error.
+	if err := InitializeAzureConfigForCluster(ctx, params.Client, params.AzureCluster.Namespace, params.AzureCluster.Spec.AzureEnvironment); err != nil {
+		log.V(1).Info("Failed to initialize custom Azure configuration, using defaults", "error", err.Error())
 	}
 
 	credentialsProvider, err := NewAzureCredentialsProvider(ctx, params.CredentialCache, params.Client, params.AzureCluster.Spec.IdentityRef, params.AzureCluster.Namespace)
@@ -580,6 +586,14 @@ func (s *ClusterScope) VNetSpec() azure.ASOResourceSpecGetter[*asonetworkv1api20
 
 // PrivateDNSSpec returns the private dns zone spec.
 func (s *ClusterScope) PrivateDNSSpec() (zoneSpec azure.ResourceSpecGetter, linkSpec, recordSpec []azure.ResourceSpecGetter) {
+	// Bypass private DNS zone creation entirely when the disable-private-dns annotation is set
+	// (AzureSecret / air-gapped custom cloud support).
+	if s.AzureCluster.Annotations != nil {
+		if bypass, exists := s.AzureCluster.Annotations[azure.DisablePrivateDNSAnnotation]; exists && bypass == "true" {
+			return nil, nil, nil
+		}
+	}
+
 	if s.IsAPIServerPrivate() && s.PrivateDNSZoneMode() != infrav1.PrivateDNSZoneModeNone {
 		resourceGroup := s.ResourceGroup()
 		if s.AzureCluster.Spec.NetworkSpec.PrivateDNSZoneResourceGroup != "" {

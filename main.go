@@ -360,6 +360,13 @@ func main() {
 
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.UserAgent = "cluster-api-provider-azure-manager"
+	// AzureSecret (air-gapped custom cloud) endpoints are slow/proxied; relax the client
+	// timeout and throughput only for that environment. Public/gov/china keep upstream defaults.
+	if os.Getenv("AZURE_ENVIRONMENT") == azure.AzSecretCloudName {
+		restConfig.Timeout = 30 * time.Second
+		restConfig.QPS = 20
+		restConfig.Burst = 30
+	}
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                     scheme,
 		LeaderElection:             enableLeaderElection,
