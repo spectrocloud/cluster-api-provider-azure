@@ -97,3 +97,4 @@ openid-configuration.json
 aks-mgmt.config
 .service-account-issuer.env
 vendor/
+.DS_Store
