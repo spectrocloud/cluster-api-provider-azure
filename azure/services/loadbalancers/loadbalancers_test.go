@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 	"k8s.io/utils/ptr"
@@ -223,7 +224,21 @@ func TestReconcileLoadBalancer(t *testing.T) {
 			expect: func(s *mock_loadbalancers.MockLBScopeMockRecorder, r *mock_async.MockReconcilerMockRecorder) {
 				s.DefaultedAzureServiceReconcileTimeout().Return(reconciler.DefaultAzureServiceReconcileTimeout)
 				s.LBSpecs().Return([]azure.ResourceSpecGetter{&fakePublicAPILBSpec})
-				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakePublicAPILBSpec, serviceName).Return(nil, nil)
+				// Fork re-inlines the reconcile loop and type-asserts the created resource to
+				// armnetwork.LoadBalancer, so CreateOrUpdateResource must return one (not nil).
+				// This is the API-server LB, so APIServerLB().Name matches and the read-back block
+				// is entered, but a public LB frontend carries no private IP, so nothing is written back.
+				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakePublicAPILBSpec, serviceName).Return(armnetwork.LoadBalancer{
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{}},
+						},
+					},
+				}, nil)
+				s.APIServerLB().Return(&infrav1.LoadBalancerSpec{
+					Name:        "my-publiclb",
+					FrontendIPs: []infrav1.FrontendIP{{Name: "my-publiclb-frontEnd"}},
+				}).AnyTimes()
 				s.UpdatePutStatus(infrav1.LoadBalancersReadyCondition, serviceName, nil)
 			},
 		},
@@ -233,7 +248,20 @@ func TestReconcileLoadBalancer(t *testing.T) {
 			expect: func(s *mock_loadbalancers.MockLBScopeMockRecorder, r *mock_async.MockReconcilerMockRecorder) {
 				s.DefaultedAzureServiceReconcileTimeout().Return(reconciler.DefaultAzureServiceReconcileTimeout)
 				s.LBSpecs().Return([]azure.ResourceSpecGetter{&fakeInternalAPILBSpec})
-				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeInternalAPILBSpec, serviceName).Return(nil, nil)
+				// Fork read-back path: CreateOrUpdateResource returns an armnetwork.LoadBalancer whose
+				// frontend carries the Azure-assigned private IP. Because ResourceName == APIServerLB().Name,
+				// Reconcile reads that IP back into APIServerLB().FrontendIPs[0].PrivateIPAddress.
+				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeInternalAPILBSpec, serviceName).Return(armnetwork.LoadBalancer{
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PrivateIPAddress: ptr.To("10.0.0.10")}},
+						},
+					},
+				}, nil)
+				s.APIServerLB().Return(&infrav1.LoadBalancerSpec{
+					Name:        "my-private-lb",
+					FrontendIPs: []infrav1.FrontendIP{{Name: "my-private-lb-frontEnd"}},
+				}).AnyTimes()
 				s.UpdatePutStatus(infrav1.LoadBalancersReadyCondition, serviceName, nil)
 			},
 		},
@@ -243,7 +271,10 @@ func TestReconcileLoadBalancer(t *testing.T) {
 			expect: func(s *mock_loadbalancers.MockLBScopeMockRecorder, r *mock_async.MockReconcilerMockRecorder) {
 				s.DefaultedAzureServiceReconcileTimeout().Return(reconciler.DefaultAzureServiceReconcileTimeout)
 				s.LBSpecs().Return([]azure.ResourceSpecGetter{&fakeNodeOutboundLBSpec})
-				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeNodeOutboundLBSpec, serviceName).Return(nil, nil)
+				// Node-outbound LB is not the API-server LB (ResourceName != APIServerLB().Name),
+				// so the read-back block is skipped entirely.
+				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeNodeOutboundLBSpec, serviceName).Return(armnetwork.LoadBalancer{}, nil)
+				s.APIServerLB().Return(&infrav1.LoadBalancerSpec{Name: "my-publiclb"}).AnyTimes()
 				s.UpdatePutStatus(infrav1.LoadBalancersReadyCondition, serviceName, nil)
 			},
 		},
@@ -253,9 +284,22 @@ func TestReconcileLoadBalancer(t *testing.T) {
 			expect: func(s *mock_loadbalancers.MockLBScopeMockRecorder, r *mock_async.MockReconcilerMockRecorder) {
 				s.DefaultedAzureServiceReconcileTimeout().Return(reconciler.DefaultAzureServiceReconcileTimeout)
 				s.LBSpecs().Return([]azure.ResourceSpecGetter{&fakePublicAPILBSpec, &fakeInternalAPILBSpec, &fakeNodeOutboundLBSpec})
-				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakePublicAPILBSpec, serviceName).Return(nil, nil)
-				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeInternalAPILBSpec, serviceName).Return(nil, nil)
-				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeNodeOutboundLBSpec, serviceName).Return(nil, nil)
+				// Fork reconciles each spec individually. Only the spec whose ResourceName matches
+				// APIServerLB().Name (here the internal LB) exercises the private-IP read-back; the
+				// others skip it.
+				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakePublicAPILBSpec, serviceName).Return(armnetwork.LoadBalancer{}, nil)
+				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeInternalAPILBSpec, serviceName).Return(armnetwork.LoadBalancer{
+					Properties: &armnetwork.LoadBalancerPropertiesFormat{
+						FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
+							{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{PrivateIPAddress: ptr.To("10.0.0.10")}},
+						},
+					},
+				}, nil)
+				r.CreateOrUpdateResource(gomockinternal.AContext(), &fakeNodeOutboundLBSpec, serviceName).Return(armnetwork.LoadBalancer{}, nil)
+				s.APIServerLB().Return(&infrav1.LoadBalancerSpec{
+					Name:        "my-private-lb",
+					FrontendIPs: []infrav1.FrontendIP{{Name: "my-private-lb-frontEnd"}},
+				}).AnyTimes()
 				s.UpdatePutStatus(infrav1.LoadBalancersReadyCondition, serviceName, nil)
 			},
 		},
