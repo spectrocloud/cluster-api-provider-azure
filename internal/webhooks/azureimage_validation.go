@@ -61,17 +61,20 @@ func validateSingleDetailsOnly(image *infrav1.Image, fldPath *field.Path) field.
 		}
 	}
 
-	if image.SharedGallery != nil {
-		if imageDetailsFound {
-			allErrs = append(allErrs, field.Forbidden(fldPath.Child("SharedGallery"), "SharedGallery cannot be used as an image ID. Marketplace or ComputeGallery images has been specified"))
-		} else {
-			imageDetailsFound = true
-		}
-	}
-
+	// spectro (45d9bb84, supersedes 6d749add): after the CAPZ upgrade palette submits Images carrying
+	// BOTH ComputeGallery and SharedGallery (mixed-version worker pools during palette upgrade, avoiding
+	// node repave), so this must accept both instead of enforcing single-gallery. ComputeGallery is
+	// preferred when both are set (else-if). Marketplace/ID combinations stay rejected. Can be reverted
+	// to strict mutual exclusivity once all palette clusters have been upgraded.
 	if image.ComputeGallery != nil {
 		if imageDetailsFound {
 			allErrs = append(allErrs, field.Forbidden(fldPath.Child("ComputeGallery"), "ComputeGallery cannot be used as an image ID. Marketplace or SharedGallery images has been specified"))
+		} else {
+			imageDetailsFound = true
+		}
+	} else if image.SharedGallery != nil {
+		if imageDetailsFound {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("SharedGallery"), "SharedGallery cannot be used as an image ID. Marketplace or ComputeGallery images has been specified"))
 		} else {
 			imageDetailsFound = true
 		}
