@@ -20,9 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/go-logr/logr"
 	asocontainerservicev1 "github.com/Azure/azure-service-operator/v2/api/containerservice/v1api20250801"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	corev1 "k8s.io/api/core/v1"
@@ -48,6 +50,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/pkg/mutators"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
 )
@@ -323,6 +326,49 @@ func (r *AzureASOManagedControlPlaneReconciler) reconcileKubeconfig(ctx context.
 			a.Exec = nil
 			a.Token = token.Token
 		}
+
+		// PATCH POINT: Inject custom CA certificate data here.
+		// Only fires for the AzureSecret (air-gapped custom Azure) environment, where the global
+		// AzSecret cert data is populated during Azure client initialization; a no-op otherwise.
+		log.V(4).Info("ASO Controller CA injection", "cluster", cluster.Name)
+		if customCACert := getCustomCACertificateForCluster(cluster.Name, log); customCACert != nil {
+			log.V(4).Info("Custom CA certificate found", "size", len(customCACert))
+			patchedCount := 0
+			for clusterName, clusterInfo := range kubeconfig.Clusters {
+				log.V(4).Info("Processing cluster", "name", clusterName)
+				log.V(4).Info("Original CA data", "size", len(clusterInfo.CertificateAuthorityData))
+
+				if clusterInfo.CertificateAuthorityData != nil && len(clusterInfo.CertificateAuthorityData) > 0 {
+					log.V(4).Info("Combining original CA with custom CA")
+					// Combine: original + newline + custom CA
+					combinedCA := make([]byte, 0, len(clusterInfo.CertificateAuthorityData)+1+len(customCACert))
+					combinedCA = append(combinedCA, clusterInfo.CertificateAuthorityData...)
+
+					// Add newline separator if original doesn't end with newline
+					if clusterInfo.CertificateAuthorityData[len(clusterInfo.CertificateAuthorityData)-1] != '\n' {
+						combinedCA = append(combinedCA, '\n')
+					}
+
+					combinedCA = append(combinedCA, customCACert...)
+					clusterInfo.CertificateAuthorityData = combinedCA
+
+					log.V(4).Info("Combined CA data",
+						"totalSize", len(combinedCA),
+						"originalSize", len(clusterInfo.CertificateAuthorityData)-len(customCACert)-1,
+						"customSize", len(customCACert))
+				} else {
+					log.V(4).Info("No original CA data, using only custom CA")
+					// No original CA, just use custom
+					clusterInfo.CertificateAuthorityData = customCACert
+					log.V(4).Info("Set CA data", "size", len(clusterInfo.CertificateAuthorityData))
+				}
+				patchedCount++
+			}
+			log.V(4).Info("CA certificates combined", "patchedClusters", patchedCount)
+		} else {
+			log.V(4).Info("No custom CA certificate found, keeping original kubeconfig")
+		}
+
 		kubeconfigData, err = clientcmd.Write(*kubeconfig)
 		if err != nil {
 			return nil, err
@@ -356,6 +402,41 @@ func (r *AzureASOManagedControlPlaneReconciler) reconcileKubeconfig(ctx context.
 		return nil, err
 	}
 	return tokenExpiresIn, nil
+}
+
+// getCustomCACertificateForCluster returns custom CA certificate data for a specific cluster
+// This function leverages the same certificate that is used for Azure authentication
+// by checking the global AzSecretCertPool that gets populated during Azure client initialization
+func getCustomCACertificateForCluster(clusterName string, log logr.Logger) []byte {
+	log.V(4).Info("ASO getCustomCACertificateForCluster() called for cluster", "clusterName", clusterName)
+
+	// Debug the condition checks
+	isConfigured := azure.IsAzSecretCertConfigured()
+	poolNotNil := azure.AzSecretCertPool != nil
+	dataLength := len(azure.AzSecretCertData)
+
+	log.V(4).Info("ASO - azure.IsAzSecretCertConfigured()", "isConfigured", isConfigured)
+	log.V(4).Info("ASO - azure.AzSecretCertPool != nil", "poolNotNil", poolNotNil)
+	log.V(4).Info("ASO - len(azure.AzSecretCertData)", "dataLength", dataLength)
+
+	// Check if we have a certificate in the global AzSecretCertPool
+	// This is the same certificate pool used for Azure authentication
+	if azure.IsAzSecretCertConfigured() && azure.AzSecretCertPool != nil {
+		log.V(4).Info("Passed first condition check (IsConfigured && PoolNotNil)")
+		// Return the raw certificate data stored in AzSecretCertData
+		// This contains the original PEM data that was used to populate the certificate pool
+		if len(azure.AzSecretCertData) > 0 {
+			log.V(4).Info("Found certificate data, returning", "size", len(azure.AzSecretCertData))
+			log.V(4).Info("Certificate data preview (first 100 chars)", "preview", string(azure.AzSecretCertData[:int(math.Min(100, float64(len(azure.AzSecretCertData))))]))
+			return azure.AzSecretCertData
+		}
+		log.V(4).Info("Certificate data is empty, returning nil")
+	} else {
+		log.V(4).Info("Failed condition check - IsConfigured", "isConfigured", isConfigured, "PoolNotNil", poolNotNil)
+	}
+
+	log.V(4).Info("ASO - getCustomCACertificateForCluster() returning nil")
+	return nil
 }
 
 func (r *AzureASOManagedControlPlaneReconciler) reconcilePaused(ctx context.Context, asoManagedControlPlane *infrav1.AzureASOManagedControlPlane) (ctrl.Result, error) {
