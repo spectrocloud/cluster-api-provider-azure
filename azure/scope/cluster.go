@@ -832,11 +832,28 @@ func (s *ClusterScope) IsAPIServerPrivate() bool {
 
 // APIServerPublicIP returns the API Server public IP.
 func (s *ClusterScope) APIServerPublicIP() *infrav1.PublicIPSpec {
+	// AzureSecret (air-gapped) clusters may reconcile with a not-yet-populated APIServerLB;
+	// tolerate nil there. Standard clouds keep upstream behavior (non-nil LB expected).
+	if s.isAzureSecretCloudEnvironment() {
+		lb := s.APIServerLB()
+		if lb == nil || len(lb.FrontendIPs) == 0 {
+			return nil
+		}
+		return lb.FrontendIPs[0].PublicIP
+	}
 	return s.APIServerLB().FrontendIPs[0].PublicIP
 }
 
 // APIServerPrivateIP returns the API Server private IP.
 func (s *ClusterScope) APIServerPrivateIP() string {
+	// AzureSecret nil-safety (see APIServerPublicIP); Standard clouds keep upstream behavior.
+	if s.isAzureSecretCloudEnvironment() {
+		lb := s.APIServerLB()
+		if lb == nil || len(lb.FrontendIPs) == 0 {
+			return ""
+		}
+		return lb.FrontendIPs[0].PrivateIPAddress
+	}
 	return s.APIServerLB().FrontendIPs[0].PrivateIPAddress
 }
 
@@ -850,6 +867,13 @@ func (s *ClusterScope) GetPrivateDNSZoneName() string {
 
 // APIServerLBPoolName returns the API Server LB backend pool name.
 func (s *ClusterScope) APIServerLBPoolName() string {
+	// AzureSecret nil-safety (see APIServerPublicIP); Standard clouds keep upstream behavior.
+	if s.isAzureSecretCloudEnvironment() {
+		if lb := s.APIServerLB(); lb != nil {
+			return lb.BackendPool.Name
+		}
+		return ""
+	}
 	return s.APIServerLB().BackendPool.Name
 }
 
